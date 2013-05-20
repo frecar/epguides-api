@@ -37,11 +37,11 @@ def episode_released(show_name, season, episode):
     episode = int(episode)
 
     if season not in data or len(data[season]) < episode:
-        return response
+        return json.dumps(response)
 
     release_date = datetime.datetime.strptime(data[season][episode - 1][2], "%Y-%m-%d")
 
     if datetime.datetime.now() - datetime.timedelta(hours=32) > release_date:
         response['status'] = True
 
-    return response
+    return json.dumps(response)
