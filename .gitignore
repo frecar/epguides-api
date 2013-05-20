@@ -1,4 +1,6 @@
 *.py[cod]
+.idea
+venv
 
 # C extensions
 *.so
