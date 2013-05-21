@@ -7,7 +7,7 @@ import web
 def get_seriedata(url):
     f = urllib.urlopen("http://epguides.com/" + url)
 
-    episodes = re.findall("([\d]*)\s*([\d]*)-([\d]*)\s*[\w]*\s*([0-9][0-9]\/\w*\/[0-9][0-9])[\s<\w='.:\/]*>([\w\s]*)", f.read())
+    episodes = re.findall("([\d]*)\s*([\d]*)-([\d]*)\s*[\w\-]*\s*([0-9][0-9]\/\w*\/[0-9][0-9])[\s<\w='.:\/]*>([\w\s]*)", f.read())
     show = {}
 
     for episode_info in episodes:
