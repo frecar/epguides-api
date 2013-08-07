@@ -14,17 +14,20 @@ def get_seriedata(url):
 
     for episode_info in episodes:
 
-        season = int(episode_info[1])
+        try:
+            season = int(episode_info[1])
 
-        if season not in show:
-            show[season] = []
+            if season not in show:
+                show[season] = []
 
-        show[season].append([
-            int(episode_info[2]),
-            episode_info[4],
-            datetime.datetime.strptime(episode_info[3], "%d/%b/%y").strftime("%Y-%m-%d")
-        ])
-
+            show[season].append([
+                int(episode_info[2]),
+                episode_info[4],
+                datetime.datetime.strptime(episode_info[3], "%d/%b/%y").strftime("%Y-%m-%d")
+            ])
+        except Exception, e:
+            print url + ": " + str(e)
+                    
     f.close()
 
 
