@@ -3,9 +3,20 @@ import datetime
 import re
 import json
 import web
-import redis
 
+from beaker.cache import CacheManager
+from beaker.util import parse_cache_config_options
+
+cache_opts = {
+    'cache.type': 'memory',
+    'cache.expire': 604800,
+}
+
+cache = CacheManager(**parse_cache_config_options(cache_opts))
+
+@cache.cache('get_seriedata')
 def get_seriedata(url):
+
     f = urllib.urlopen("http://epguides.com/" + url)
 
     episodes = re.findall("([\d]*)\s*([\d]*)-([\d]*)\s*[\w\-]*\s*([0-9][0-9]\/\w*\/[0-9][0-9])[\s&\-#<\w='.;:\/]*>([\w\s]*)", f.read())
@@ -25,15 +36,16 @@ def get_seriedata(url):
                 episode_info[4],
                 datetime.datetime.strptime(episode_info[3], "%d/%b/%y").strftime("%Y-%m-%d")
             ])
+
         except Exception, e:
             print url + ": " + str(e)
                     
     f.close()
 
-
     return json.dumps(show)
 
 
+@cache.cache('episode_released')
 def episode_released(show_name, season, episode):
 
     data = json.loads(urllib.urlopen(web.ctx.home + "/show/" + show_name).read())
