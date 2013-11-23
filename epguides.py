@@ -45,7 +45,6 @@ def get_seriedata(url):
     return json.dumps(show)
 
 
-@cache.cache('episode_released')
 def episode_released(show_name, season, episode):
 
     data = json.loads(urllib.urlopen(web.ctx.home + "/show/" + show_name).read())
