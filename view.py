@@ -1,5 +1,7 @@
-from epguides import get_seriedata, episode_released
 import web
+import json
+
+from epguides import get_seriedata, episode_released
 
 urls = (
     '/show/(\w*)/?', 'view.index',
@@ -9,12 +11,14 @@ urls = (
 
 class index:
     def GET(self, show):
-        return get_seriedata(show)
+        return json.dumps(get_seriedata(show))
 
 
 class released:
     def GET(self, show, season, episode):
-        return episode_released(show, season, episode)
+        return json.dumps({
+            'status': episode_released(show, int(season), int(episode))
+        })
 
 if __name__ == "__main__":
     app = web.application(urls, globals())
