@@ -2,7 +2,6 @@ import urllib
 import datetime
 import re
 import json
-import web
 
 from beaker.cache import CacheManager
 from beaker.util import parse_cache_config_options
@@ -13,6 +12,7 @@ cache_opts = {
 }
 
 cache = CacheManager(**parse_cache_config_options(cache_opts))
+
 
 @cache.cache('get_seriedata')
 def get_seriedata(url):
@@ -39,26 +39,22 @@ def get_seriedata(url):
 
         except Exception, e:
             print url + ": " + str(e)
-                    
+
     f.close()
 
     return json.dumps(show)
 
 
 def episode_released(show_name, season, episode):
-
-    data = json.loads(urllib.urlopen(web.ctx.home + "/show/" + show_name).read())
-    
-    response = {'status': False}
+    status = False
+    data = json.loads(get_seriedata(show_name))
 
     episode = int(episode)
 
-    if season not in data or len(data[season]) < episode:
-        return json.dumps(response)
+    if season in data or len(data[season]) >= episode:
+        release_date = datetime.datetime.strptime(data[season][episode - 1][2], "%Y-%m-%d")
 
-    release_date = datetime.datetime.strptime(data[season][episode - 1][2], "%Y-%m-%d")
+        if datetime.datetime.now() - datetime.timedelta(hours=32) > release_date:
+            status = True
 
-    if datetime.datetime.now() - datetime.timedelta(hours=32) > release_date:
-        response['status'] = True
-
-    return json.dumps(response)
+    return json.dumps({'status': status})
