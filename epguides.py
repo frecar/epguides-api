@@ -1,5 +1,5 @@
 import urllib
-import datetime
+from datetime import datetime, timedelta
 import re
 
 from beaker.cache import CacheManager
@@ -33,7 +33,7 @@ def get_seriedata(url):
             show[season].append([
                 int(episode_info[2]),
                 episode_info[4],
-                datetime.datetime.strptime(episode_info[3], "%d/%b/%y").strftime("%Y-%m-%d")
+                datetime.strptime(episode_info[3], "%d/%b/%y").strftime("%Y-%m-%d")
             ])
 
         except Exception, e:
@@ -44,14 +44,31 @@ def get_seriedata(url):
     return show
 
 
+def is_released(episode):
+    release_date = datetime.strptime(episode[2], "%Y-%m-%d")
+
+    if datetime.now() - timedelta(hours=32) > release_date:
+        return True
+
+    return False
+
+
 def episode_released(show_name, season, episode):
-    status = False
     data = get_seriedata(show_name)
-
     if season in data or len(data[season]) >= episode:
-        release_date = datetime.datetime.strptime(data[season][episode - 1][2], "%Y-%m-%d")
+        return is_released(data[season][episode - 1])
 
-        if datetime.datetime.now() - datetime.timedelta(hours=32) > release_date:
-            status = True
+    return False
 
-    return status
+
+def next_episode(show_name):
+    data = get_seriedata(show_name)
+    season_number = len(data.keys())
+    for episode in data[season_number]:
+        if not is_released(episode):
+            return {'episode': {
+                'number': episode[0],
+                'season': season_number,
+                'title': episode[1],
+                'release_date': episode[2]
+            }}
