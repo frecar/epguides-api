@@ -5,7 +5,7 @@ from epguides import get_seriedata, episode_released
 
 urls = (
     '/show/(\w*)/?', 'view.index',
-    '/released/(\w+)/(\d+)/(\d+)/?', 'view.released'
+    '/show/(\w+)/(\d+)/(\d+)/released/?', 'view.released'
 )
 
 
