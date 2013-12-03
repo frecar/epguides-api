@@ -55,7 +55,7 @@ def is_released(episode):
 
 def episode_released(show_name, season, episode):
     data = get_seriedata(show_name)
-    if season in data or len(data[season]) >= episode:
+    if season in data and len(data[season]) >= episode:
         return is_released(data[season][episode - 1])
 
     return False
