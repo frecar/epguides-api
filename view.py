@@ -14,7 +14,9 @@ urls = (
 
 class index:
     def GET(self, show):
-        return json.dumps(Show(show).get_episodes(), cls=EpisodeEncoder, indent=4)
+        return json.dumps(Show(show).get_episodes(),
+                          cls=EpisodeEncoder,
+                          indent=4)
 
 
 class released:
@@ -27,7 +29,10 @@ class released:
 class next:
     def GET(self, show):
         try:
-            return json.dumps(Show(show).next_episode(), cls=EpisodeEncoder, indent=4)
+            return json.dumps(Show(show).next_episode(),
+                              cls=EpisodeEncoder,
+                              indent=4)
+
         except EpisodeNotFoundException:
             return json.dumps({
                 'status': 'Episode not found'
@@ -37,7 +42,10 @@ class next:
 class last:
     def GET(self, show):
         try:
-            return json.dumps(Show(show).last_episode(), cls=EpisodeEncoder, indent=4)
+            return json.dumps(Show(show).last_episode(),
+                              cls=EpisodeEncoder,
+                              indent=4)
+
         except EpisodeNotFoundException:
             return json.dumps({
                 'status': 'Episode not found'

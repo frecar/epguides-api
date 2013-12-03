@@ -49,14 +49,18 @@ class Show:
 
         raise EpisodeNotFoundException()
 
-    def episode_released(self, season_number, episode_number):
+    def get_episode(self, season_number, episode_number):
         show_data = self.get_episodes()
-        if season_number in show_data and len(show_data[season_number]) >= episode_number:
+
+        if season_number in show_data:
             for episode in show_data[season_number]:
                 if episode.number == episode_number:
-                    return episode.released()
+                    return episode
 
-        return False
+        raise EpisodeNotFoundException()
+
+    def episode_released(self, season_number, episode_number):
+        return self.get_episode(season_number, episode_number).released()
 
     def get_episodes(self):
         episodes = {}
@@ -72,7 +76,8 @@ class Show:
                               {'number': episode_data[2],
                                'title': episode_data[4],
                                'release_date': datetime.datetime.strptime(
-                                   episode_data[3], "%d/%b/%y").strftime("%Y-%m-%d")})
+                                   episode_data[3], "%d/%b/%y").strftime(
+                                   "%Y-%m-%d")})
 
             episodes[season_number].append(episode)
 
