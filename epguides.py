@@ -72,3 +72,19 @@ def next_episode(show_name):
                 'title': episode[1],
                 'release_date': episode[2]
             }}
+
+
+def last_episode(show_name):
+    data = get_seriedata(show_name)
+    season_number = len(data.keys())
+    last = data[season_number][0]
+    for episode in data[season_number]:
+        if not is_released(episode):
+            return {'episode': {
+                'number': last[0],
+                'season': season_number,
+                'title': last[1],
+                'release_date': last[2]
+            }}
+        else:
+            last = episode

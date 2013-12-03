@@ -1,11 +1,12 @@
 import web
 import json
 
-from epguides import get_seriedata, episode_released, next_episode
+from epguides import get_seriedata, episode_released, next_episode, last_episode
 
 urls = (
     '/show/(\w*)/?', 'view.index',
     '/show/(\w+)/next/?', 'view.next',
+    '/show/(\w+)/last/?', 'view.last',
     '/show/(\w+)/(\d+)/(\d+)/released/?', 'view.released'
 )
 
@@ -25,6 +26,11 @@ class released:
 class next:
     def GET(self, show):
         return json.dumps(next_episode(show))
+
+
+class last:
+    def GET(self, show):
+        return json.dumps(last_episode(show))
 
 
 if __name__ == "__main__":
