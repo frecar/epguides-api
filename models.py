@@ -6,12 +6,15 @@ class EpisodeNotFoundException(Exception):
     pass
 
 
-class Episode:
+class Episode(object):
     def __init__(self, season_number, episode_data):
         self.season = int(season_number)
         self.number = int(episode_data['number'])
         self.title = episode_data['title']
         self.release_date = episode_data['release_date']
+
+    def __serialize__(self):
+        return self.__dict__
 
     def released(self):
         release_date = datetime.datetime.strptime(self.release_date, "%Y-%m-%d")
@@ -22,7 +25,7 @@ class Episode:
         return False
 
 
-class Show:
+class Show(object):
     def __init__(self, show_name):
         self.show_name = show_name
 
@@ -72,12 +75,14 @@ class Show:
             if season_number not in episodes:
                 episodes[season_number] = []
 
-            episode = Episode(season_number,
-                              {'number': episode_data[2],
-                               'title': episode_data[4],
-                               'release_date': datetime.datetime.strptime(
-                                   episode_data[3], "%d/%b/%y").strftime(
-                                   "%Y-%m-%d")})
+            episode = Episode(season_number, {
+                'number': episode_data[2],
+                'title': episode_data[4],
+                'release_date': datetime.datetime.strptime(
+                    episode_data[3],
+                    "%d/%b/%y"
+                ).strftime("%Y-%m-%d")
+            })
 
             episodes[season_number].append(episode)
 
