@@ -1,3 +1,3 @@
-web.py
+flask
 redis
 beaker
