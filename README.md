@@ -1,7 +1,7 @@
 epguides-client-api
 ===================
 
-API for epguides.com 
+Public API for epguides.com 
 
 Query tvshows and retreieve dates and titles for all episodes. 
 
