@@ -12,7 +12,6 @@ install:
 
 script:
   - flake8
-  - PYTHONPATH=$PWD
   - coverage run --source=python tests.py
   - coverage report
 
