@@ -30,7 +30,7 @@ def released(show, season, episode):
 def next_from_given_episode(show, season, episode):
     try:
         return json_response({
-            'status': Show(show).get_episode(int(season), int(episode)).next()
+            'episode': Show(show).get_episode(int(season), int(episode)).next()
         })
     except EpisodeNotFoundException:
         return json_response({

@@ -34,6 +34,11 @@ class TestViews(unittest.TestCase):
         self.assertStatusCode(response, 200)
         self.assertEqual(json.loads(response.data)['status'], True)
 
+    def test_next_from_current_view(self):
+        response = self.app.get('/show/howimetyourmother/1/1/next')
+        self.assertStatusCode(response, 200)
+        self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
+
     def test_last_view(self):
         response = self.app.get('/show/howimetyourmother/last')
         self.assertStatusCode(response, 200)
