@@ -21,7 +21,7 @@ class TestViews(unittest.TestCase):
         self.assertTrue('title' in data)
 
     def test_show_view(self):
-        response = self.app.get('/show/howimetyourmother')
+        response = self.app.get('/show/howimetyourmother/')
         self.assertStatusCode(response, 200)
 
         data = json.loads(response.data)
@@ -30,27 +30,32 @@ class TestViews(unittest.TestCase):
                 self.assertCorrectEpisodeObject(episode)
 
     def test_released_view(self):
-        response = self.app.get('/show/howimetyourmother/1/1/released')
+        response = self.app.get('/show/howimetyourmother/1/1/released/')
         self.assertStatusCode(response, 200)
         self.assertEqual(json.loads(response.data)['status'], True)
 
     def test_next_from_current_view(self):
-        response = self.app.get('/show/howimetyourmother/1/1/next')
+        response = self.app.get('/show/howimetyourmother/1/1/next/')
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
 
+    def test_released_next_from_current_view(self):
+        response = self.app.get('/show/howimetyourmother/1/1/next/released/')
+        self.assertStatusCode(response, 200)
+        self.assertEqual(json.loads(response.data)['status'], True)
+
     def test_last_view(self):
-        response = self.app.get('/show/howimetyourmother/last')
+        response = self.app.get('/show/howimetyourmother/last/')
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
 
     def test_next_view(self):
         # test a show that is running, this might need to be updated some day
-        response = self.app.get('/show/howimetyourmother/next')
+        response = self.app.get('/show/howimetyourmother/next/')
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
 
-        response = self.app.get('/show/chuck/next/')
+        response = self.app.get('/show/chuck/next//')
         self.assertStatusCode(response, 404)
 
 
