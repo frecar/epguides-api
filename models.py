@@ -7,7 +7,8 @@ class EpisodeNotFoundException(Exception):
 
 
 class Episode(object):
-    def __init__(self, season_number, episode_data):
+    def __init__(self, show, season_number, episode_data):
+        self.show = show
         self.season = int(season_number)
         self.number = int(episode_data['number'])
         self.title = episode_data['title']
@@ -23,6 +24,21 @@ class Episode(object):
             return True
 
         return False
+
+    def next(self):
+        episodes = self.show.get_episodes()
+
+        for ep in episodes[self.season]:
+            if ep.number == self.number + 1:
+                return ep
+
+        if self.season + 1 in episodes:
+
+            for ep in episodes[self.season + 1]:
+                if ep.number == 1:
+                    return ep
+
+        return None
 
 
 class Show(object):
@@ -75,7 +91,7 @@ class Show(object):
             if season_number not in episodes:
                 episodes[season_number] = []
 
-            episode = Episode(season_number, {
+            episode = Episode(self, season_number, {
                 'number': episode_data[2],
                 'title': episode_data[4],
                 'release_date': datetime.datetime.strptime(
