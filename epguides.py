@@ -1,19 +1,11 @@
-from contextlib import closing
-import urllib
 import re
+import urllib
+from contextlib import closing
 
-from beaker.cache import CacheManager
-from beaker.util import parse_cache_config_options
-
-cache_opts = {
-    'cache.type': 'memory',
-    'cache.expire': 604800,
-}
-
-cache = CacheManager(**parse_cache_config_options(cache_opts))
+from views import cache
 
 
-@cache.cache('get_seriedata')
+@cache.memoize(60 * 60 * 24 * 7)
 def get_seriedata(url):
     with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
         episodes = re.findall("([\d]*)\s*([\d]*)-([\d]*)\s*[\w\-]*"

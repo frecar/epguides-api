@@ -1,12 +1,16 @@
 from flask import Flask
+from flask.ext.cache import Cache
 
 from models import EpisodeNotFoundException, Show
 from utils import json_response
 
 app = Flask(__name__)
 app.config.update({
-    'DEBUG': True
+    'DEBUG': True,
+    'CACHE_TYPE': 'redis'
 })
+
+cache = Cache(app)
 
 
 @app.route('/show/<show>/')
