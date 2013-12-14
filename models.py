@@ -1,5 +1,4 @@
 import datetime
-from epguides import get_seriedata
 
 
 class EpisodeNotFoundException(Exception):
@@ -82,6 +81,7 @@ class Show(object):
         return self.get_episode(season_number, episode_number).released()
 
     def get_episodes(self):
+        from epguides import get_seriedata
         episodes = {}
 
         for episode_data in get_seriedata(self.show_name):

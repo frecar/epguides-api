@@ -6,7 +6,9 @@ import views
 class TestViews(unittest.TestCase):
 
     def setUp(self):
-        self.app = views.app.test_client()
+        app = views.app
+        app.config['CACHE_TYPE'] = 'simple'
+        self.app = app.test_client()
 
     def tearDown(self):
         pass
