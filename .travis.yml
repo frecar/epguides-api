@@ -13,5 +13,7 @@ script:
   - coverage run --source=python tests.py
   - coverage report
 
+services:
+  - redis-server
 
 after_success: coveralls
