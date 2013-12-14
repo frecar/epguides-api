@@ -1,6 +1,7 @@
 *.py[cod]
 .idea
 venv
+local.cfg
 
 # C extensions
 *.so
