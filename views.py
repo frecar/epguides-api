@@ -21,6 +21,17 @@ cache = Cache(app)
 def view_show(show):
     return json_response(Show(show).get_episodes())
 
+@app.route('/show/<show>/<season>/<episode>/')
+def episode(show, season, episode):
+    try:
+        return json_response({
+            'episode': Show(show).get_episode(int(season), int(episode))
+        })
+    except EpisodeNotFoundException:
+        return json_response({
+            'error': 'Episode not found'
+        }, 404)
+
 
 @app.route('/show/<show>/<season>/<episode>/released/')
 def released(show, season, episode):
