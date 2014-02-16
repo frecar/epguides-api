@@ -1,8 +1,6 @@
 import datetime
 
-
-class EpisodeNotFoundException(Exception):
-    pass
+from api.utils import parse_epguides_data, EpisodeNotFoundException
 
 
 class Episode(object):
@@ -81,10 +79,9 @@ class Show(object):
         return self.get_episode(season_number, episode_number).released()
 
     def get_episodes(self):
-        from epguides import get_seriedata
         episodes = {}
 
-        for episode_data in get_seriedata(self.show_name):
+        for episode_data in parse_epguides_data(self.show_name):
 
             season_number = int(episode_data[1])
 
