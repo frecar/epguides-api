@@ -4,7 +4,6 @@ import views
 
 
 class TestViews(unittest.TestCase):
-
     def setUp(self):
         app = views.app
         app.config['CACHE_TYPE'] = 'simple'
@@ -35,6 +34,11 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/howimetyourmother/1/1/released/')
         self.assertStatusCode(response, 200)
         self.assertEqual(json.loads(response.data)['status'], True)
+
+    def test_given_episode_view(self):
+        response = self.app.get('/show/howimetyourmother/1/1/')
+        self.assertStatusCode(response, 200)
+        self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
 
     def test_next_from_current_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/next/')
