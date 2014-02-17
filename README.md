@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/frecar/epguides-client-api.png?branch=master)](https://travis-ci.org/frecar/epguides-client-api)
+[![Build Status](https://travis-ci.org/frecar/epguides-api.png?branch=master)](https://travis-ci.org/frecar/epguides-api)
 [![Coverage Status](https://coveralls.io/repos/frecar/epguides-api/badge.png?branch=master)](https://coveralls.io/r/frecar/epguides-api?branch=master)
 
 epguides-api
