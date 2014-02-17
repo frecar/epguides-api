@@ -33,7 +33,6 @@ def parse_epguides_data(url):
     return episodes
 
 
-
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_info(url):
     with closing(urllib.urlopen("http://epguides.com/" + url)) as x:

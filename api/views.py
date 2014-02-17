@@ -8,9 +8,11 @@ from utils import json_response, EpisodeNotFoundException
 def view_show(show):
     return json_response(Show(show).get_episodes())
 
+
 @app.route('/show/<show>/info/')
 def view_show_info(show):
     return json_response(Show(show))
+
 
 @app.route('/show/<show>/<season>/<episode>/')
 def episode(show, season, episode):
