@@ -10,7 +10,7 @@ install:
 
 script:
   - flake8
-  - coverage run --source=python tests.py
+  - coverage run --source=python api/tests.py
   - coverage report
 
 services:

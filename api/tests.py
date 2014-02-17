@@ -30,6 +30,11 @@ class TestViews(unittest.TestCase):
             for episode in data[season]:
                 self.assertCorrectEpisodeObject(episode)
 
+    def test_metadata_info(self):
+        response = self.app.get('/show/howimetyourmother/info/')
+        self.assertStatusCode(response, 200)
+        self.assertEqual(json.loads(response.data)['title'], "How I Met Your Mother")
+
     def test_released_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/released/')
         self.assertStatusCode(response, 200)
