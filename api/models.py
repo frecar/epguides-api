@@ -1,6 +1,6 @@
 import datetime
 
-from api.utils import parse_epguides_data, EpisodeNotFoundException
+from utils import parse_epguides_data, EpisodeNotFoundException, parse_epguides_info
 
 
 class Episode(object):
@@ -39,8 +39,16 @@ class Episode(object):
 
 
 class Show(object):
-    def __init__(self, show_name):
-        self.show_name = show_name
+    def __init__(self, epguide_name):
+        self.epguide_name = epguide_name
+        self.title = self.get_title()
+        self.imdb_id = self.get_imdb_id()
+
+    def get_title(self):
+        return parse_epguides_info(self.epguide_name)[1]
+
+    def get_imdb_id(self):
+        return parse_epguides_info(self.epguide_name)[0]
 
     def next_episode(self):
         show_data = self.get_episodes()
@@ -81,7 +89,7 @@ class Show(object):
     def get_episodes(self):
         episodes = {}
 
-        for episode_data in parse_epguides_data(self.show_name):
+        for episode_data in parse_epguides_data(self.epguide_name):
 
             season_number = int(episode_data[1])
 

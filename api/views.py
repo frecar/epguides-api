@@ -9,9 +9,8 @@ def view_show(show):
     return json_response(Show(show).get_episodes())
 
 @app.route('/show/<show>/info/')
-def view_show(show):
-    return json_response(Show(show).get_episodes())
-
+def view_show_info(show):
+    return json_response(Show(show))
 
 @app.route('/show/<show>/<season>/<episode>/')
 def episode(show, season, episode):
@@ -76,4 +75,4 @@ def last(show):
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)

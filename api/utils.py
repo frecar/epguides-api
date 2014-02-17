@@ -31,3 +31,10 @@ def parse_epguides_data(url):
                               "&\-#<\w='.;:\/]*>([\w\s]*)", x.read())
 
     return episodes
+
+
+
+@cache.memoize(60 * 60 * 24 * 7)
+def parse_epguides_info(url):
+    with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
+        return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.]*)">([\w\s.]*)<\/a>', x.read())[0]
