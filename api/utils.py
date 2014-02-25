@@ -25,15 +25,26 @@ def json_response(data, status=200):
 
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_data(url):
-    with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
-        episodes = re.findall("([\d]*)\s*([\d]*)-([\d]*)\s*[\w\-]*"
-                              "\s*([0-9][0-9]\/\w*\/[0-9][0-9])[\s"
-                              "&\-#<\w='.;:\/]*>([\w\s]*)", x.read())
+    try:
+        with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
+            episodes = re.findall("([\d]*)\s*([\d]*)-([\d]*)\s*[\w\-]*"
+                                  "\s*([0-9][0-9]\/\w*\/[0-9][0-9])[\s"
+                                  "&\-#<\w='.;:\/]*>([\w\s]*)", x.read())
+
+    except IndexError:
+        print "Error reading epguides, sure that %s is the correct url? " % url
+        return
+
 
     return episodes
 
 
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_info(url):
-    with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
-        return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.]*)">([\w\s.]*)<\/a>', x.read())[0]
+    try:
+        with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
+            return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.]*)">([\w\s.]*)<\/a>', x.read())[0]
+
+    except IndexError:
+        print "Error reading epguides, sure that %s is the correct url? " % url
+        return

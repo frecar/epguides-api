@@ -45,10 +45,16 @@ class Show(object):
         self.imdb_id = self.get_imdb_id()
 
     def get_title(self):
-        return parse_epguides_info(self.epguide_name)[1]
+        try:
+            return parse_epguides_info(self.epguide_name)[1]
+        except (IndexError, TypeError):
+            raise EpisodeNotFoundException
 
     def get_imdb_id(self):
-        return parse_epguides_info(self.epguide_name)[0]
+        try:
+            return parse_epguides_info(self.epguide_name)[0]
+        except (IndexError, TypeError):
+            raise EpisodeNotFoundException
 
     def next_episode(self):
         show_data = self.get_episodes()
