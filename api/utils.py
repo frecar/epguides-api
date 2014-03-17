@@ -27,9 +27,10 @@ def json_response(data, status=200):
 def parse_epguides_data(url):
     try:
         with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
-            episodes = re.findall("([\d]*)\s*([\d]*)-([\d]*)\s*[\w\-]*"
-                                  "\s*([0-9][0-9]\/\w*\/[0-9][0-9])[\s"
-                                  "&\-#<\w='.;:\/]*>([\w\s]*)", x.read())
+            episodes = re.findall("([\d]*)\s*([\d]*)-([\d]*)"
+                                  "\s*[\w\-]*\s*([0-9][0-9]\/"
+                                  "\w*\/[0-9][0-9])[\s&\-#-<"
+                                  "\w='.;:\/]*>([)(:\w\s-]*)", x.read())
 
     except IndexError:
         print "Error reading epguides, sure that %s is the correct url? " % url
