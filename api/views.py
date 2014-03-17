@@ -39,7 +39,9 @@ def released(show, season, episode):
             'status': Show(show).episode_released(int(season), int(episode))
         })
     except EpisodeNotFoundException:
-        return json_response({'error': 'Episode not found'}, 404)
+        return json_response({
+            'status': False
+        })
 
 
 @app.route('/show/<show>/<season>/<episode>/next/')
