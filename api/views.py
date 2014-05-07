@@ -57,9 +57,16 @@ def next_from_given_episode(show, season, episode):
 @app.route('/show/<show>/<season>/<episode>/next/released/')
 def next_released_from_given_episode(show, season, episode):
     try:
+
+        next_episode = Show(show).get_episode(int(season), int(episode)).next()
+
+        if not next_episode:
+            raise EpisodeNotFoundException
+
         return json_response({
             'status': Show(show).get_episode(int(season), int(episode)).next().released()
         })
+
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
 
