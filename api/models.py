@@ -41,6 +41,7 @@ class Episode(object):
 class Show(object):
     def __init__(self, epguide_name):
         self.epguide_name = epguide_name
+
         self.title = self.get_title()
         self.imdb_id = self.get_imdb_id()
 

@@ -6,11 +6,10 @@ from utils import json_response, EpisodeNotFoundException
 
 @app.route('/show/<show>/')
 def view_show(show):
-
     try:
         return json_response(Show(show).get_episodes())
     except EpisodeNotFoundException:
-        return json_response({'error': 'Episode not found'}, 404)
+        return json_response({'error': 'Show not found'}, 404)
 
 
 @app.route('/show/<show>/info/')
@@ -19,7 +18,7 @@ def view_show_info(show):
         return json_response(Show(show))
 
     except EpisodeNotFoundException:
-        return json_response({'error': 'Episode not found'}, 404)
+        return json_response({'error': 'Show not found'}, 404)
 
 
 @app.route('/show/<show>/<season>/<episode>/')
