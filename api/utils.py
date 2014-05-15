@@ -46,7 +46,6 @@ def parse_epguides_info(url):
             return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.]*)">([\w\s.&:\']*)[\w)(]*<\/a>',
                               x.read())[0]
 
-
     except IndexError:
         print "Error reading epguides, sure that %s is the correct url? " % url
         return
