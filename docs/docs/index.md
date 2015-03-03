@@ -1,19 +1,10 @@
-[![Build status](https://ci.frigg.io/badges/frecar/epguides-api)](https://ci.frigg.io/frecar/epguides-api/last/)
-[![Build status](https://ci.frigg.io/badges/coverage/frecar/epguides-api/)](https://ci.frigg.io/frecar/epguides-api/last/)
-
-epguides-api
-===================
-
-Public API for epguides.com 
-
-Query TV Shows for metadata on show and all episodes.
+# Welcome to epguides-api docs
 
 
 Example usage
 ===================
 
-Big Bang Theory
-##############
+## Big Bang Theory
 
 [Big Bang Theory Metadata](http://epguides.frecar.no/show/bigbangtheory/info/)
 
@@ -36,8 +27,8 @@ Big Bang Theory
     http://epguides.frecar.no/show/bigbangtheory/last/
 
 
-How I met Your Mother
-###################
+## How I met Your Mother
+
 
 [How I Met Your Mother Metadata](http://epguides.frecar.no/show/howimetyourmother/info/)
 
