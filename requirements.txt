@@ -3,3 +3,4 @@ flask-cache
 redis
 flake8
 coverage
+tox

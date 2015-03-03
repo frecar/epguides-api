@@ -4,8 +4,9 @@ import urllib
 
 from flask import make_response
 from json import JSONEncoder
-from app import cache
 from contextlib import closing
+
+from app import cache
 
 
 class EpisodeNotFoundException(Exception):
@@ -32,8 +33,7 @@ def parse_epguides_data(url):
                                   "\w*\/[0-9][0-9])[\s&\-#-<"
                                   "\w='.;:\/]*>([)(:\w\s-]*)", x.read())
 
-    except IndexError:
-        print "Error reading epguides, sure that %s is the correct url? " % url
+    except IndexError as e:
         return
 
     return episodes
@@ -46,6 +46,5 @@ def parse_epguides_info(url):
             return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.]*)">([\w\s.&:\']*)[\w)(]*<\/a>',
                               x.read())[0]
 
-    except IndexError:
-        print "Error reading epguides, sure that %s is the correct url? " % url
+    except IndexError as e:
         return
