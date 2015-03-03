@@ -33,7 +33,7 @@ def parse_epguides_data(url):
                                   "\w*\/[0-9][0-9])[\s&\-#-<"
                                   "\w='.;:\/]*>([)(:\w\s-]*)", x.read())
 
-    except IndexError as e:
+    except IndexError:
         return
 
     return episodes
@@ -46,5 +46,5 @@ def parse_epguides_info(url):
             return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.]*)">([\w\s.&:\']*)[\w)(]*<\/a>',
                               x.read())[0]
 
-    except IndexError as e:
+    except IndexError:
         return
