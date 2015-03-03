@@ -13,9 +13,10 @@ Example usage
 ===================
 
 Big Bang Theory
-====
+##############
 
 [Big Bang Theory Metadata](http://epguides.frecar.no/show/bigbangtheory/info/)
+
     http://epguides.frecar.no/show/bigbangtheory/info/
 
 [All episodes of Big Bang Theory](http://epguides.frecar.no/show/bigbangtheory/)
@@ -36,7 +37,7 @@ Big Bang Theory
 
 
 How I met Your Mother
-====
+###################
 
 [How I Met Your Mother Metadata](http://epguides.frecar.no/show/howimetyourmother/info/)
 
