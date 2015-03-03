@@ -50,6 +50,10 @@ class TestViews(unittest.TestCase):
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
 
+    def test_next_from_current_view_does_not_exist(self):
+        response = self.app.get('/show/howimetyourmother/15/1/next/')
+        self.assertStatusCode(response, 404)
+
     def test_released_next_from_current_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/next/released/')
         self.assertStatusCode(response, 200)
@@ -59,6 +63,10 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/howimetyourmother/last/')
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
+
+    def test_next_released_from_given_episode(self):
+        response = self.app.get('/show/howimetyourmother/next/')
+        self.assertStatusCode(response, 404)
 
     def test_next_view(self):
         # test a show that is running, this might need to be updated some day
