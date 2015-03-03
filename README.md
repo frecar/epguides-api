@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/frecar/epguides-api.png?branch=master)](https://travis-ci.org/frecar/epguides-api)
-[![Coverage Status](https://coveralls.io/repos/frecar/epguides-api/badge.png?branch=master)](https://coveralls.io/r/frecar/epguides-api?branch=master)
+[![Build status](https://ci.frigg.io/badges/frecar/epguides-api)](https://ci.frigg.io/frecar/epguides-api/last/)
+[![Build status](https://ci.frigg.io/badges/coverage/frecar/epguides-api/)](https://ci.frigg.io/frecar/epguides-api/last/)
 
 epguides-api
 ===================
