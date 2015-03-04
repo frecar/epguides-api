@@ -9,6 +9,7 @@ from werkzeug.utils import redirect
 def redirect_to_docs():
     return redirect("http://epguides-api.readthedocs.org/en/latest/")
 
+
 @app.route('/show/<show>/')
 def view_show(show):
     try:

@@ -2,6 +2,7 @@
 
 Providing a JSON api for everyone.
 
+Source code: [Github](https://github.com/frecar/epguides-api)
 
 Example usage
 ===================
