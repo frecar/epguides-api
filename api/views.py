@@ -2,7 +2,12 @@ from app import app
 
 from models import Show
 from utils import json_response, EpisodeNotFoundException
+from werkzeug.utils import redirect
 
+
+@app.route("/")
+def redirect_to_docs():
+    return redirect("http://epguides-api.readthedocs.org/en/latest/")
 
 @app.route('/show/<show>/')
 def view_show(show):
