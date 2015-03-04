@@ -1,10 +1,12 @@
-# Welcome to epguides-api docs
+# Welcome to epguides api docs
+
+Providing a JSON api for everyone.
 
 
 Example usage
 ===================
 
-## Big Bang Theory
+### Big Bang Theory
 
 [Big Bang Theory Metadata](http://epguides.frecar.no/show/bigbangtheory/info/)
 
@@ -27,7 +29,7 @@ Example usage
     http://epguides.frecar.no/show/bigbangtheory/last/
 
 
-## How I met Your Mother
+### How I met Your Mother
 
 
 [How I Met Your Mother Metadata](http://epguides.frecar.no/show/howimetyourmother/info/)
