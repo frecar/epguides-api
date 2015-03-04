@@ -43,7 +43,8 @@ def parse_epguides_data(url):
 def parse_epguides_info(url):
     try:
         with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
-            return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.]*)">([\w\s.&:\']*)[\w)(]*<\/a>',
+            return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.:]*)">'
+                              '([\w\s.&:\']*)[\w:\s)(]*<\/a>',
                               x.read())[0]
 
     except IndexError:
