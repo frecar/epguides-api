@@ -71,9 +71,14 @@ class Show(object):
         season_number = len(show_data.keys())
         last_episode_released = None
 
-        for episode in show_data[season_number]:
-            if episode.released():
-                last_episode_released = episode
+        if show_data[season_number][0].released():
+            for episode in show_data[season_number]:
+                if episode.released():
+                    last_episode_released = episode
+        else:
+            for episode in show_data[season_number - 1]:
+                if episode.released():
+                    last_episode_released = episode
 
         if last_episode_released:
             return last_episode_released
