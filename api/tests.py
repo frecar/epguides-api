@@ -64,6 +64,10 @@ class TestViews(unittest.TestCase):
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
 
+        response = self.app.get('/show/gameofthrones/last/')
+        self.assertStatusCode(response, 200)
+        self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
+
     def test_next_released_from_given_episode(self):
         response = self.app.get('/show/howimetyourmother/next/')
         self.assertStatusCode(response, 404)
