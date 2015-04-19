@@ -87,7 +87,7 @@ class TestViews(unittest.TestCase):
 
     def test_redirect_to_docs(self):
         response = self.app.get('/')
-        self.assertStatusCode(response, 403)
+        self.assertStatusCode(response, 302)
 
 if __name__ == '__main__':
     unittest.main()
