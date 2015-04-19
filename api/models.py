@@ -1,6 +1,7 @@
 import datetime
 
 from utils import parse_epguides_data, EpisodeNotFoundException, parse_epguides_info
+from app import cache
 
 
 class Episode(object):
@@ -39,6 +40,8 @@ class Episode(object):
 
 
 class Show(object):
+
+    @cache.memoize(60 * 60 * 24 * 7)
     def __init__(self, epguide_name):
         self.epguide_name = epguide_name
 
