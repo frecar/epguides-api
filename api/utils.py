@@ -7,6 +7,7 @@ from json import JSONEncoder
 from contextlib import closing
 
 from app import cache
+from redis import Redis
 
 
 class EpisodeNotFoundException(Exception):
@@ -22,6 +23,22 @@ def json_response(data, status=200):
     response = make_response(json.dumps(data, cls=SimpleEncoder), status)
     response.mimetype = 'application/json'
     return response
+
+
+def add_epguides_key_to_redis(epguides_name):
+    redis = Redis()
+
+    redis_queue_key = "epguides_api:keys"
+    all_keys = redis.lrange(redis_queue_key, 0, redis.llen(redis_queue_key))
+
+    if epguides_name not in all_keys:
+        redis.lpush(redis_queue_key, epguides_name)
+
+
+def list_all_epguides_keys_redis():
+    redis = Redis()
+    redis_queue_key = "epguides_api:keys"
+    return redis.lrange(redis_queue_key, 0, redis.llen(redis_queue_key))
 
 
 @cache.memoize(60 * 60 * 24 * 7)

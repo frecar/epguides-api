@@ -1,7 +1,12 @@
+import csv
+import io
+from flask import request
+
 from app import app
 
 from models import Show
-from utils import json_response, EpisodeNotFoundException
+from utils import json_response, EpisodeNotFoundException, add_epguides_key_to_redis, \
+    list_all_epguides_keys_redis
 from werkzeug.utils import redirect
 
 
@@ -9,11 +14,29 @@ from werkzeug.utils import redirect
 def redirect_to_docs():
     return redirect("http://epguides-api.readthedocs.org/en/latest/")
 
+@app.route('/show/')
+def discover_shows():
+    result = []
+
+    for epguides_name in list_all_epguides_keys_redis():
+
+        show = Show(epguides_name)
+        show.episodes = "{0}{1}/".format(request.base_url, epguides_name)
+        show.next_episode = "{0}{1}/next".format(request.base_url, epguides_name)
+        show.last_episode = "{0}{1}/last".format(request.base_url, epguides_name)
+        show.imdb_url = "http://www.imdb.com/title/{0}".format(show.imdb_id)
+        show.epguides_url = "http://www.epguides.com/{0}".format(epguides_name)
+        result.append(show)
+
+    return json_response(result)
+
 
 @app.route('/show/<show>/')
 def view_show(show):
     try:
-        return json_response(Show(show).get_episodes())
+        result_show = json_response(Show(show).get_episodes())
+        add_epguides_key_to_redis(show)
+        return result_show
     except EpisodeNotFoundException:
         return json_response({'error': 'Show not found'}, 404)
 
