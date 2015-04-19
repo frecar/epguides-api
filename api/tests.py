@@ -77,6 +77,10 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/chuck/next//')
         self.assertStatusCode(response, 404)
 
+    def test_discover_shows_url(self):
+        response = self.app.get('/show/gameofthrones/next/')
+        self.assertStatusCode(response, 200)
+
 
 if __name__ == '__main__':
     unittest.main()
