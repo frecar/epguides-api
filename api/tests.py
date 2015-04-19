@@ -85,6 +85,9 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/gameofthrones/next/')
         self.assertStatusCode(response, 200)
 
+    def test_redirect_to_docs(self):
+        response = self.app.get('/')
+        self.assertStatusCode(response, 403)
 
 if __name__ == '__main__':
     unittest.main()

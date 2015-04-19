@@ -1,7 +1,6 @@
 import datetime
 
 from utils import parse_epguides_data, EpisodeNotFoundException, parse_epguides_info
-from app import cache
 
 
 class Episode(object):
