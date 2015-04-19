@@ -7,6 +7,13 @@ Source code: [Github](https://github.com/frecar/epguides-api)
 Example usage
 ===================
 
+## Explore all TV shows
+
+[Discover TV shows from epguides](http://epguides.frecar.no/show/)
+
+    http://epguides.frecar.no/show/
+
+
 ### Big Bang Theory
 
 [Big Bang Theory Metadata](http://epguides.frecar.no/show/bigbangtheory/info/)
