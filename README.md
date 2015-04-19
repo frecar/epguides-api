@@ -12,3 +12,8 @@ Query TV Shows for metadata on show and all episodes.
 Documentation
 ===================
 For full documentation visit [epguides-docs](http://epguides-api.readthedocs.org/).
+
+
+Mashape
+===================
+The API is also available through [Mashape][https://www.mashape.com/frecar/epguides-api]
