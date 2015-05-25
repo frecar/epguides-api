@@ -4,6 +4,8 @@
 epguides-api
 ===================
 
+[![Join the chat at https://gitter.im/frecar/epguides-api](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/frecar/epguides-api?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 Public API for epguides.com 
 
 Query TV Shows for metadata on show and all episodes.
