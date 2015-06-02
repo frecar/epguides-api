@@ -41,11 +41,13 @@ class Episode(object):
 
 @cache.memoize(60 * 60 * 24 * 7)
 def get_show_by_name(epguides_name):
-    return Show(epguides_name)
+    try:
+        return Show(epguides_name)
+    except EpisodeNotFoundException:
+        return None
 
 
 class Show(object):
-
     def __init__(self, epguide_name):
         self.epguide_name = epguide_name
         self.title = self.get_title()
@@ -55,13 +57,13 @@ class Show(object):
         try:
             return parse_epguides_info(self.epguide_name)[1]
         except (IndexError, TypeError):
-            return "Unknown title"
+            raise EpisodeNotFoundException()
 
     def get_imdb_id(self):
         try:
             return parse_epguides_info(self.epguide_name)[0]
         except (IndexError, TypeError):
-            return "Unknown imdb id"
+            raise EpisodeNotFoundException()
 
     def next_episode(self):
         show_data = self.get_episodes()

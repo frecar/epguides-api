@@ -16,13 +16,19 @@ def discover_shows():
     result = []
 
     for epguides_name in list_all_epguides_keys_redis():
-        show = get_show_by_name(epguides_name)
-        show.episodes = "{0}show/{1}/".format(app.config['BASE_URL'], epguides_name)
-        show.next_episode = "{0}show/{1}/next".format(app.config['BASE_URL'], epguides_name)
-        show.last_episode = "{0}show/{1}/last".format(app.config['BASE_URL'], epguides_name)
-        show.imdb_url = "http://www.imdb.com/title/{0}".format(show.imdb_id)
-        show.epguides_url = "http://www.epguides.com/{0}".format(epguides_name)
-        result.append(show)
+        try:
+            show = get_show_by_name(epguides_name)
+            if not show:
+                continue
+
+            show.episodes = "{0}show/{1}/".format(app.config['BASE_URL'], epguides_name)
+            show.next_episode = "{0}show/{1}/next".format(app.config['BASE_URL'], epguides_name)
+            show.last_episode = "{0}show/{1}/last".format(app.config['BASE_URL'], epguides_name)
+            show.imdb_url = "http://www.imdb.com/title/{0}".format(show.imdb_id)
+            show.epguides_url = "http://www.epguides.com/{0}".format(epguides_name)
+            result.append(show)
+        except EpisodeNotFoundException:
+            continue
 
     return json_response(result)
 
