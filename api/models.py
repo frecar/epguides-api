@@ -1,4 +1,5 @@
 import datetime
+from app import cache
 
 from utils import parse_epguides_data, EpisodeNotFoundException, parse_epguides_info
 
@@ -38,11 +39,15 @@ class Episode(object):
         return None
 
 
+@cache.memoize(60 * 60 * 24 * 7)
+def get_show_by_name(epguides_name):
+    return Show(epguides_name)
+
+
 class Show(object):
 
     def __init__(self, epguide_name):
         self.epguide_name = epguide_name
-
         self.title = self.get_title()
         self.imdb_id = self.get_imdb_id()
 

@@ -1,6 +1,6 @@
 from app import app
 
-from models import Show
+from models import Show, get_show_by_name
 from utils import json_response, EpisodeNotFoundException, add_epguides_key_to_redis, \
     list_all_epguides_keys_redis
 from werkzeug.utils import redirect
@@ -16,7 +16,7 @@ def discover_shows():
     result = []
 
     for epguides_name in list_all_epguides_keys_redis():
-        show = Show(epguides_name)
+        show = get_show_by_name(epguides_name)
         show.episodes = "{0}show/{1}/".format(app.config['BASE_URL'], epguides_name)
         show.next_episode = "{0}show/{1}/next".format(app.config['BASE_URL'], epguides_name)
         show.last_episode = "{0}show/{1}/last".format(app.config['BASE_URL'], epguides_name)
