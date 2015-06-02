@@ -1,4 +1,3 @@
-from random import randint
 import os
 import ConfigParser
 
@@ -17,4 +16,3 @@ app.config.update(CONFIG)
 cache = Cache(app, config={'CACHE_TYPE': 'redis',
                            'CACHE_KEY_PREFIX': 'epguides_cache:',
                            'CACHE_DEFAULT_TIMEOUT': 3600})
-

@@ -56,14 +56,12 @@ class Show(object):
             return parse_epguides_info(self.epguide_name)[1]
         except (IndexError, TypeError):
             return "Unknown title"
-            #raise EpisodeNotFoundException
 
     def get_imdb_id(self):
         try:
             return parse_epguides_info(self.epguide_name)[0]
         except (IndexError, TypeError):
             return "Unknown imdb id"
-            #raise EpisodeNotFoundException
 
     def next_episode(self):
         show_data = self.get_episodes()
