@@ -1,8 +1,7 @@
 from app import app
 
-from models import Show, get_show_by_name
-from utils import json_response, EpisodeNotFoundException, add_epguides_key_to_redis, \
-    list_all_epguides_keys_redis
+from models import get_show_by_name
+from utils import json_response, EpisodeNotFoundException, list_all_epguides_keys_redis
 from werkzeug.utils import redirect
 
 
@@ -36,9 +35,7 @@ def discover_shows():
 @app.route('/show/<show>/')
 def view_show(show):
     try:
-        result_show = json_response(get_show_by_name(show).get_episodes())
-        add_epguides_key_to_redis(show)
-        return result_show
+        return json_response(get_show_by_name(show).get_episodes())
     except EpisodeNotFoundException:
         return json_response({'error': 'Show not found'}, 404)
 
@@ -46,9 +43,7 @@ def view_show(show):
 @app.route('/show/<show>/info/')
 def view_show_info(show):
     try:
-        result = json_response(get_show_by_name(show))
-        add_epguides_key_to_redis(show)
-        return result
+        return json_response(get_show_by_name(show))
     except EpisodeNotFoundException:
         return json_response({'error': 'Show not found'}, 404)
 
@@ -56,14 +51,9 @@ def view_show_info(show):
 @app.route('/show/<show>/<season>/<episode>/')
 def episode(show, season, episode):
     try:
-        result = json_response({
+        return json_response({
             'episode': get_show_by_name(show).get_episode(int(season), int(episode))
         })
-
-        add_epguides_key_to_redis(show)
-
-        return result
-
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
 
@@ -71,11 +61,9 @@ def episode(show, season, episode):
 @app.route('/show/<show>/<season>/<episode>/released/')
 def released(show, season, episode):
     try:
-        result = json_response({
+        return json_response({
             'status': get_show_by_name(show).episode_released(int(season), int(episode))
         })
-        add_epguides_key_to_redis(show)
-        return result
     except EpisodeNotFoundException:
         return json_response({
             'status': False
@@ -85,12 +73,9 @@ def released(show, season, episode):
 @app.route('/show/<show>/<season>/<episode>/next/')
 def next_from_given_episode(show, season, episode):
     try:
-        result = json_response({
+        return json_response({
             'episode': get_show_by_name(show).get_episode(int(season), int(episode)).next()
         })
-        add_epguides_key_to_redis(show)
-        return result
-
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
 
@@ -104,15 +89,10 @@ def next_released_from_given_episode(show, season, episode):
         if not next_episode:
             raise EpisodeNotFoundException
 
-        result = json_response({
+        return json_response({
             'status': get_show_by_name(show).get_episode(int(season),
                                                          int(episode)).next().released()
         })
-
-        add_epguides_key_to_redis(show)
-
-        return result
-
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
 
@@ -120,14 +100,9 @@ def next_released_from_given_episode(show, season, episode):
 @app.route('/show/<show>/next/')
 def next(show):
     try:
-        result = json_response({
+        return json_response({
             'episode': get_show_by_name(show).next_episode()
         })
-
-        add_epguides_key_to_redis(show)
-
-        return result
-
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
 
@@ -135,14 +110,9 @@ def next(show):
 @app.route('/show/<show>/last/')
 def last(show):
     try:
-        result = json_response({
+        return json_response({
             'episode': get_show_by_name(show).last_episode()
         })
-
-        add_epguides_key_to_redis(show)
-
-        return result
-
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
 
