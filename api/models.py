@@ -40,7 +40,7 @@ class Episode(object):
         return None
 
 
-@cache.memoize(60 * 60 * 24 * 7)
+@cache.memoize(timeout=60 * 60 * 24 * 7)
 def get_show_by_name(epguides_name):
     try:
         show = Show(epguides_name)
