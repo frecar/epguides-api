@@ -43,6 +43,7 @@ def list_all_epguides_keys_redis():
 
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_data(url):
+
     try:
         with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
             episodes = re.findall("([\d]+)\s*([\d]*)-([\d]+)"
@@ -58,6 +59,7 @@ def parse_epguides_data(url):
 
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_info(url):
+
     try:
         with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
             return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.:]*)">'
