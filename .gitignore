@@ -2,6 +2,7 @@
 .idea
 venv
 local.cfg
+.eggs
 
 # C extensions
 *.so
