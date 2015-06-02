@@ -42,6 +42,7 @@ class Episode(object):
 
 @cache.memoize(timeout=60 * 60 * 24 * 7)
 def get_show_by_name(epguides_name):
+    epguides_name = str(epguides_name).lower()
     try:
         show = Show(epguides_name)
         add_epguides_key_to_redis(epguides_name)
