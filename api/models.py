@@ -54,7 +54,11 @@ class Show(object):
 
     def get_imdb_id(self):
         try:
-            return parse_epguides_info(self.epguide_name)[0]
+            imdb_id_raw = parse_epguides_info(self.epguide_name)[0]
+            imdb_id_prefix = imdb_id_raw[:2]
+            imdb_id_number = int(imdb_id_raw[2:])
+            return imdb_id_prefix + "%07d" % imdb_id_number
+
         except (IndexError, TypeError):
             raise EpisodeNotFoundException
 
