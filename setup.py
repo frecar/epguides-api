@@ -12,7 +12,7 @@ def _read_long_description():
 setup(
     name="epguides-api",
     version='1.0.1',
-    url='http://github.com/frecar/epguides-api',
+    url='https://github.com/frecar/epguides-api',
     author='Fredrik Carlsen',
     author_email='fredrik@carlsen.io',
     description='API for epguides.com',

@@ -7,7 +7,7 @@ from werkzeug.utils import redirect
 
 @app.route("/")
 def redirect_to_docs():
-    return redirect("http://epguides-api.readthedocs.org/en/latest/")
+    return redirect("https://epguides-api.readthedocs.org/en/latest/")
 
 
 @app.route('/show/')
