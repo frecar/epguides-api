@@ -1,7 +1,7 @@
-flask
-flask-cache
-redis
-flake8
-coverage
-tox
-requests
+Flask==0.10.1
+Flask-Cache==0.13.1
+redis==2.10.3
+flake8==2.3.0
+coverage==3.7.1
+tox==1.9.2
+requests==2.6.0
