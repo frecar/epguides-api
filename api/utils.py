@@ -1,13 +1,12 @@
 import json
 import re
-import urllib
 
 from flask import make_response
 from json import JSONEncoder
-from contextlib import closing
 
 from app import cache
 from redis import Redis
+import requests
 
 
 class EpisodeNotFoundException(Exception):
@@ -43,14 +42,12 @@ def list_all_epguides_keys_redis():
 
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_data(url):
-
     try:
-        with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
-            episodes = re.findall("([\d]+)\s*([\d]*)-([\d]+)"
-                                  "\s*[\w\-]*\s*([0-9][0-9]\/"
-                                  "\w*\/[0-9][0-9])[\s&\-#-<"
-                                  "\w='.;:\/]*>([)(:\w\s-]*)", x.read())
-
+        data = requests.get("http://epguides.com/" + url).text
+        episodes = re.findall("([\d]+)\s*([\d]*)-([\d]+)"
+                              "\s*[\w\-]*\s*([0-9][0-9]\/"
+                              "\w*\/[0-9][0-9])[\s&\-#-<"
+                              "\w='.;:\/]*>([)(:\w\s-]*)", data)
     except IndexError:
         return
 
@@ -59,12 +56,11 @@ def parse_epguides_data(url):
 
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_info(url):
-
     try:
-        with closing(urllib.urlopen("http://epguides.com/" + url)) as x:
-            return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.:]*)">'
-                              '([\w\s.&:\']*)[\w:\s)(]*<\/a>',
-                              x.read())[0]
+        data = requests.get("http://epguides.com/" + url).text
+        return re.findall('<h1><a href="[\w:\/\/.]*title\/([\w.:]*)">'
+                          '([\w\s.&:\']*)[\w:\s)(]*<\/a>',
+                          data)[0]
 
     except IndexError:
         return

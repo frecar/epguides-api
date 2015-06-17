@@ -12,6 +12,9 @@ class TestViews(unittest.TestCase):
     def tearDown(self):
         pass
 
+    def response_to_json(self, response):
+        return json.loads(response.data.decode("utf-8"))
+
     def assertStatusCode(self, response, expected):
         self.assertEquals(response._status_code, expected)
 
@@ -25,7 +28,7 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/howimetyourmother/')
         self.assertStatusCode(response, 200)
 
-        data = json.loads(response.data)
+        data = self.response_to_json(response)
         for season in data:
             for episode in data[season]:
                 self.assertCorrectEpisodeObject(episode)
@@ -33,22 +36,23 @@ class TestViews(unittest.TestCase):
     def test_metadata_info(self):
         response = self.app.get('/show/howimetyourmother/info/')
         self.assertStatusCode(response, 200)
-        self.assertEqual(json.loads(response.data)['title'], "How I Met Your Mother")
+        self.assertEqual(self.response_to_json(response)['title'],
+                         "How I Met Your Mother")
 
     def test_released_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/released/')
         self.assertStatusCode(response, 200)
-        self.assertEqual(json.loads(response.data)['status'], True)
+        self.assertEqual(self.response_to_json(response)['status'], True)
 
     def test_given_episode_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/')
         self.assertStatusCode(response, 200)
-        self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
+        self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
 
     def test_next_from_current_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/next/')
         self.assertStatusCode(response, 200)
-        self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
+        self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
 
     def test_next_from_current_view_does_not_exist(self):
         response = self.app.get('/show/howimetyourmother/15/1/next/')
@@ -57,16 +61,16 @@ class TestViews(unittest.TestCase):
     def test_released_next_from_current_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/next/released/')
         self.assertStatusCode(response, 200)
-        self.assertEqual(json.loads(response.data)['status'], True)
+        self.assertEqual(self.response_to_json(response)['status'], True)
 
     def test_last_view(self):
         response = self.app.get('/show/howimetyourmother/last/')
         self.assertStatusCode(response, 200)
-        self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
+        self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
 
         response = self.app.get('/show/gameofthrones/last/')
         self.assertStatusCode(response, 200)
-        self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
+        self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
 
     def test_next_released_from_given_episode(self):
         response = self.app.get('/show/howimetyourmother/next/')
@@ -76,7 +80,7 @@ class TestViews(unittest.TestCase):
         # test a show that is running, this might need to be updated some day
         response = self.app.get('/show/haltandcatchfire/next/')
         self.assertStatusCode(response, 200)
-        self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
+        self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
 
         response = self.app.get('/show/chuck/next//')
         self.assertStatusCode(response, 404)

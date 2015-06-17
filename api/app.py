@@ -1,10 +1,14 @@
 import os
-import ConfigParser
+
+try:
+    import configparser
+except ImportError:
+    from six.moves import configparser
 
 from flask import Flask
 from flask.ext.cache import Cache
 
-config = ConfigParser.ConfigParser()
+config = configparser.ConfigParser()
 config.read(["defaults.cfg", os.path.expanduser('~/epguidesapi.cfg')])
 CONFIG = {
     'BASE_URL': config.get('flask', 'base_url'),

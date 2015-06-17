@@ -4,3 +4,4 @@ redis
 flake8
 coverage
 tox
+requests

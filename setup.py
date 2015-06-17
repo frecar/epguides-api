@@ -24,7 +24,8 @@ setup(
         'redis',
         'flake8',
         'coverage',
-        'tox'
+        'tox',
+        'requests'
     ],
 
     license='MIT',
