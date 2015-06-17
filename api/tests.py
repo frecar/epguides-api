@@ -74,7 +74,7 @@ class TestViews(unittest.TestCase):
 
     def test_next_view(self):
         # test a show that is running, this might need to be updated some day
-        response = self.app.get('/show/gameofthrones/next/')
+        response = self.app.get('/show/haltandcatchfire/next/')
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(json.loads(response.data)['episode'])
 
@@ -82,7 +82,7 @@ class TestViews(unittest.TestCase):
         self.assertStatusCode(response, 404)
 
     def test_discover_shows_url(self):
-        response = self.app.get('/show/gameofthrones/next/')
+        response = self.app.get('/show/')
         self.assertStatusCode(response, 200)
 
     def test_redirect_to_docs(self):

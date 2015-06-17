@@ -1,5 +1,5 @@
-[![Build status](https://ci.frigg.io/badges/frecar/epguides-api)](https://ci.frigg.io/frecar/epguides-api/last/)
-[![Build status](https://ci.frigg.io/badges/coverage/frecar/epguides-api/)](https://ci.frigg.io/frecar/epguides-api/last/)
+[![Build status](https://ci.frigg.io/frecar/epguides-api.svg)](https://ci.frigg.io/frecar/epguides-api/last/)
+[![Coverage status](https://ci.frigg.io/frecar/epguides-api/coverage.svg)](https://ci.frigg.io/frecar/epguides-api/last/)
 
 epguides-api
 ===================
@@ -18,4 +18,4 @@ For full documentation visit [epguides-docs](http://epguides-api.readthedocs.org
 
 Mashape
 ===================
-The API is also available through [Mashape][https://www.mashape.com/frecar/epguides-api]
+The API is also available through [Mashape](https://www.mashape.com/frecar/epguides-api)
