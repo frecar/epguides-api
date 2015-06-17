@@ -13,7 +13,7 @@ Query TV Shows for metadata on show and all episodes.
 
 Documentation
 ===================
-For full documentation visit [epguides-docs](http://epguides-api.readthedocs.org/).
+For full documentation visit [epguides-docs](https://epguides-api.readthedocs.org/).
 
 
 Mashape
