@@ -1,5 +1,6 @@
 [![Build status](https://ci.frigg.io/frecar/epguides-api.svg)](https://ci.frigg.io/frecar/epguides-api/last/)
 [![Coverage status](https://ci.frigg.io/frecar/epguides-api/coverage.svg)](https://ci.frigg.io/frecar/epguides-api/last/)
+[![Requirements Status](https://requires.io/github/frecar/epguides-api/requirements.svg?branch=master)](https://requires.io/github/frecar/epguides-api/requirements/?branch=master)
 
 epguides-api
 ===================
