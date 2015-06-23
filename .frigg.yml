@@ -2,10 +2,10 @@ services:
   - redis-server
 
 tasks:
-  - flake8
-  - tox
-  - coverage report --fail-under=80
-  - coverage xml
+ - tox -e flake8
+ - tox -e isort
+ - tox -e tests
+ - coverage report && coverage xml
 
 coverage:
   path: coverage.xml

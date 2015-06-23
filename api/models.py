@@ -1,8 +1,8 @@
 import datetime
-from app import cache
 
-from utils import parse_epguides_data, EpisodeNotFoundException, parse_epguides_info, \
-    add_epguides_key_to_redis
+from app import cache
+from utils import (EpisodeNotFoundException, add_epguides_key_to_redis, parse_epguides_data,
+                   parse_epguides_info)
 
 
 class Episode(object):
@@ -42,7 +42,10 @@ class Episode(object):
 
 @cache.memoize(timeout=60 * 60 * 24 * 7)
 def get_show_by_name(epguides_name):
-    epguides_name = str(epguides_name).lower()
+    epguides_name = str(epguides_name).lower().replace(" ", "")
+    if epguides_name.startswith("the"):
+        epguides_name = epguides_name[3:]
+
     try:
         show = Show(epguides_name)
         add_epguides_key_to_redis(epguides_name)
