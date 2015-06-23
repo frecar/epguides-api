@@ -22,18 +22,12 @@ setup(
     author_email='fredrik@carlsen.io',
     description='API for epguides.com',
     long_description=_read_long_description(),
-    packages=find_packages(exclude='tests'),
+    packages=find_packages(exclude=['tests', 'tests.*']),
     tests_require=read_requirements(),
     license='MIT',
     test_suite='runtests.runtests',
     include_package_data=True,
     classifiers=[
-        "Programming Language :: Python",
-        'Programming Language :: Python :: 3.4',
-        "Topic :: Software Development :: Libraries :: Python Modules",
-        "Framework :: Flask",
-        "Environment :: Web Environment",
-        "Operating System :: OS Independent",
-        "Natural Language :: English",
+        'Programming Language :: Python :: 3',
     ]
 )

@@ -1,8 +1,8 @@
 import datetime
 
-from app import cache
-from utils import (EpisodeNotFoundException, add_epguides_key_to_redis,
-                   parse_epguides_data, parse_epguides_info)
+from api.app import cache
+from api.utils import (EpisodeNotFoundException, add_epguides_key_to_redis, parse_epguides_data,
+                       parse_epguides_info)
 
 
 class Episode(object):

@@ -1,9 +1,8 @@
 from werkzeug.utils import redirect
 
-from app import app
-from models import get_show_by_name
-from utils import (EpisodeNotFoundException, json_response,
-                   list_all_epguides_keys_redis)
+from api.app import app
+from api.models import get_show_by_name
+from api.utils import EpisodeNotFoundException, json_response, list_all_epguides_keys_redis
 
 
 @app.route("/")

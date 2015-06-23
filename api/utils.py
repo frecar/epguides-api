@@ -5,7 +5,7 @@ import requests
 from flask import make_response
 from redis import Redis
 
-from app import cache
+from api.app import cache
 
 
 class EpisodeNotFoundException(Exception):
