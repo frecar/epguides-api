@@ -1,9 +1,5 @@
+import configparser
 import os
-
-try:
-    import configparser
-except ImportError:
-    from six.moves import configparser
 
 from flask import Flask
 from flask.ext.cache import Cache

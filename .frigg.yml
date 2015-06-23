@@ -3,7 +3,8 @@ services:
 
 tasks:
   - flake8
-  - tox
+  - tox -e isort
+  - tox -e tests
   - coverage report --fail-under=80
   - coverage xml
 

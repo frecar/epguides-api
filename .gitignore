@@ -4,6 +4,8 @@ venv
 local.cfg
 .eggs
 
+coverage.xml
+
 # C extensions
 *.so
 

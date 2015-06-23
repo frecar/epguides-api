@@ -1,7 +1,7 @@
 from app import app
-
 from models import get_show_by_name
-from utils import json_response, EpisodeNotFoundException, list_all_epguides_keys_redis
+from utils import (EpisodeNotFoundException, json_response,
+                   list_all_epguides_keys_redis)
 from werkzeug.utils import redirect
 
 

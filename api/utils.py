@@ -1,19 +1,18 @@
 import json
 import re
 
-from flask import make_response
-from json import JSONEncoder
+import requests
 
 from app import cache
+from flask import make_response
 from redis import Redis
-import requests
 
 
 class EpisodeNotFoundException(Exception):
     pass
 
 
-class SimpleEncoder(JSONEncoder):
+class SimpleEncoder(json.JSONEncoder):
     def default(self, o):
         return o.__dict__
 

@@ -1,5 +1,6 @@
-import unittest
 import json
+import unittest
+
 import views
 
 
