@@ -1,7 +1,7 @@
 import json
 import unittest
 
-import views
+from api import views
 
 
 class TestViews(unittest.TestCase):

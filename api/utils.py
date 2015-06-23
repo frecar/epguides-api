@@ -2,10 +2,10 @@ import json
 import re
 
 import requests
-
-from app import cache
 from flask import make_response
 from redis import Redis
+
+from app import cache
 
 
 class EpisodeNotFoundException(Exception):

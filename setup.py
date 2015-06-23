@@ -9,31 +9,27 @@ def _read_long_description():
     except Exception:
         return None
 
+
+def read_requirements():
+    with open('requirements.txt') as f:
+        return f.read().splitlines()
+
 setup(
     name="epguides-api",
-    version='1.0.1',
-    url='https://github.com/frecar/epguides-api',
+    version='1.1.0',
+    url='http://github.com/frecar/epguides-api',
     author='Fredrik Carlsen',
     author_email='fredrik@carlsen.io',
     description='API for epguides.com',
     long_description=_read_long_description(),
     packages=find_packages(exclude='tests'),
-    tests_require=[
-        'flask',
-        'flask-cache',
-        'redis',
-        'flake8',
-        'coverage',
-        'tox',
-        'requests'
-    ],
-
+    tests_require=read_requirements(),
     license='MIT',
     test_suite='runtests.runtests',
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python",
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.4',
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Framework :: Flask",
         "Environment :: Web Environment",

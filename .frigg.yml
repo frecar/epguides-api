@@ -2,7 +2,7 @@ services:
   - redis-server
 
 tasks:
-  - flake8
+  - tox -e flake8
   - tox -e isort
   - tox -e tests
   - coverage report --fail-under=80
