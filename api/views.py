@@ -1,6 +1,6 @@
-from app import app
-from models import get_show_by_name
-from utils import EpisodeNotFoundException, json_response, list_all_epguides_keys_redis
+from .app import app
+from .models import get_show_by_name
+from .utils import EpisodeNotFoundException, json_response, list_all_epguides_keys_redis
 from werkzeug.utils import redirect
 
 
@@ -29,7 +29,6 @@ def discover_shows():
             continue
 
     return json_response(result)
-
 
 @app.route('/show/<show>/')
 def view_show(show):

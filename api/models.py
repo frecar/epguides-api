@@ -1,7 +1,7 @@
 import datetime
 
-from app import cache
-from utils import (EpisodeNotFoundException, add_epguides_key_to_redis, parse_epguides_data,
+from .app import cache
+from .utils import (EpisodeNotFoundException, add_epguides_key_to_redis, parse_epguides_data,
                    parse_epguides_info)
 
 
@@ -119,9 +119,8 @@ class Show(object):
 
     def get_episodes(self):
         episodes = {}
-
+        
         for episode_data in parse_epguides_data(self.epguide_name):
-
             season_number = int(episode_data[1])
 
             if season_number not in episodes:
@@ -132,7 +131,7 @@ class Show(object):
                 'title': episode_data[4],
                 'release_date': datetime.datetime.strptime(
                     episode_data[3],
-                    "%d/%b/%y"
+                    "%d %b %y"
                 ).strftime("%Y-%m-%d")
             })
 

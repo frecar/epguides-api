@@ -2,7 +2,7 @@ import json
 import re
 
 import requests
-from app import cache
+from .app import cache
 from flask import make_response
 from redis import Redis
 
@@ -42,10 +42,8 @@ def list_all_epguides_keys_redis():
 def parse_epguides_data(url):
     try:
         data = requests.get("http://epguides.com/" + url).text
-        episodes = re.findall("([\d]+)\s*([\d]*)-([\d]+)"
-                              "\s*[\w\-]*\s*([0-9][0-9]\/"
-                              "\w*\/[0-9][0-9])[\s&\-#-<"
-                              "\w='.;:\/]*>([)(:\w\s-]*)", data)
+        episodes = re.findall("([\d]+)[.]\s*([\d]*)-([\d]*)\s*([\d]+\s[\w]*\s[\d]*)\s*[\s&\-#\"\'\-\<\w='.;:\/]*>([\)\(\:\w\'\"\_\s\-]*)", data)
+
     except IndexError:
         return
 
