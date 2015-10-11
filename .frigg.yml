@@ -5,7 +5,7 @@ tasks:
  - tox -e flake8
  - tox -e isort
  - tox -e tests
- - coverage report && coverage xml
+ - tox -e coverage
 
 coverage:
   path: coverage.xml
