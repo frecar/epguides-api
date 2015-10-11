@@ -2,7 +2,7 @@ import datetime
 
 from .app import cache
 from .utils import (EpisodeNotFoundException, add_epguides_key_to_redis, parse_epguides_data,
-                   parse_epguides_info)
+                    parse_epguides_info)
 
 
 class Episode(object):
@@ -119,14 +119,12 @@ class Show(object):
 
     def get_episodes(self):
         episodes = {}
-        
+
         for episode_data in parse_epguides_data(self.epguide_name):
             season_number = int(episode_data[1])
 
             if season_number not in episodes:
                 episodes[season_number] = []
-
-            print(episode_data)
 
             try:
                 episode = Episode(self, season_number, {
@@ -141,5 +139,5 @@ class Show(object):
 
             except ValueError:
                 pass
-        
+
         return episodes

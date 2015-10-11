@@ -42,7 +42,10 @@ def list_all_epguides_keys_redis():
 def parse_epguides_data(url):
     try:
         data = requests.get("http://epguides.com/" + url).text
-        episodes = re.findall("([\d]+)[.]\s*([\d]*)-([\d]*)\s*([\d]+\s[\w]*\s[\d]*)\s*[\s&\-#\"\'\-\<\w='.;:\/]*>([\)\(\:\w\'\"\_\s\-]*)", data)
+        episodes = re.findall(
+            "([\d]+)[.]\s*([\d]*)-([\d]*)\s*([\d]+\s[\w]*\s[\d]*)"
+            "\s*[\s&\-#\"\'\-\<\w='.;:\/]*>([\)\(\:\w\'\"\_\s\-]*)",
+            data)
 
     except IndexError:
         return

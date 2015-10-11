@@ -30,6 +30,7 @@ def discover_shows():
 
     return json_response(result)
 
+
 @app.route('/show/<show>/')
 def view_show(show):
     try:
