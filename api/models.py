@@ -126,15 +126,20 @@ class Show(object):
             if season_number not in episodes:
                 episodes[season_number] = []
 
-            episode = Episode(self, season_number, {
-                'number': episode_data[2],
-                'title': episode_data[4],
-                'release_date': datetime.datetime.strptime(
-                    episode_data[3],
-                    "%d %b %y"
-                ).strftime("%Y-%m-%d")
-            })
+            print(episode_data)
 
-            episodes[season_number].append(episode)
+            try:
+                episode = Episode(self, season_number, {
+                    'number': episode_data[2],
+                    'title': episode_data[4],
+                    'release_date': datetime.datetime.strptime(
+                        episode_data[3],
+                        "%d %b %y"
+                    ).strftime("%Y-%m-%d")
+                })
+                episodes[season_number].append(episode)
 
+            except ValueError:
+                pass
+        
         return episodes
