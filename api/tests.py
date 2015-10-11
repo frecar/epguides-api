@@ -79,11 +79,11 @@ class TestViews(unittest.TestCase):
 
     def test_next_view(self):
         # test a show that is running, this might need to be updated some day
-        response = self.app.get('/show/haltandcatchfire/next/')
+        response = self.app.get('/show/bigbangtheory/next/')
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
 
-        response = self.app.get('/show/chuck/next//')
+        response = self.app.get('/show/chuck/next/')
         self.assertStatusCode(response, 404)
 
     def test_discover_shows_url(self):
