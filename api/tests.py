@@ -40,20 +40,37 @@ class TestViews(unittest.TestCase):
         self.assertEqual(self.response_to_json(response)['title'],
                          "How I Met Your Mother")
 
+    def test_metadata_invalid_show(self):
+        response = self.app.get('/show/invalidshowtestrandomtext/info/')
+        self.assertStatusCode(response, 404)
+
     def test_released_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/released/')
         self.assertStatusCode(response, 200)
         self.assertEqual(self.response_to_json(response)['status'], True)
+
+    def test_released_view_invalid_show(self):
+        response = self.app.get('/show/invalidshowtestrandomtext/1/1/released/')
+        self.assertStatusCode(response, 200)
+        self.assertEqual(self.response_to_json(response)['status'], False)
 
     def test_given_episode_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/')
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
 
+    def test_given_episode_view_invalid_show(self):
+        response = self.app.get('/show/invalidshowtestrandomtext/1/1/')
+        self.assertStatusCode(response, 404)
+
     def test_next_from_current_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/next/')
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
+
+    def test_next_from_current_view_invalid_show(self):
+        response = self.app.get('/show/invalidshowtestrandomtext/1/1/next/')
+        self.assertStatusCode(response, 404)
 
     def test_next_from_current_view_does_not_exist(self):
         response = self.app.get('/show/howimetyourmother/15/1/next/')
@@ -64,6 +81,10 @@ class TestViews(unittest.TestCase):
         self.assertStatusCode(response, 200)
         self.assertEqual(self.response_to_json(response)['status'], True)
 
+    def test_released_next_from_current_view_invalid_show(self):
+        response = self.app.get('/show/invalidshowtestrandomtext/1/1/next/released/')
+        self.assertStatusCode(response, 404)
+
     def test_last_view(self):
         response = self.app.get('/show/howimetyourmother/last/')
         self.assertStatusCode(response, 200)
@@ -72,6 +93,10 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/gameofthrones/last/')
         self.assertStatusCode(response, 200)
         self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
+
+    def test_last_view_invalid_show(self):
+        response = self.app.get('/show/invalidshowtestrandomtext/last/')
+        self.assertStatusCode(response, 404)
 
     def test_next_released_from_given_episode(self):
         response = self.app.get('/show/howimetyourmother/next/')
@@ -86,6 +111,10 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/chuck/next/')
         self.assertStatusCode(response, 404)
 
+    def test_next_view_invalid_show(self):
+        response = self.app.get('/show/invalidshowtestrandomtext/next/')
+        self.assertStatusCode(response, 404)
+
     def test_discover_shows_url(self):
         response = self.app.get('/show/')
         self.assertStatusCode(response, 200)
@@ -93,6 +122,7 @@ class TestViews(unittest.TestCase):
     def test_redirect_to_docs(self):
         response = self.app.get('/')
         self.assertStatusCode(response, 302)
+
 
 if __name__ == '__main__':
     unittest.main()

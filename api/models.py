@@ -46,12 +46,9 @@ def get_show_by_name(epguides_name):
     if epguides_name.startswith("the"):
         epguides_name = epguides_name[3:]
 
-    try:
-        show = Show(epguides_name)
-        add_epguides_key_to_redis(epguides_name)
-        return show
-    except EpisodeNotFoundException:
-        return None
+    show = Show(epguides_name)
+    add_epguides_key_to_redis(epguides_name)
+    return show
 
 
 class Show(object):
