@@ -6,4 +6,5 @@ tox==2.1.1
 requests==2.7.0
 pytest==2.7.2
 raven[flask]==4.2.2
-coverage
+blinker==1.4
+coverage==3.7.1
