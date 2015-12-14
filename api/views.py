@@ -21,6 +21,7 @@ def discover_shows():
                 continue
 
             show.episodes = "{0}show/{1}/".format(app.config['BASE_URL'], epguides_name)
+            show.first_episode = "{0}show/{1}/first/".format(app.config['BASE_URL'], epguides_name)
             show.next_episode = "{0}show/{1}/next/".format(app.config['BASE_URL'], epguides_name)
             show.last_episode = "{0}show/{1}/last/".format(app.config['BASE_URL'], epguides_name)
             show.epguides_url = "http://www.epguides.com/{0}".format(epguides_name)
@@ -115,6 +116,14 @@ def last(show):
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
 
+@app.route('/show/<show>/first/')
+def first(show):
+    try:
+        return json_response({
+            'episode': get_show_by_name(show).first_episode()
+        })
+    except EpisodeNotFoundException:
+        return json_response({'error': 'Episode not found'}, 404)
 
 if __name__ == '__main__':
     app.run(debug=app.config['DEBUG'])

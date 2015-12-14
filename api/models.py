@@ -73,6 +73,9 @@ class Show(object):
         except (IndexError, TypeError):
             raise EpisodeNotFoundException()
 
+    def first_episode(self):
+        return self.get_episode(1,1)
+
     def next_episode(self):
         show_data = self.get_episodes()
         season_number = len(show_data.keys())
@@ -87,7 +90,7 @@ class Show(object):
         season_number = len(show_data.keys())
         last_episode_released = None
 
-        if show_data[season_number][0].released():
+        if len(show_data[season_number]) > 0 and show_data[season_number][0].released():
             for episode in show_data[season_number]:
                 if episode.released():
                     last_episode_released = episode
