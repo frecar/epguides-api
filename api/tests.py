@@ -146,7 +146,10 @@ class TestViews(unittest.TestCase):
                  'bob', 'bobthebuilder', 'chuck', 'bigbangtheory',
                  'gameofthrones', 'screamqueens', 'brink', 'stateofaffairs',
                  'chicagofire', 'originals', 'sense8', 'modernfamily',
-                 'affair', 'lastweektonightwithjohnoliver', 'vampirediaries']
+                 'affair', 'lastweektonightwithjohnoliver', 'vampirediaries',
+                 'tonightshowstarringjimmyfallon', 'unforgettable',
+                 'dailyshow', 'latelateshowwithjamescorden', '8outof10cats',
+                 'doctorwho_2005', '24', 'aliensinamerica']
 
         for show in shows:
             response = self.app.get('/show/{0}/first/'.format(show))

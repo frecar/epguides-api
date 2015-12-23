@@ -81,7 +81,10 @@ class Show(object):
             raise EpisodeNotFoundException()
 
     def first_episode(self):
-        for episode in self.get_episodes()[1]:
+        episodes = self.get_episodes()
+        first_season_number = sorted(episodes.keys(), key=int)[0]
+
+        for episode in episodes[first_season_number]:
             if episode.released():
                 return episode
 
@@ -158,17 +161,23 @@ class Show(object):
 
         for episode_data in parse_epguides_data(self.epguide_name):
 
-            season_number = int(episode_data[1])
-
-            if season_number not in episodes:
-                episodes[season_number] = []
-
             try:
+                season_number = int(episode_data[1])
+
+                if season_number not in episodes:
+                    episodes[season_number] = []
+
+                parsed_date = parse_date(episode_data[3])
+
+                if not parsed_date:
+                    continue
+
                 episode = Episode(self, season_number, {
                     'number': episode_data[2],
                     'title': episode_data[4],
-                    'release_date': parse_date(episode_data[3])
+                    'release_date': parsed_date
                 })
+
                 episodes[season_number].append(episode)
 
             except ValueError:
