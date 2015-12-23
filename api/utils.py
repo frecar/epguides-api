@@ -49,15 +49,15 @@ def format_title(title):
     return title.strip()
 
 
-@cache.memoize(60 * 60 * 24 * 7)
+#@cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_data(url):
-    pattern = "([\d]+)[.]?\s*([\d]*)\s?-\s?([\d]*)" \
-              "\s*([\d]+[\s|\/][\w]*[\s|\/][\d]*)\s*(.*)"
+    pattern = "([\d]+)[.]?\s*([\d]*)\s?-\s?([\d]*)[\s\d]*" \
+              "([\d]+[\s|\/][\w]*[\s|\/][\d]*)\s*(.*)"
 
     try:
         data = requests.get("http://epguides.com/" + url).text
         episodes = []
-
+        
         for episode_tuple in re.findall(pattern, data):
             episode = list(episode_tuple)
             episode[4] = format_title(episode[4])
@@ -70,7 +70,7 @@ def parse_epguides_data(url):
     return episodes
 
 
-@cache.memoize(60 * 60 * 24 * 7)
+#@cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_info(url):
     try:
         data = requests.get("http://epguides.com/" + url).text
