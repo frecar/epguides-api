@@ -116,6 +116,7 @@ def last(show):
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
 
+
 @app.route('/show/<show>/first/')
 def first(show):
     try:
@@ -124,6 +125,7 @@ def first(show):
         })
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
+
 
 if __name__ == '__main__':
     app.run(debug=app.config['DEBUG'])
