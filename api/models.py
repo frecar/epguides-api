@@ -17,6 +17,13 @@ class Episode(object):
         return self.__dict__
 
     def released(self):
+
+        if not self.release_date:
+            return False
+
+        if not self.number > 0 or not self.season > 0:
+            return False
+
         release_date = datetime.datetime.strptime(self.release_date, "%Y-%m-%d")
 
         if datetime.datetime.now() - datetime.timedelta(hours=32) > release_date:
@@ -74,7 +81,11 @@ class Show(object):
             raise EpisodeNotFoundException()
 
     def first_episode(self):
-        return self.get_episode(1,1)
+        for episode in self.get_episodes()[1]:
+            if episode.released():
+                return episode
+
+        raise EpisodeNotFoundException()
 
     def next_episode(self):
         show_data = self.get_episodes()
@@ -87,17 +98,31 @@ class Show(object):
 
     def last_episode(self):
         show_data = self.get_episodes()
-        season_number = len(show_data.keys())
+        season_keys = show_data.keys()
+
+        season_number = 0
+        second_season_number = 0
+
+        if len(season_keys) > 0:
+            season_number = sorted(show_data.keys(), key=int)[-1]
+
+        if len(season_keys) > 1:
+            second_season_number = sorted(show_data.keys(), key=int)[-2]
+
         last_episode_released = None
 
+        # Check if the latest season has episodes and if the first is released
         if len(show_data[season_number]) > 0 and show_data[season_number][0].released():
             for episode in show_data[season_number]:
                 if episode.released():
                     last_episode_released = episode
+
+        # If not, check if the previous season has released episodes
         else:
-            for episode in show_data[season_number - 1]:
-                if episode.released():
-                    last_episode_released = episode
+            if second_season_number > 0:
+                for episode in show_data[second_season_number]:
+                    if episode.released():
+                        last_episode_released = episode
 
         if last_episode_released:
             return last_episode_released
@@ -120,7 +145,19 @@ class Show(object):
     def get_episodes(self):
         episodes = {}
 
+        def parse_date(date):
+            try:
+                return datetime.datetime.strptime(date, "%d %b %y").strftime("%Y-%m-%d")
+            except:
+                try:
+                    return datetime.datetime.strptime(date, "%d/%b/%y").strftime("%Y-%m-%d")
+                except:
+                    return None
+
+            return None
+
         for episode_data in parse_epguides_data(self.epguide_name):
+
             season_number = int(episode_data[1])
 
             if season_number not in episodes:
@@ -130,10 +167,7 @@ class Show(object):
                 episode = Episode(self, season_number, {
                     'number': episode_data[2],
                     'title': episode_data[4],
-                    'release_date': datetime.datetime.strptime(
-                        episode_data[3],
-                        "%d %b %y"
-                    ).strftime("%Y-%m-%d")
+                    'release_date': parse_date(episode_data[3])
                 })
                 episodes[season_number].append(episode)
 

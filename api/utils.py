@@ -38,14 +38,31 @@ def list_all_epguides_keys_redis(redis_queue_key="epguides_api:keys"):
             redis.lrange(redis_queue_key, 0, redis.llen(redis_queue_key))]
 
 
+def format_title(title):
+    pattern = "[<a\s\w\=\'\"\:\/\.\-]*>(.*)</a>"
+
+    if title.startswith("<a"):
+        parsed_title_groups = re.findall(pattern, title)
+        if len(parsed_title_groups) == 1:
+            title = parsed_title_groups[0]
+
+    return title.strip()
+
+
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_data(url):
+    pattern = "([\d]+)[.]?\s*([\d]*)\s?-\s?([\d]*)" \
+              "\s*([\d]+[\s|\/][\w]*[\s|\/][\d]*)\s*(.*)"
+
     try:
         data = requests.get("http://epguides.com/" + url).text
-        episodes = re.findall(
-            "([\d]+)[.]\s*([\d]*)-([\d]*)\s*([\d]+\s[\w]*\s[\d]*)"
-            "\s*[\s&\-#\"\'\-\<\w='.;:\/]*>([\)\(\:\w\'\"\_\s\-]*)",
-            data)
+        episodes = []
+
+        for episode_tuple in re.findall(pattern, data):
+            episode = list(episode_tuple)
+            episode[4] = format_title(episode[4])
+
+            episodes.append(episode)
 
     except IndexError:
         return

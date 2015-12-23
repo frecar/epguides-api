@@ -76,6 +76,14 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/howimetyourmother/15/1/next/')
         self.assertStatusCode(response, 404)
 
+    def test_first_episode_query(self):
+        response = self.app.get('/show/howimetyourmother/first/')
+        self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
+
+    def test_last_episode_query(self):
+        response = self.app.get('/show/howimetyourmother/last/')
+        self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
+
     def test_released_next_from_current_view(self):
         response = self.app.get('/show/howimetyourmother/1/1/next/released/')
         self.assertStatusCode(response, 200)
@@ -115,6 +123,15 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/invalidshowtestrandomtext/next/')
         self.assertStatusCode(response, 404)
 
+    def test_last_correct_show(self):
+        response = self.app.get('/show/howimetyourmother/last/')
+        self.assertStatusCode(response, 200)
+        self.assertCorrectEpisodeObject(self.response_to_json(response)['episode'])
+
+        episode = self.response_to_json(response)['episode']
+        self.assertEqual(episode['season'], 9)
+        self.assertEqual(episode['number'], 24)
+
     def test_discover_shows_url(self):
         response = self.app.get('/show/')
         self.assertStatusCode(response, 200)
@@ -123,6 +140,26 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/')
         self.assertStatusCode(response, 302)
 
+    def test_first_last_valid_episodes(self):
+
+        shows = ['daaligshow_us', 'howimetyourmother', 'persona4',
+                 'bob', 'bobthebuilder', 'chuck', 'bigbangtheory',
+                 'gameofthrones', 'screamqueens', 'brink', 'stateofaffairs',
+                 'chicagofire', 'originals', 'sense8', 'modernfamily',
+                 'affair', 'lastweektonightwithjohnoliver', 'vampirediaries']
+
+        for show in shows:
+            response = self.app.get('/show/{0}/first/'.format(show))
+
+            self.assertCorrectEpisodeObject(
+                self.response_to_json(response)['episode'])
+
+        for show in shows:
+            response = self.app.get('/show/{0}/last/'.format(show))
+            self.assertStatusCode(response, 200)
+
+            self.assertCorrectEpisodeObject(
+                self.response_to_json(response)['episode'])
 
 if __name__ == '__main__':
     unittest.main()
