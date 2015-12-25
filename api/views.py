@@ -17,6 +17,7 @@ def discover_shows():
     for epguides_name in list_all_epguides_keys_redis():
         try:
             show = get_show_by_name(epguides_name)
+
             if not show:
                 continue
 
@@ -35,7 +36,7 @@ def discover_shows():
 @app.route('/show/<show>/')
 def view_show(show):
     try:
-        return json_response(get_show_by_name(show).get_episodes())
+        return json_response(get_show_by_name(show).get_show_data())
     except EpisodeNotFoundException:
         return json_response({'error': 'Show not found'}, 404)
 
