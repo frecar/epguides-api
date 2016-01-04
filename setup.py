@@ -16,7 +16,7 @@ def read_requirements():
 
 setup(
     name="epguides-api",
-    version='1.1.0',
+    version='1.5.0',
     url='http://github.com/frecar/epguides-api',
     author='Fredrik Carlsen',
     author_email='fredrik@carlsen.io',

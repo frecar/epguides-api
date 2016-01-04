@@ -54,10 +54,10 @@ def parse_date(date):
 
     try:
         return strptime(date, "%d %b %y").strftime("%Y-%m-%d")
-    except:
+    except ValueError:
         try:
             return strptime(date, "%d/%b/%y").strftime("%Y-%m-%d")
-        except:
+        except ValueError:
             return None
 
     return None
