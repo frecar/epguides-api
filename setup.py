@@ -1,5 +1,5 @@
 # -*- coding: utf8 -*-
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 
 def _read_long_description():
@@ -16,7 +16,7 @@ def read_requirements():
 
 setup(
     name="epguides-api",
-    version='1.1.0',
+    version='1.5.0',
     url='http://github.com/frecar/epguides-api',
     author='Fredrik Carlsen',
     author_email='fredrik@carlsen.io',
