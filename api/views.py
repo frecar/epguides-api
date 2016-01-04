@@ -1,8 +1,9 @@
 from werkzeug.utils import redirect
 
 from .app import app
+from .exceptions import EpisodeNotFoundException
 from .models import get_show_by_name
-from .utils import EpisodeNotFoundException, json_response, list_all_epguides_keys_redis
+from .utils import json_response, list_all_epguides_keys_redis
 
 
 @app.route("/")
@@ -21,11 +22,16 @@ def discover_shows():
             if not show:
                 continue
 
-            show.episodes = "{0}show/{1}/".format(app.config['BASE_URL'], epguides_name)
-            show.first_episode = "{0}show/{1}/first/".format(app.config['BASE_URL'], epguides_name)
-            show.next_episode = "{0}show/{1}/next/".format(app.config['BASE_URL'], epguides_name)
-            show.last_episode = "{0}show/{1}/last/".format(app.config['BASE_URL'], epguides_name)
-            show.epguides_url = "http://www.epguides.com/{0}".format(epguides_name)
+            show.episodes = "{0}show/{1}/".format(
+                app.config['BASE_URL'], epguides_name)
+            show.first_episode = "{0}show/{1}/first/".format(
+                app.config['BASE_URL'], epguides_name)
+            show.next_episode = "{0}show/{1}/next/".format(
+                app.config['BASE_URL'], epguides_name)
+            show.last_episode = "{0}show/{1}/last/".format(
+                app.config['BASE_URL'], epguides_name)
+            show.epguides_url = "http://www.epguides.com/{0}".format(
+                epguides_name)
             result.append(show)
         except EpisodeNotFoundException:
             continue
@@ -85,7 +91,8 @@ def next_from_given_episode(show, season, episode):
 def next_released_from_given_episode(show, season, episode):
     try:
 
-        next_episode = get_show_by_name(show).get_episode(int(season), int(episode)).next()
+        next_episode = get_show_by_name(show).get_episode(
+            int(season), int(episode)).next()
 
         if not next_episode:
             raise EpisodeNotFoundException

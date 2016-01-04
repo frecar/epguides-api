@@ -8,11 +8,8 @@ from redis import Redis
 from .app import cache
 
 
-class EpisodeNotFoundException(Exception):
-    pass
-
-
 class SimpleEncoder(json.JSONEncoder):
+
     def default(self, o):
         return o.__dict__
 
@@ -27,7 +24,9 @@ def add_epguides_key_to_redis(epguides_name):
     redis = Redis()
     redis_queue_key = "epguides_api:keys"
 
-    if epguides_name not in list_all_epguides_keys_redis(redis_queue_key=redis_queue_key):
+    all_keys = list_all_epguides_keys_redis(redis_queue_key=redis_queue_key)
+
+    if epguides_name not in all_keys:
         redis.lpush(redis_queue_key, epguides_name)
 
 

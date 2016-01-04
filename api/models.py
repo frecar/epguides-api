@@ -1,11 +1,12 @@
-import datetime
+from datetime import datetime, timedelta
 
 from .app import cache
-from .utils import (EpisodeNotFoundException, add_epguides_key_to_redis, parse_epguides_data,
-                    parse_epguides_info)
+from .exceptions import EpisodeNotFoundException
+from .utils import add_epguides_key_to_redis, parse_epguides_data, parse_epguides_info
 
 
 class Episode(object):
+
     def __init__(self, show, season_number, episode_data):
         self.show = show
         self.season = int(season_number)
@@ -39,9 +40,10 @@ class Episode(object):
         if not self.valid():
             return False
 
-        release_date = datetime.datetime.strptime(self.release_date, "%Y-%m-%d")
+        release_date = datetime.strptime(
+            self.release_date, "%Y-%m-%d")
 
-        if datetime.datetime.now() - datetime.timedelta(hours=32) > release_date:
+        if datetime.now() - timedelta(hours=32) > release_date:
             return True
 
         return False
@@ -73,6 +75,7 @@ def get_show_by_name(epguides_name):
 
 
 class Show(object):
+
     def __init__(self, epguide_name):
         self.epguide_name = epguide_name
         self.title = self.get_title()
@@ -165,11 +168,13 @@ class Show(object):
         episodes = {}
 
         def parse_date(date):
+            strptime = datetime.strptime
+
             try:
-                return datetime.datetime.strptime(date, "%d %b %y").strftime("%Y-%m-%d")
+                return strptime(date, "%d %b %y").strftime("%Y-%m-%d")
             except:
                 try:
-                    return datetime.datetime.strptime(date, "%d/%b/%y").strftime("%Y-%m-%d")
+                    return strptime(date, "%d/%b/%y").strftime("%Y-%m-%d")
                 except:
                     return None
 
