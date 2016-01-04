@@ -58,8 +58,9 @@ def view_show_info(show):
 @app.route('/show/<show>/<season>/<episode>/')
 def episode(show, season, episode):
     try:
+        show = get_show_by_name(show)
         return json_response({
-            'episode': get_show_by_name(show).get_episode(int(season), int(episode))
+            'episode': show.get_episode(int(season), int(episode))
         })
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
@@ -68,8 +69,9 @@ def episode(show, season, episode):
 @app.route('/show/<show>/<season>/<episode>/released/')
 def released(show, season, episode):
     try:
+        show = get_show_by_name(show)
         return json_response({
-            'status': get_show_by_name(show).episode_released(int(season), int(episode))
+            'status': show.episode_released(int(season), int(episode))
         })
     except EpisodeNotFoundException:
         return json_response({
@@ -80,8 +82,9 @@ def released(show, season, episode):
 @app.route('/show/<show>/<season>/<episode>/next/')
 def next_from_given_episode(show, season, episode):
     try:
+        show = get_show_by_name(show)
         return json_response({
-            'episode': get_show_by_name(show).get_episode(int(season), int(episode)).next()
+            'episode': show.get_episode(int(season), int(episode)).next()
         })
     except EpisodeNotFoundException:
         return json_response({'error': 'Episode not found'}, 404)
