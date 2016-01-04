@@ -65,8 +65,8 @@ def parse_date(date):
 
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_data(url):
-    pattern = "([\d]+)[.]?\s*([\d]*)\s?-\s?([\d]*)[\s\d]*" \
-              "([\d]+[\s|\/][\w]*[\s|\/][\d]*)\s*(.*)"
+    pattern = "([\d]+)[.]?\s*([\d]*)\s?-\s?([\d]*)" \
+              "[\s\d]*\s+([\d]+[\s|\/][\w]+[\s|\/][\d]+)\s*(.*)"
 
     try:
         data = requests.get("http://epguides.com/" + url).text

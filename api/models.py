@@ -162,24 +162,23 @@ class Show(object):
 
             try:
                 season_number = int(episode_data[1])
-
-                if season_number not in episodes:
-                    episodes[season_number] = []
-
-                parsed_date = parse_date(episode_data[3])
-
-                if not parsed_date:
-                    continue
-
-                episode = Episode(self, season_number, {
-                    'number': episode_data[2],
-                    'title': episode_data[4],
-                    'release_date': parsed_date
-                })
-
-                episodes[season_number].append(episode)
-
             except ValueError:
-                pass
+                continue
+
+            if season_number not in episodes:
+                episodes[season_number] = []
+
+            parsed_date = parse_date(episode_data[3])
+
+            if not parsed_date:
+                continue
+
+            episode = Episode(self, season_number, {
+                'number': episode_data[2],
+                'title': episode_data[4],
+                'release_date': parsed_date
+            })
+
+            episodes[season_number].append(episode)
 
         return episodes
