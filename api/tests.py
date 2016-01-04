@@ -143,6 +143,24 @@ class TestViews(unittest.TestCase):
         self.assertEqual(episode['season'], 9)
         self.assertEqual(episode['number'], 24)
 
+    def test_parse_date_correctly(self):
+
+        shows_first_dates = [
+            ('howimetyourmother', '2005-09-19'),
+            ('bigbangtheory', '2007-09-24'),
+            ('lost', '2004-09-22'),
+            ('suits', '2011-06-23'),
+            ('unforgettable', '2011-09-20'),
+            ('walkingdead', '2010-10-31'),
+            ('satisfaction', '2007-12-05')
+        ]
+
+        for show, first_date in shows_first_dates:
+            response = self.app.get('/show/{0}/first/'.format(show))
+            episode_json = self.response_to_json(response)['episode']
+
+            self.assertEquals(first_date, episode_json['release_date'])
+
     def test_discover_shows_url(self):
         response = self.app.get('/show/')
         self.assertStatusCode(response, 200)
@@ -181,7 +199,7 @@ class TestViews(unittest.TestCase):
             season = episode_json_obj['season']
             number = episode_json_obj['number']
 
-            self.assertNotEquals(season+number, 2)
+            self.assertNotEquals(season + number, 2)
             self.assertValidEpisodeObject(episode_json_obj)
 
 if __name__ == '__main__':
