@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime
 
 import requests
 from flask import make_response
@@ -46,6 +47,20 @@ def format_title(title):
             title = parsed_title_groups[0]
 
     return title.strip()
+
+
+def parse_date(date):
+    strptime = datetime.strptime
+
+    try:
+        return strptime(date, "%d %b %y").strftime("%Y-%m-%d")
+    except:
+        try:
+            return strptime(date, "%d/%b/%y").strftime("%Y-%m-%d")
+        except:
+            return None
+
+    return None
 
 
 @cache.memoize(60 * 60 * 24 * 7)
