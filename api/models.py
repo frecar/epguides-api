@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 
 from .app import cache
 from .exceptions import EpisodeNotFoundException
-from .utils import add_epguides_key_to_redis, parse_epguides_data, parse_epguides_info
+from .utils import (add_epguides_key_to_redis, parse_epguides_data,
+                    parse_epguides_info)
 
 
 class Episode(object):
