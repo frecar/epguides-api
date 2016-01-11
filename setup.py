@@ -14,9 +14,15 @@ def read_requirements():
     with open('requirements.txt') as f:
         return f.read().splitlines()
 
+version = re.search(
+    r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]',
+    read('api/__init__.py'),
+    re.MULTILINE
+).group(1)
+
 setup(
     name="epguides-api",
-    version='1.5.0',
+    version=version,
     url='http://github.com/frecar/epguides-api',
     author='Fredrik Carlsen',
     author_email='fredrik@carlsen.io',

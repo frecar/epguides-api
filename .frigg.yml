@@ -2,10 +2,17 @@ services:
   - redis-server
 
 tasks:
- - tox -e flake8
- - tox -e isort
- - tox -e tests
- - tox -e coverage
+ tests:
+  - tox -e flake8
+  - tox -e isort
+  - tox -e tests
+  - tox -e coverage
+
+ after_success:
+  - git config --global user.name "semantic-release"
+  - git config --global user.email "semantic-release@epguides"
+  - pip3 install python-semantic-release
+  - semantic-release publish
 
 coverage:
   path: coverage.xml
