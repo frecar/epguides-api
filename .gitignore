@@ -1,4 +1,6 @@
 *.py[cod]
+error.log
+info.log
 .idea
 venv
 local.cfg

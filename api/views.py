@@ -3,8 +3,7 @@ from werkzeug.utils import redirect
 from .app import app
 from .exceptions import EpisodeNotFoundException, SeasonNotFoundException
 from .models import get_show_by_key
-from .utils import json_response, list_all_epguides_keys_redis
-
+from .utils import json_response, list_all_epguides_keys_redis, parse_imdb_poster_image
 
 @app.route("/")
 def redirect_to_docs():
@@ -38,6 +37,15 @@ def discover_shows():
 
     return json_response(result)
 
+@app.route('/show/<string:show>/poster/')
+def view_show_poster(show):
+    try: 
+        show = get_show_by_key(show)
+        data = parse_imdb_poster_image(show.imdb_id)
+        return json_response({'url': data})
+    except Exception as e:
+        print(e)
+        return json_response({'error': 'Show not found'}, 404)
 
 @app.route('/show/<string:show>/')
 def view_show(show):

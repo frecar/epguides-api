@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from .app import cache
 from .exceptions import EpisodeNotFoundException, SeasonNotFoundException
 from .utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
-                    parse_epguides_info)
+                    parse_epguides_info, parse_imdb_poster_image)
 
 
 @cache.memoize(timeout=60 * 60 * 24)
@@ -80,6 +80,7 @@ class Show(object):
         self.epguide_name = epguide_name
         self.title = self.get_title()
         self.imdb_id = self.get_imdb_id()
+        self.poster_url = parse_imdb_poster_image(self.imdb_id)
 
     @staticmethod
     def get(key):

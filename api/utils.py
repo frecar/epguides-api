@@ -83,6 +83,15 @@ def parse_epguides_data(url):
 
     return episodes
 
+@cache.memoize(20 * 60 * 60 * 24 * 7)
+def parse_imdb_poster_image(imdb_id):
+    try:
+        url = "http://imdb.com/title/{0}".format(imdb_id)
+        data = requests.get(url).text
+        return re.findall('img_primary"[^.]*src="(.*)"', data)[0]
+    except Exception as e:
+        return 
+
 
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_info(url):
