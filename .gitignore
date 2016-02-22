@@ -6,6 +6,7 @@ venv
 local.cfg
 .eggs
 
+.DS_Store
 coverage.xml
 
 # C extensions

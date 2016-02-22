@@ -90,7 +90,7 @@ def parse_imdb_poster_image(imdb_id):
         data = requests.get(url).text
         return re.findall('img_primary"[^.]*src="(.*)"', data)[0]
     except Exception as e:
-        return 
+        return
 
 
 @cache.memoize(60 * 60 * 24 * 7)

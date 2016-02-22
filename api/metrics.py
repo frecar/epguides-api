@@ -1,0 +1,64 @@
+import requests
+from redis import Redis
+
+from .app import app
+
+
+def create_fb_pixel():
+    if app.fb_enabled:
+        def request_new_fb_pixel():
+            from facebookads.api import FacebookAdsApi
+            from facebookads.objects import AdAccount, AdsPixel, AdUser
+
+            FacebookAdsApi.init(
+                app.config['FB_MY_APP_ID'],
+                app.config['FB_MY_APP_SECRET'],
+                app.config['FB_MY_ACCESS_TOKEN']
+            )
+
+            me = AdUser(fbid='me')
+            account = me.get_ad_accounts()[0]
+            pixel = account.get_ads_pixels([AdsPixel.Field.code])
+            return pixel.get_id(), pixel['code']
+
+        redis = Redis()
+        pixel_id_key = 'epguides_fb_pixel_id'
+        pixel_code_key = 'epguides_fb_pixel_code'
+        if redis.get(pixel_id_key) and redis.get(pixel_code_key):
+            return {
+                'id': redis.get(pixel_id_key),
+                'code': redis.get(pixel_code_key)
+            }
+        new_pixel = request_new_fb_pixel()
+        redis.set(pixel_id_key, new_pixel[0])
+        redis.set(pixel_code_key, new_pixel[1])
+        return {'id': new_pixel[0], 'code': new_pixel[1]}
+    else:
+        return {'id': 0, 'code': ''}
+
+def log_event(request, event):
+    try:
+        source_url = request.path
+        if 'ignore_tracking' in request.url:
+            return
+        if app.fb_enabled:
+            pixel = create_fb_pixel()
+            res = requests.get(
+                'https://www.facebook.com/tr?id={0}&ev={1}&{2}&noscript=1'.format(
+                    pixel['id'],
+                    event,
+                    source_url
+                ),
+                cookies=request.cookies
+            )
+
+        if app.ga_enabled:
+            from UniversalAnalytics import Tracker
+            tracker = Tracker.create(
+                app.config['GA_TRACKER_ID'],
+                client_id = request.environ['REMOTE_ADDR']
+            )
+            tracker.send('pageview', path=source_url, title=event)
+            tracker.send('event', 'VIEW', event)
+    except:
+        pass

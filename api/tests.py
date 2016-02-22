@@ -165,7 +165,7 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/')
         self.assertStatusCode(response, 200)
 
-    def test_redirect_to_docs(self):
+    def test_overview(self):
         response = self.app.get('/')
         self.assertStatusCode(response, 302)
 
