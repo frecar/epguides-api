@@ -13,20 +13,15 @@ CONFIG = {
     'DEBUG': config.getboolean('flask', 'debug'),
     'FB_MY_APP_ID': config.get('flask', 'fb_my_app_id'),
     'FB_MY_APP_SECRET': config.get('flask', 'fb_my_app_secret'),
-    'FB_MY_ACCESS_TOKEN': config.get('flask', 'fb_my_access_token'),
-    'GA_TRACKER_ID': config.get('flask', 'ga_tracker_id')
+    'FB_MY_ACCESS_TOKEN': config.get('flask', 'fb_my_access_token')
 }
 
 app = Flask(__name__)
 app.config.update(CONFIG)
 app.fb_enabled = False
-app.ga_enabled = False
 
 if config.getboolean('flask', 'fb_enabled'):
     app.fb_enabled = True
-
-if config.getboolean('flask', 'ga_enabled'):
-    app.ga_enabled = True
 
 cache = Cache(app, config={'CACHE_TYPE': 'redis',
                            'CACHE_KEY_PREFIX': 'epguides_cache:',
@@ -34,3 +29,4 @@ cache = Cache(app, config={'CACHE_TYPE': 'redis',
 
 if CONFIG['SENTRY_DSN']:
     sentry = Sentry(app, dsn=CONFIG['SENTRY_DSN'])
+    #app = sentry
