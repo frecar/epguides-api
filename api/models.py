@@ -162,21 +162,34 @@ class Show(object):
         for episode_data in parse_epguides_data(self.epguide_name):
 
             try:
-                season_number = int(episode_data[1])
+                season_number = int(episode_data['season'])
             except ValueError:
+                continue
+
+            try:
+                number = int(episode_data['number'])
+            except ValueError:
+                continue
+
+            try:
+                title = str(episode_data['title'])
+            except ValueError:
+                continue
+
+            if len(title) < 1:
                 continue
 
             if season_number not in episodes:
                 episodes[season_number] = []
 
-            parsed_date = parse_date(episode_data[3])
+            parsed_date = parse_date(episode_data['release_date'])
 
             if not parsed_date:
                 continue
 
             episode = Episode(self, season_number, {
-                'number': episode_data[2],
-                'title': episode_data[4],
+                'number': number,
+                'title': episode_data['title'],
                 'release_date': parsed_date
             })
 
