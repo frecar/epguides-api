@@ -113,24 +113,6 @@ def parse_epguides_data(url):
     return []
 
 
-@cache.memoize(20 * 60 * 60 * 24 * 7)
-def parse_imdb_poster_image(imdb_id):
-    regexes = [
-        'div class="poster"[\w\<\>\s=\"\'\/\?]*src="([]\w\:\/\.\-\@\,\']*)"',
-        'img_primary"[^.]*src="(.*)"'
-    ]
-
-    for regex in regexes:
-        try:
-            url = "http://imdb.com/title/{0}".format(imdb_id)
-            data = requests.get(url).text
-            return re.findall(regex, data)[0]
-        except Exception:
-            continue
-
-    return None
-
-
 @cache.memoize(60 * 60 * 24 * 7)
 def parse_epguides_info(url):
     try:

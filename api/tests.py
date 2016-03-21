@@ -244,10 +244,6 @@ class TestViews(unittest.TestCase):
 
         self.assertGreater(returned_rows, 10)
 
-    def test_fetch_poster(self):
-        imdb_ids = ["tt1129029", "tt1632701", "tt0386676", "tt0465315"]
-        for imdb_id in imdb_ids:
-            self.assertNotEqual(utils.parse_imdb_poster_image(imdb_id), None)
 
 if __name__ == '__main__':
     unittest.main()

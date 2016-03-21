@@ -4,8 +4,7 @@ from .app import app
 from .exceptions import EpisodeNotFoundException, SeasonNotFoundException
 from .metrics import create_fb_pixel, log_event
 from .models import get_show_by_key
-from .utils import (json_response, list_all_epguides_keys_redis,
-                    parse_imdb_poster_image)
+from .utils import json_response, list_all_epguides_keys_redis
 
 
 @app.route("/")
@@ -62,11 +61,7 @@ def examples():
         {
             'title': 'Check if next episode from given episode is released',
             'path': '{0}show/bigbangtheory/1/17/next/released/'.format(base_url)
-        },
-        {
-            'title': 'Lookup poster url for show',
-            'path': '{0}show/gameofthrones/poster/'.format(base_url)
-        },
+        }
     ])
 
 
@@ -95,17 +90,6 @@ def discover_shows():
             continue
 
     return json_response(result)
-
-
-@app.route('/show/<string:show>/poster/')
-def view_show_poster(show):
-    log_event(request, "ViewShowPoster")
-    try:
-        show = get_show_by_key(show)
-        data = parse_imdb_poster_image(show.imdb_id)
-        return json_response({'url': data})
-    except Exception:
-        return json_response({'error': 'Show not found'}, 404)
 
 
 @app.route('/show/<string:show>/')
