@@ -53,19 +53,5 @@ def log_event(request, event):
                 ),
                 cookies=request.cookies
             )
-
-        if app.ga_enabled:
-            from pyga.requests import Tracker, Page, Session, Visitor, Event
-
-            tracker = Tracker(app.config['GA_TRACKER_ID'], 'yourdomain.com')
-            visitor = Visitor()
-            visitor.ip_address = request.environ['REMOTE_ADDR']
-            session = Session()
-            page = Page(source_url)
-            page.title = event
-            event = Event("event", event)
-            tracker.track_pageview(page, session, visitor)
-            tracker.track_event(event, session, visitor)
-
     except:
         pass
