@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import re
 from datetime import datetime
@@ -52,45 +54,81 @@ def format_title(title):
 def parse_date(date):
     strptime = datetime.strptime
 
-    try:
-        return strptime(date, "%d %b %y").strftime("%Y-%m-%d")
-    except ValueError:
+    valid_date_formats = ["%d %b %y", "%d/%b/%y", "%Y-%m-%d"]
+
+    for date_format in valid_date_formats:
         try:
-            return strptime(date, "%d/%b/%y").strftime("%Y-%m-%d")
+            return strptime(date, date_format).strftime("%Y-%m-%d")
         except ValueError:
-            return None
+            continue
 
     return None
 
 
-@cache.memoize(60 * 60 * 24 * 7)
+def csv_reader_from_url(url):
+    data = requests.get(url).text
+    csvio = io.StringIO(data, newline="")
+    return csv.reader(csvio)
+
+
+def parse_csv_file(url, row_map):
+    result = []
+
+    for row in csv_reader_from_url(url):
+        episode = {}
+        if row:
+            try:
+                for key, val in row_map.items():
+                    episode[key] = row[val]
+                result.append(episode)
+            except IndexError:
+                continue
+    return result
+
+
+def parse_epguides_tvrage_csv_data(id):
+    url = 'http://epguides.com/common/exportToCSV.asp?rage={0}'.format(id)
+    row_map = {'season': 1, 'number': 2, 'release_date': 4, 'title': 5}
+    return parse_csv_file(url, row_map)
+
+
+def parse_epguides_maze_csv_data(id):
+    url = 'http://epguides.com/common/exportToCSVmaze.asp?maze={0}'.format(id)
+    row_map = {'season': 1, 'number': 2, 'release_date': 3, 'title': 4}
+    return parse_csv_file(url, row_map)
+
+
+@cache.memoize(20 * 60 * 60 * 24 * 7)
 def parse_epguides_data(url):
-    pattern = "([\d]+)[.]?\s*([\d]*)\s?-\s?([\d]*)" \
-              "[\s\d]*\s+([\d]+[\s|\/][\w]+[\s|\/][\d]+)\s*(.*)"
+    data = requests.get("http://epguides.com/" + url).text
+    if 'exportToCSV.asp' in data:
+        rage_ids = re.findall("exportToCSV\.asp\?rage=([\d+]*)", data)
+        if rage_ids:
+            return parse_epguides_tvrage_csv_data(rage_ids[0])
+    elif 'exportToCSVmaze' in data:
+        maze_ids = re.findall("exportToCSVmaze\.asp\?maze=([\d]*)", data)
+        if maze_ids:
+            return parse_epguides_maze_csv_data(maze_ids[0])
 
-    try:
-        data = requests.get("http://epguides.com/" + url).text
-        episodes = []
+    return []
 
-        for episode_tuple in re.findall(pattern, data):
-            episode = list(episode_tuple)
-            episode[4] = format_title(episode[4])
-
-            episodes.append(episode)
-
-    except IndexError:
-        return
-
-    return episodes
 
 @cache.memoize(20 * 60 * 60 * 24 * 7)
 def parse_imdb_poster_image(imdb_id):
-    try:
-        url = "http://imdb.com/title/{0}".format(imdb_id)
-        data = requests.get(url).text
-        return re.findall('img_primary"[^.]*src="(.*)"', data)[0]
-    except Exception as e:
-        return
+    regexes = [
+        'div class="poster"[\w\<\>\s=\"\'\/\?]*src="([]\w\:\/\.\-\@\,\']*)"',
+        'img_primary"[^.]*src="(.*)"'
+    ]
+
+    for regex in regexes:
+        try:
+            url = "http://imdb.com/title/{0}".format(imdb_id)
+            data = requests.get(url).text
+            return re.findall(regex, data)[0]
+        except Exception:
+            continue
+
+    return None
 
 
 @cache.memoize(60 * 60 * 24 * 7)

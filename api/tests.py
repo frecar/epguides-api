@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from api import views
+from api import utils, views
 
 
 class TestViews(unittest.TestCase):
@@ -143,6 +143,23 @@ class TestViews(unittest.TestCase):
         self.assertEqual(episode['season'], 9)
         self.assertEqual(episode['number'], 24)
 
+    def test_parse_data_method(self):
+        dates = [
+            '2005-09-19',
+            '2007-09-24',
+            '2004-09-22',
+            '2011-06-23',
+            '2011-09-20',
+            '2010-10-31',
+            '2007-12-05',
+            '2015-6-5'
+        ]
+
+        for date in dates:
+            self.assertNotEqual(utils.parse_date(date), None)
+
+        self.assertEqual(utils.parse_date("invalid date"), None)
+
     def test_parse_date_correctly(self):
 
         shows_first_dates = [
@@ -159,7 +176,7 @@ class TestViews(unittest.TestCase):
             response = self.app.get('/show/{0}/first/'.format(show))
             episode_json = self.response_to_json(response)['episode']
 
-            self.assertEquals(first_date, episode_json['release_date'])
+            self.assertEqual(first_date, episode_json['release_date'])
 
     def test_discover_shows_url(self):
         response = self.app.get('/show/')
@@ -167,7 +184,11 @@ class TestViews(unittest.TestCase):
 
     def test_overview(self):
         response = self.app.get('/')
-        self.assertStatusCode(response, 302)
+        self.assertStatusCode(response, 200)
+
+    def test_fetch_examples(self):
+        response = self.app.get('/api/examples/')
+        self.assertStatusCode(response, 200)
 
     def test_first_last_valid_episodes(self):
 
@@ -187,8 +208,11 @@ class TestViews(unittest.TestCase):
             episode_json_obj = self.response_to_json(response)['episode']
 
             self.assertValidEpisodeObject(episode_json_obj)
-            self.assertEquals(episode_json_obj['number'], 1,
-                              "wrong first episode for \'{0}\'".format(show))
+            self.assertEqual(
+                episode_json_obj['number'],
+                1,
+                "wrong first episode for \'{0}\'".format(show)
+            )
 
         for show in shows:
             response = self.app.get('/show/{0}/last/'.format(show))
@@ -199,8 +223,31 @@ class TestViews(unittest.TestCase):
             season = episode_json_obj['season']
             number = episode_json_obj['number']
 
-            self.assertNotEquals(season + number, 2)
+            self.assertNotEqual(season + number, 2)
             self.assertValidEpisodeObject(episode_json_obj)
+
+    def test_parse_epguides_tvrage_csv_data(self):
+        self.assertEqual(utils.parse_epguides_tvrage_csv_data(66), [])
+        self.assertNotEqual(utils.parse_epguides_tvrage_csv_data(2445), [])
+
+    def test_parse_epguides_maze_csv_data(self):
+        self.assertEqual(utils.parse_epguides_maze_csv_data(53450), [])
+        self.assertNotEqual(utils.parse_epguides_maze_csv_data(66), [])
+
+    def test_parse_csv_file(self):
+        url = 'http://epguides.com/common/exportToCSVmaze.asp?maze=66'
+        row_map = {'season': 1, 'number': 2, 'release_date': 4, 'title': 5}
+        returned_rows = 0
+
+        for row in utils.parse_csv_file(url, row_map):
+            returned_rows += 1
+
+        self.assertGreater(returned_rows, 10)
+
+    def test_fetch_poster(self):
+        imdb_ids = ["tt1129029", "tt1632701", "tt0386676", "tt0465315"]
+        for imdb_id in imdb_ids:
+            self.assertNotEqual(utils.parse_imdb_poster_image(imdb_id), None)
 
 if __name__ == '__main__':
     unittest.main()

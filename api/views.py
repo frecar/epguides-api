@@ -1,5 +1,4 @@
 from flask import render_template, request
-from werkzeug.utils import redirect
 
 from .app import app
 from .exceptions import EpisodeNotFoundException, SeasonNotFoundException
@@ -14,9 +13,62 @@ def overview():
     log_event(request, "ViewFrontPage")
     return render_template(
         'index.html',
-        base_url = app.config['BASE_URL'],
+        base_url=app.config['BASE_URL'],
         fb_pixel=create_fb_pixel()['code']
     )
+
+
+@app.route("/api/examples/")
+def examples():
+    base_url = app.config['BASE_URL']
+    return json_response([
+        {
+            'title': 'All tv shows',
+            'path': '{0}show/'.format(base_url),
+            'limit': 3,
+        },
+        {
+            'title': 'Next episode of show',
+            'path': '{0}show/bigbangtheory/next/'.format(base_url)
+        },
+        {
+            'title': 'Last episode of show',
+            'path': '{0}show/bigbangtheory/last/'.format(base_url)
+        },
+        {
+            'title': 'First episode of show',
+            'path': '{0}show/bigbangtheory/first/'.format(base_url)
+        },
+        {
+            'title': 'Lookup specific episode',
+            'path': '{0}show/bigbangtheory/1/15/'.format(base_url)
+        },
+        {
+            'title': 'Meta data for show',
+            'path': '{0}show/bigbangtheory/info/'.format(base_url)
+        },
+        {
+            'title': 'Check if specific episode is released',
+            'path': '{0}show/bigbangtheory/1/5/released/'.format(base_url)
+        },
+        {
+            'title': 'Lookup next episode from given episode',
+            'path': '{0}show/bigbangtheory/1/15/next/'.format(base_url)
+        },
+        {
+            'title': 'Lookup next episode from given episode (new season)',
+            'path': '{0}show/bigbangtheory/1/17/next/'.format(base_url)
+        },
+        {
+            'title': 'Check if next episode from given episode is released',
+            'path': '{0}show/bigbangtheory/1/17/next/released/'.format(base_url)
+        },
+        {
+            'title': 'Lookup poster url for show',
+            'path': '{0}show/gameofthrones/poster/'.format(base_url)
+        },
+    ])
+
 
 @app.route('/show/')
 def discover_shows():
@@ -44,6 +96,7 @@ def discover_shows():
 
     return json_response(result)
 
+
 @app.route('/show/<string:show>/poster/')
 def view_show_poster(show):
     log_event(request, "ViewShowPoster")
@@ -51,8 +104,9 @@ def view_show_poster(show):
         show = get_show_by_key(show)
         data = parse_imdb_poster_image(show.imdb_id)
         return json_response({'url': data})
-    except Exception as e:
+    except Exception:
         return json_response({'error': 'Show not found'}, 404)
+
 
 @app.route('/show/<string:show>/')
 def view_show(show):
