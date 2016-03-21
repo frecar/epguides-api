@@ -176,7 +176,7 @@ class Show(object):
             except ValueError:
                 continue
 
-            if len(title) < 1:
+            if not title:
                 continue
 
             if season_number not in episodes:
