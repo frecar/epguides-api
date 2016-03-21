@@ -29,4 +29,3 @@ cache = Cache(app, config={'CACHE_TYPE': 'redis',
 
 if CONFIG['SENTRY_DSN']:
     sentry = Sentry(app, dsn=CONFIG['SENTRY_DSN'])
-    app = sentry
