@@ -5,7 +5,7 @@ flake8==2.5.4
 tox==2.3.1
 requests==2.9.1
 pytest==2.8.7
-raven[flask]==5.10.2
+raven[flask]==5.12.0
 blinker==1.4
 coverage==4.0.3
 facebookads==2.5.1
