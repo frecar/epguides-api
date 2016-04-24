@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from api import utils, views
+from api import models, utils, views
 
 
 class TestViews(unittest.TestCase):
@@ -190,8 +190,27 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/api/examples/')
         self.assertStatusCode(response, 200)
 
-    def test_first_last_valid_episodes(self):
+    def test_all_episodes_included_in_show_data(self):
+        show_keys = [
+            "greysanatomy", "bigbangtheory", "howimetyourmother",
+            "lastweektonightwithjohnoliver", "vampirediaries",
+            "chuck", "originals", "gameofthrones", "modernfamily"
+        ]
 
+        for show_key in show_keys:
+            show = models.get_show_by_key(show_key)
+            current_season = 1
+            for season_key in show.seasons_keys():
+                self.assertEqual(current_season, int(season_key))
+                current_episode = 1
+                for episode in show.season_episodes(season_key):
+                    if episode.number == 0:
+                        continue
+                    self.assertEqual(current_episode, int(episode.number))
+                    current_episode += 1
+                current_season += 1
+
+    def test_first_last_valid_episodes(self):
         shows = ['howimetyourmother', 'persona4',
                  'bob', 'bobthebuilder', 'chuck', 'bigbangtheory',
                  'gameofthrones', 'screamqueens', 'brink', 'stateofaffairs',
