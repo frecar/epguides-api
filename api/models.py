@@ -54,7 +54,7 @@ class Episode(object):
 
         release_date = datetime.strptime(self.release_date, "%Y-%m-%d")
 
-        if datetime.now() - timedelta(hours=24) > release_date:
+        if datetime.now() - timedelta(hours=38) > release_date:
             return True
 
         return False
