@@ -10,6 +10,7 @@ from redis import Redis
 
 from .app import cache
 
+TWELVE_HOURS_SECONDS = 43200
 
 class SimpleEncoder(json.JSONEncoder):
 
@@ -98,7 +99,7 @@ def parse_epguides_maze_csv_data(id):
     return parse_csv_file(url, row_map)
 
 
-@cache.memoize(20 * 60 * 60 * 24 * 7)
+@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
 def parse_epguides_data(url):
     data = requests.get("http://epguides.com/" + url).text
     if 'exportToCSV.asp' in data:
@@ -113,7 +114,7 @@ def parse_epguides_data(url):
     return []
 
 
-@cache.memoize(60 * 60 * 24 * 7)
+@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
 def parse_epguides_info(url):
     try:
         data = requests.get("http://epguides.com/" + url).text
