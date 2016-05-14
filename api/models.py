@@ -5,8 +5,9 @@ from .exceptions import EpisodeNotFoundException, SeasonNotFoundException
 from .utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
                     parse_epguides_info)
 
+ELEVEN_HOURS_SECONDS = 39600
 
-@cache.memoize(timeout=60 * 60 * 24)
+@cache.memoize(timeout=ELEVEN_HOURS_SECONDS)
 def get_show_by_key(epguides_name):
     epguides_name = str(epguides_name).lower().replace(" ", "")
     if epguides_name.startswith("the"):
