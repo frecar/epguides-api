@@ -9,4 +9,4 @@ raven[flask]==5.13.0
 blinker==1.4
 coverage==4.0.3
 facebookads==2.6.2
-gunicorn==19.5.0
+gunicorn==19.6.0
