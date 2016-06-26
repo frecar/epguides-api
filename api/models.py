@@ -7,6 +7,7 @@ from .utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
 
 ELEVEN_HOURS_SECONDS = 39600
 
+
 @cache.memoize(timeout=ELEVEN_HOURS_SECONDS)
 def get_show_by_key(epguides_name):
     epguides_name = str(epguides_name).lower().replace(" ", "")
@@ -115,7 +116,6 @@ class Show(object):
 
     def next_episode(self):
         data = self.get_show_data()
-
         for season in sorted(data.keys(), key=int):
             for episode in data[season]:
                 if episode.valid() and not episode.released():
