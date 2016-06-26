@@ -191,6 +191,18 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/api/examples/')
         self.assertStatusCode(response, 200)
 
+    def test_old_tvshows_dates(self):
+        shows = ['ilovelucy', 'pattydukeshow', 'mred']
+        for show in shows:
+            self.assertStatusCode(
+                self.app.get('/show/{0}/'.format(show)),
+                200
+            )
+            self.assertStatusCode(
+                self.app.get('/show/{0}/last/'.format(show)),
+                200
+            )
+
     def test_all_episodes_included_in_show_data(self):
         show_keys = [
             "greysanatomy", "bigbangtheory", "howimetyourmother",
