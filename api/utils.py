@@ -60,7 +60,11 @@ def parse_date(date):
 
     for date_format in valid_date_formats:
         try:
-            return strptime(date, date_format).strftime("%Y-%m-%d")
+            dd = strptime(date, date_format)
+            # Hack to support old tv shows
+            if dd.year > datetime.now().year + 2:
+                dd = dd.replace(year=dd.year-100)
+            return dd.strftime("%Y-%m-%d")
         except ValueError:
             continue
 
