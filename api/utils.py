@@ -12,6 +12,7 @@ from .app import cache
 
 TWELVE_HOURS_SECONDS = 43200
 
+
 class SimpleEncoder(json.JSONEncoder):
 
     def default(self, o):
