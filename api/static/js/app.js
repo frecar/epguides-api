@@ -20,6 +20,20 @@ var ApiExample = React.createClass({
      }.bind(this));
   },
 
+  render_curl_link: function() {
+      return (
+        <pre>
+            <code className="bash hljs">
+              <span className="hljs-meta">
+              $ curl <a target="_blank"
+                        href={this.props.endpoint.path}>
+                          {this.props.endpoint.path}</a>
+              </span>
+            </code>
+          </pre>
+      );
+  },
+
   render: function() {
 
     var results_comment = "";
@@ -34,13 +48,7 @@ var ApiExample = React.createClass({
             <h3 className="post-title">{this.props.endpoint.title}</h3>
         </header>
         <div className="post-description">  
-          <pre>
-            <code className="bash hljs">
-              <span className="hljs-meta">
-                $ curl <a target="_blank" href={this.props.endpoint.path}>{this.props.endpoint.path}</a>
-              </span>
-            </code>
-          </pre>
+          {this.render_curl_link()}
           <pre>
             <code className="json hljs">
               {this.state.result}
