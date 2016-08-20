@@ -38,8 +38,10 @@ class TestViews(unittest.TestCase):
     def test_metadata_info(self):
         response = self.app.get('/show/howimetyourmother/info/')
         self.assertStatusCode(response, 200)
-        self.assertEqual(self.response_to_json(response)['title'],
-                         "How I Met Your Mother")
+        self.assertEqual(
+            self.response_to_json(response)['title'],
+            "How I Met Your Mother"
+        )
 
     def test_metadata_invalid_show(self):
         response = self.app.get('/show/invalidshowtestrandomtext/info/')
@@ -109,7 +111,8 @@ class TestViews(unittest.TestCase):
         response = self.app.get('/show/gameofthrones/last/')
         self.assertStatusCode(response, 200)
         self.assertValidEpisodeObject(
-            self.response_to_json(response)['episode'])
+            self.response_to_json(response)['episode']
+        )
 
     def test_last_view_invalid_show(self):
         response = self.app.get('/show/invalidshowtestrandomtext/last/')
@@ -120,8 +123,7 @@ class TestViews(unittest.TestCase):
         self.assertStatusCode(response, 404)
 
     def test_next_view(self):
-        # test a show that is running, this might need to be updated some day
-        response = self.app.get('/show/gameofthrones/next/')
+        response = self.app.get('/show/lastweektonightwithjohnoliver/next/')
         self.assertStatusCode(response, 200)
         self.assertValidEpisodeObject(
             self.response_to_json(response)['episode']
@@ -249,13 +251,11 @@ class TestViews(unittest.TestCase):
         for show in shows:
             response = self.app.get('/show/{0}/last/'.format(show))
             self.assertStatusCode(response, 200)
-
             episode_json_obj = self.response_to_json(response)['episode']
-
-            season = episode_json_obj['season']
-            number = episode_json_obj['number']
-
-            self.assertNotEqual(season + number, 2)
+            self.assertNotEqual(
+                episode_json_obj['season'] + episode_json_obj['number'],
+                2
+            )
             self.assertValidEpisodeObject(episode_json_obj)
 
     def test_parse_epguides_tvrage_csv_data(self):
