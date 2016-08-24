@@ -4,7 +4,7 @@ redis==2.10.5
 flake8==3.0.4
 tox==2.3.1
 requests==2.10.0
-pytest==3.0.0
+pytest==3.0.1
 raven[flask]==5.21.0
 blinker==1.4
 coverage==4.2
