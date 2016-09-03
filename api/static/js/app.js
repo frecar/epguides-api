@@ -102,7 +102,7 @@ var ApiRenderOverview = React.createClass({
               <p>
                 This project aims to make it easier to query data about tvshows from epguides.com
                 <br />
-                Freel free to {this.renderLinkToReportIssues()}.
+                Feel free to {this.renderLinkToReportIssues()}.
               </p>
             </div>
             <div className="posts" id="posts">
