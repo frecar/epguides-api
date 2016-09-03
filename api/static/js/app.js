@@ -79,8 +79,15 @@ var ApiRenderOverview = React.createClass({
      }.bind(this));
   },
 
-  render: function() {
+  renderLinkToReportIssues: function() {
+    return (
+      <a target="_blank" href="https://github.com/frecar/epguides-api/issues">
+        report bugs and suggest new features
+      </a>
+    );
+  },
 
+  render: function() {
     return (
       <div id="layout" className="pure-g">
           <div className="sidebar pure-u-1 pure-u-md-1-4">
@@ -90,6 +97,14 @@ var ApiRenderOverview = React.createClass({
               </div>
           </div>
           <div className="content pure-u-1 pure-u-md-3-4">
+            <div class="header">
+              <h1>Welcome to Epguides API</h1>
+              <p>
+                This project aims to make it easier to query data about tvshows from epguides.com
+                <br />
+                Freel free to {this.renderLinkToReportIssues()}.
+              </p>
+            </div>
             <div className="posts" id="posts">
               {this.state.examples.map(function (item) {
                 return <ApiExample key={item.path} endpoint={item} />;
