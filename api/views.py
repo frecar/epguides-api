@@ -74,7 +74,7 @@ def discover_shows():
     result = []
     log_event(request, "ViewShowsOverview")
 
-    for epguides_name in random.shuffle(list_all_epguides_keys_redis()):
+    for epguides_name in list_all_epguides_keys_redis():
         try:
             show = get_show_by_key(epguides_name)
             if not show:
