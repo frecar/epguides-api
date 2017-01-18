@@ -13,7 +13,9 @@ def overview():
     return render_template(
         'index.html',
         base_url=app.config['BASE_URL'],
-        fb_pixel=create_fb_pixel()['code']
+        fb_pixel=create_fb_pixel()['code'],
+        ga_enabled=app.config['GA_ENABLED'],
+        ga_tracker_id=app.config['GA_ID']
     )
 
 
