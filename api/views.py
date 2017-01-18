@@ -1,3 +1,5 @@
+import random
+
 from flask import render_template, request
 
 from .app import app
@@ -15,7 +17,7 @@ def overview():
         base_url=app.config['BASE_URL'],
         fb_pixel=create_fb_pixel()['code'],
         ga_enabled=app.config['GA_ENABLED'],
-        ga_tracker_id=app.config['GA_ID']
+        ga_tracker_id=app.config['GA_TRACKER_ID']
     )
 
 
@@ -72,7 +74,7 @@ def discover_shows():
     result = []
     log_event(request, "ViewShowsOverview")
 
-    for epguides_name in list_all_epguides_keys_redis():
+    for epguides_name in random.shuffle(list_all_epguides_keys_redis()):
         try:
             show = get_show_by_key(epguides_name)
             if not show:
