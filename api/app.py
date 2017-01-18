@@ -14,7 +14,7 @@ CONFIG = {
     'FB_MY_APP_ID': config.get('flask', 'fb_my_app_id'),
     'FB_MY_APP_SECRET': config.get('flask', 'fb_my_app_secret'),
     'FB_MY_ACCESS_TOKEN': config.get('flask', 'fb_my_access_token'),
-    'GA_ID': config.get('flask', 'ga_tracker_id'),
+    'GA_TRACKER_ID': config.get('flask', 'ga_tracker_id'),
     'GA_ENABLED': config.get('flask', 'ga_enabled'),
 }
 
