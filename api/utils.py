@@ -14,7 +14,6 @@ TWELVE_HOURS_SECONDS = 43200
 
 
 class SimpleEncoder(json.JSONEncoder):
-
     def default(self, o):
         return o.__dict__
 
@@ -38,8 +37,10 @@ def add_epguides_key_to_redis(epguides_name):
 def list_all_epguides_keys_redis(redis_queue_key="epguides_api:keys"):
     redis = Redis()
 
-    return [x.decode("utf-8") for x in
-            redis.lrange(redis_queue_key, 0, redis.llen(redis_queue_key))]
+    return set([
+        x.decode("utf-8")
+        for x in redis.lrange(redis_queue_key, 0, redis.llen(redis_queue_key))
+    ])
 
 
 def format_title(title):
@@ -63,7 +64,7 @@ def parse_date(date):
             dd = strptime(date, date_format)
             # Hack to support old tv shows
             if dd.year > datetime.now().year + 2:
-                dd = dd.replace(year=dd.year-100)
+                dd = dd.replace(year=dd.year - 100)
             return dd.strftime("%Y-%m-%d")
         except ValueError:
             continue
