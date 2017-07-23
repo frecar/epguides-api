@@ -63,15 +63,15 @@ var ApiExample = React.createClass({
 
 var ApiRenderOverview = React.createClass({
 
-  getInitialState: function() {
+  getInitialState() {
      return {examples: []};
   },
 
-  componentDidMount: function() {
+  componentDidMount() {
      this.fetchExamples();
   },
 
-  fetchExamples: function() {
+  fetchExamples() {
     let that = this;
     let url = "/api/examples";
     $.ajax({ url:url}).success(function(res){
@@ -79,7 +79,7 @@ var ApiRenderOverview = React.createClass({
      }.bind(this));
   },
 
-  renderLinkToReportIssues: function() {
+  renderLinkToReportIssues() {
     return (
       <a target="_blank" href="https://github.com/frecar/epguides-api/issues">
         report bugs and suggest new features
@@ -87,13 +87,13 @@ var ApiRenderOverview = React.createClass({
     );
   },
 
-  render: function() {
+  render() {
     return (
       <div id="layout" className="pure-g">
           <div className="sidebar pure-u-1 pure-u-md-1-4">
               <div className="header">
                   <h1 className="brand-title">epguides api</h1>
-                  <h2 className="brand-tagline">TVshows data for everyone</h2>
+                  <h2 className="brand-tagline">TV Shows API</h2>
               </div>
           </div>
           <div className="content pure-u-1 pure-u-md-3-4">
