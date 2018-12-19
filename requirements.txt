@@ -5,7 +5,7 @@ flake8==3.6.0
 tox==3.6.0
 requests==2.21.0
 pytest==4.0.2
-raven[flask]==6.9.0
+raven[flask]==6.10.0
 blinker==1.4
 coverage==4.5.2
 facebookads==2.11.4
