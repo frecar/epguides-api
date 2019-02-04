@@ -1,7 +1,7 @@
 Flask==1.0.2
 Flask-Cache==0.13.1
 redis==3.1.0
-flake8==3.7.4
+flake8==3.7.5
 tox==3.7.0
 requests==2.21.0
 pytest==4.2.0
