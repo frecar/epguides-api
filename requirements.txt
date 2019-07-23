@@ -10,4 +10,4 @@ blinker==1.4
 coverage==4.5.3
 facebookads==2.11.4
 gunicorn==19.9.0
-pip==19.2
+pip==19.2.1
