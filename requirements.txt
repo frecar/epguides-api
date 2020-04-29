@@ -1,6 +1,6 @@
 Flask==1.1.2
 Flask-Cache==0.13.1
-redis==3.4.1
+redis==3.5.0
 flake8==3.7.9
 tox==3.14.6
 requests==2.23.0
