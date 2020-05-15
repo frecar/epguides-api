@@ -10,7 +10,10 @@ ELEVEN_HOURS_SECONDS = 39600
 
 @cache.memoize(timeout=ELEVEN_HOURS_SECONDS)
 def get_show_by_key(epguides_name):
-    epguides_name = str(epguides_name).lower().replace(" ", "")
+    epguides_name = epguides_name = str(epguides_name).lower().replace(" ", "")
+
+    #epguides_name = u''.join(epguides_name).encode('utf-8').strip().lower().replace(" ", "")
+
     if epguides_name.startswith("the"):
         epguides_name = epguides_name[3:]
 
@@ -172,7 +175,7 @@ class Show(object):
                 continue
 
             try:
-                title = str(episode_data['title'])
+                title = "".join(episode_data['title']).encode("utf-8")
             except ValueError:
                 continue
 
