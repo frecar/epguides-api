@@ -3,7 +3,7 @@ Flask-Cache==0.13.1
 redis==2.10.5
 flake8==3.0.4
 tox==2.3.1
-requests==2.10.0
+requests==2.20.0
 pytest==3.0.3
 raven[flask]==5.27.1
 blinker==1.4
