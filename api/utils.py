@@ -124,7 +124,7 @@ def parse_epguides_data(url):
 def parse_epguides_info(url):
     try:
         data = requests.get("http://epguides.com/" + url).text
-        return re.findall('<h1><a href="[\w\:\/\/.]*title\/(.*)">(.*)<\/a>',
+        return re.findall('<h2><a href="[\w\:\/\/.]*title\/(.*)">(.*)<\/a>',
                           data)[0]
 
     except IndexError:
