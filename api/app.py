@@ -2,7 +2,7 @@ import configparser
 import os
 
 from flask import Flask
-from flask.ext.cache import Cache
+from flask_caching import Cache
 from raven.contrib.flask import Sentry
 
 config = configparser.ConfigParser()

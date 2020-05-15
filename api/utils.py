@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import re
+import random
 from datetime import datetime
 
 import requests
@@ -14,6 +15,7 @@ TWELVE_HOURS_SECONDS = 43200
 
 
 class SimpleEncoder(json.JSONEncoder):
+
     def default(self, o):
         return o.__dict__
 
@@ -37,10 +39,12 @@ def add_epguides_key_to_redis(epguides_name):
 def list_all_epguides_keys_redis(redis_queue_key="epguides_api:keys"):
     redis = Redis()
 
-    return set([
+    res = list(set([
         x.decode("utf-8")
         for x in redis.lrange(redis_queue_key, 0, redis.llen(redis_queue_key))
-    ])
+    ]))
+    random.shuffle(res)
+    return res
 
 
 def format_title(title):
