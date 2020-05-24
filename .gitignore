@@ -5,6 +5,7 @@ info.log
 venv
 local.cfg
 .eggs
+.vscode
 
 .DS_Store
 coverage.xml

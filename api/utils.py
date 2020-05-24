@@ -46,18 +46,6 @@ def list_all_epguides_keys_redis(redis_queue_key="epguides_api:keys"):
     random.shuffle(res)
     return res
 
-
-def format_title(title):
-    pattern = "[<a\s\w\=\'\"\:\/\.\-]*>(.*)</a>"
-
-    if title.startswith("<a"):
-        parsed_title_groups = re.findall(pattern, title)
-        if len(parsed_title_groups) == 1:
-            title = parsed_title_groups[0]
-
-    return title.strip()
-
-
 def parse_date(date):
     strptime = datetime.strptime
 
@@ -128,8 +116,6 @@ def parse_epguides_data(url):
 def parse_epguides_info(url):
     try:
         data = requests.get("http://epguides.com/" + url).text
-        return re.findall('<h2><a href="[\w\:\/\/.]*title\/(.*)">(.*)<\/a>',
-                          data)[0]
-
+        return re.findall(r'<h2><a href="[\w\:\/\/.]*title\/(.*)">(.*)<\/a>', data)[0]
     except IndexError:
         return

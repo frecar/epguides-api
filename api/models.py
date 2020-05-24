@@ -12,13 +12,10 @@ ELEVEN_HOURS_SECONDS = 39600
 def get_show_by_key(epguides_name):
     epguides_name = epguides_name = str(epguides_name).lower().replace(" ", "")
 
-    #epguides_name = u''.join(epguides_name).encode('utf-8').strip().lower().replace(" ", "")
-
     if epguides_name.startswith("the"):
         epguides_name = epguides_name[3:]
 
     show = Show(epguides_name)
-    add_epguides_key_to_redis(epguides_name)
     return show
 
 
@@ -93,7 +90,6 @@ class Show(object):
     def get_title(self):
         try:
             return parse_epguides_info(self.epguide_name)[1]
-
         except (IndexError, TypeError):
             raise EpisodeNotFoundException()
 
