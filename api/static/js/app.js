@@ -12,11 +12,16 @@ var ApiExample = React.createClass({
   queryEndpoint: function() {
     let that = this;
     let url = this.props.endpoint.path+"?ignore_tracking";
-    $.ajax({ url:url}).success(function(res){
+    $.ajax({ url:url, 
+      error:function (xhr, ajaxOptions, thrownError){
+        console.log(xhr.responseJSON);
+        this.setState({result: JSON.stringify(xhr.responseJSON)});
+      }.bind(this)
+   }).success(function(res){
         if(this.props.endpoint.limit) {
           res = res.slice(0, that.props.endpoint.limit);
         }
-        this.setState({result:JSON.stringify(res,null,' ')});
+        this.setState({result: JSON.stringify(res, null, ' ')});
      }.bind(this));
   },
 
