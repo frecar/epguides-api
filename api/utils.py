@@ -9,7 +9,7 @@ import requests
 from flask import make_response
 from redis import Redis
 
-from .app import cache
+from app import cache
 
 TWELVE_HOURS_SECONDS = 43200
 

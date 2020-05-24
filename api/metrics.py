@@ -1,7 +1,7 @@
 import requests
 from redis import Redis
 
-from .app import app
+from app import app
 
 
 def create_fb_pixel():

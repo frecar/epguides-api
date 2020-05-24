@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 
-from .app import cache
-from .exceptions import EpisodeNotFoundException, SeasonNotFoundException
-from .utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
+from app import cache
+from exceptions import EpisodeNotFoundException, SeasonNotFoundException
+from utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
                     parse_epguides_info)
 
 ELEVEN_HOURS_SECONDS = 39600
