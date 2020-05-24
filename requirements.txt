@@ -1,8 +1,8 @@
 Flask==1.1.2
 Flask-Caching==1.8.0
-redis==3.5.1
-flake8==3.7.9
-tox==3.15.0
+redis==3.5.2
+flake8==3.8.2
+tox==3.15.1
 requests==2.23.0
 pytest==5.4.2
 raven[flask]==6.10.0
