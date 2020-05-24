@@ -2,11 +2,11 @@ import random
 
 from flask import render_template, request
 
-from .app import app
-from .exceptions import EpisodeNotFoundException, SeasonNotFoundException
-from .metrics import create_fb_pixel, log_event
-from .models import get_show_by_key
-from .utils import json_response, list_all_epguides_keys_redis
+from app import app
+from exceptions import EpisodeNotFoundException, SeasonNotFoundException
+from metrics import create_fb_pixel, log_event
+from models import get_show_by_key
+from utils import json_response, list_all_epguides_keys_redis
 
 
 @app.route("/")
