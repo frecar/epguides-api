@@ -28,6 +28,9 @@ if config.getboolean('flask', 'fb_enabled'):
 cache = Cache(app, config={'CACHE_TYPE': 'redis',
                            'CACHE_KEY_PREFIX': 'epguides_cache:',
                            'CACHE_DEFAULT_TIMEOUT': 3600})
+sentry = app
 
 if CONFIG['SENTRY_DSN']:
-    sentry = Sentry(app, dsn=CONFIG['SENTRY_DSN'])
+    sentry = Sentry(cache, dsn=CONFIG['SENTRY_DSN'])
+
+app = sentry
