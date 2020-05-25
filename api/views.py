@@ -84,13 +84,12 @@ def discover_shows():
 @app.route('/show/<string:show>/')
 def view_show(show):
     log_event(request, "ViewShow")
+    add_epguides_key_to_redis(show)
     try:
         return json_response(get_show_by_key(show).get_show_data())
     except EpisodeNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Show not found'}, 404)
     except SeasonNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Season not found'}, 404)
 
 
@@ -109,22 +108,21 @@ def view_show_info(show):
 @app.route('/show/<string:show>/<int:season>/<int:episode>/')
 def episode(show, season, episode):
     log_event(request, "ViewEpisode")
+    add_epguides_key_to_redis(show)
     try:
-        show = get_show_by_key(show)
         return json_response({
-            'episode': show.get_episode(int(season), int(episode))
+            'episode': get_show_by_key(show).get_episode(int(season), int(episode))
         })
     except EpisodeNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Show not found'}, 404)
     except SeasonNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Season not found'}, 404)
 
 
 @app.route('/show/<string:show>/<int:season>/<int:episode>/released/')
 def released(show, season, episode):
     log_event(request, "ViewReleased")
+    add_epguides_key_to_redis(show)
     try:
         show = get_show_by_key(show)
         return json_response({
@@ -132,16 +130,15 @@ def released(show, season, episode):
                 int(season), int(episode))
         })
     except EpisodeNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Show not found'}, 404)
     except SeasonNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Season not found'}, 404)
 
 
 @app.route('/show/<string:show>/<int:season>/<int:episode>/next/')
 def next_from_given_episode(show, season, episode):
     log_event(request, "ViewNextFromGivenEpisode")
+    add_epguides_key_to_redis(show)
     try:
         show = get_show_by_key(show)
         return json_response({
@@ -149,16 +146,15 @@ def next_from_given_episode(show, season, episode):
                 int(season), int(episode)).next()
         })
     except EpisodeNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Show not found'}, 404)
     except SeasonNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Season not found'}, 404)
 
 
 @app.route('/show/<string:show>/<int:season>/<int:episode>/next/released/')
 def next_released_from_given_episode(show, season, episode):
     log_event(request, "ViewNextReleasedFromGivenEpisode")
+    add_epguides_key_to_redis(show)
     try:
         show = get_show_by_key(show)
         next_episode = show.get_episode(season, episode).next()
@@ -166,49 +162,44 @@ def next_released_from_given_episode(show, season, episode):
             raise EpisodeNotFoundException
         return json_response({'status': next_episode.released()})
     except EpisodeNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Show not found'}, 404)
     except SeasonNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Season not found'}, 404)
 
 
 @app.route('/show/<string:show>/next/')
 def next(show):
     log_event(request, "ViewShowNextEpisode")
+    add_epguides_key_to_redis(show)
     try:
         return json_response({'episode': get_show_by_key(show).next_episode()})
     except EpisodeNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Show not found'}, 404)
     except SeasonNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Season not found'}, 404)
 
 
 @app.route('/show/<string:show>/last/')
 def last(show):
     log_event(request, "ViewShowLastEpisode")
+    add_epguides_key_to_redis(show)
     try:
         return json_response({'episode': get_show_by_key(show).last_episode()})
     except EpisodeNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Show not found'}, 404)
     except SeasonNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Season not found'}, 404)
 
 
 @app.route('/show/<string:show>/first/')
 def first(show):
     log_event(request, "ViewShowFirstEpisode")
+    add_epguides_key_to_redis(show)
     try:
         return json_response({
             'episode': get_show_by_key(show).first_episode()
         })
     except EpisodeNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Show not found'}, 404)
     except SeasonNotFoundException:
-        add_epguides_key_to_redis(show)
         return json_response({'error': 'Season not found'}, 404)
