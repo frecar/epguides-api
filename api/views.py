@@ -2,11 +2,11 @@ import random
 
 from flask import render_template, request
 
-from app import app
-from exceptions import EpisodeNotFoundException, SeasonNotFoundException
-from metrics import create_fb_pixel, log_event
-from models import get_show_by_key
-from utils import add_epguides_key_to_redis, json_response, list_all_epguides_keys_redis
+from api.app import app
+from api.exceptions import EpisodeNotFoundException, SeasonNotFoundException
+from api.metrics import create_fb_pixel, log_event
+from api.models import get_show_by_key
+from api.utils import add_epguides_key_to_redis, json_response, list_all_epguides_keys_redis
 
 
 @app.route("/")
@@ -219,7 +219,3 @@ def first(show):
     except SeasonNotFoundException:
         add_epguides_key_to_redis(show)
         return json_response({'error': 'Season not found'}, 404)
-
-
-if __name__ == '__main__':
-    app.run(debug=app.config['DEBUG'])

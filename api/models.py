@@ -1,22 +1,21 @@
 from datetime import datetime, timedelta
-
-from app import cache
-from exceptions import EpisodeNotFoundException, SeasonNotFoundException
-from utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
+from random import randrange
+from api.app import cache
+from api.exceptions import EpisodeNotFoundException, SeasonNotFoundException
+from api.utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
                     parse_epguides_info)
 
-ELEVEN_HOURS_SECONDS = 39600
+def get_timeout_cache():
+    return 50000 * randrange(1,14)
 
-
-@cache.memoize(timeout=ELEVEN_HOURS_SECONDS)
+@cache.memoize(timeout=get_timeout_cache())
 def get_show_by_key(epguides_name):
     epguides_name = epguides_name = str(epguides_name).lower().replace(" ", "")
 
     if epguides_name.startswith("the"):
         epguides_name = epguides_name[3:]
 
-    show = Show(epguides_name)
-    return show
+    return Show(epguides_name)
 
 
 class Episode(object):

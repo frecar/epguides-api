@@ -9,7 +9,7 @@ import requests
 from flask import make_response
 from redis import Redis
 
-from app import cache
+from api.app import cache
 
 TWELVE_HOURS_SECONDS = 43200
 
@@ -38,7 +38,6 @@ def add_epguides_key_to_redis(epguides_name):
 
 def list_all_epguides_keys_redis(redis_queue_key="epguides_api:keys"):
     redis = Redis()
-
     res = list(set([
         x.decode("utf-8")
         for x in redis.lrange(redis_queue_key, 0, redis.llen(redis_queue_key))
