@@ -5,10 +5,7 @@ from api.exceptions import EpisodeNotFoundException, SeasonNotFoundException
 from api.utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
                     parse_epguides_info)
 
-def get_timeout_cache():
-    return 50000 * randrange(1,14)
-
-@cache.memoize(timeout=get_timeout_cache())
+@cache.memoize(timeout=172800)
 def get_show_by_key(epguides_name):
     epguides_name = epguides_name = str(epguides_name).lower().replace(" ", "")
 
