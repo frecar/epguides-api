@@ -5,14 +5,17 @@ from api.exceptions import EpisodeNotFoundException, SeasonNotFoundException
 from api.utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
                     parse_epguides_info)
 
-@cache.memoize(timeout=172800)
-def get_show_by_key(epguides_name):
-    epguides_name = epguides_name = str(epguides_name).lower().replace(" ", "")
+ELEVEN_HOURS_SECONDS = 39600
 
+@cache.memoize(timeout=ELEVEN_HOURS_SECONDS)
+def get_show_by_key(epguides_name):
+    epguides_name = str(epguides_name).lower().replace(" ", "")
     if epguides_name.startswith("the"):
         epguides_name = epguides_name[3:]
 
-    return Show(epguides_name)
+    show = Show(epguides_name)
+    add_epguides_key_to_redis(epguides_name)
+    return show
 
 
 class Episode(object):
