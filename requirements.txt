@@ -7,7 +7,7 @@ requests==2.25.1
 pytest==6.2.3
 raven[flask]==6.10.0
 blinker==1.4
-pylint==2.8.0
+pylint==2.8.1
 coverage==5.5
 facebookads==2.11.4
 gunicorn==20.1.0
