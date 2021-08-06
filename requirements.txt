@@ -11,4 +11,4 @@ pylint==2.9.6
 coverage==5.5
 facebookads==2.11.4
 gunicorn==20.1.0
-pip==21.2.2
+pip==21.2.3
