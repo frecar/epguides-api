@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from random import randrange
 from api.app import cache
-from api.exceptions import EpisodeNotFoundException, SeasonNotFoundException
+from api.exceptions import EpisodeNotFoundException, SeasonNotFoundException, ShowNotFoundException
 from api.utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
                     parse_epguides_info)
 
@@ -90,7 +90,7 @@ class Show(object):
         try:
             return parse_epguides_info(self.epguide_name)[1]
         except (IndexError, TypeError):
-            raise EpisodeNotFoundException()
+            raise ShowNotFoundException()
 
     def get_imdb_id(self):
         try:

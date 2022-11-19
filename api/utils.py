@@ -35,6 +35,14 @@ def add_epguides_key_to_redis(epguides_name):
     if epguides_name not in all_keys:
         redis.lpush(redis_queue_key, epguides_name)
 
+def remove_epguides_key_to_redis(epguides_name):
+    redis = Redis()
+    redis_queue_key = "epguides_api:keys"
+
+    all_keys = list_all_epguides_keys_redis(redis_queue_key=redis_queue_key)
+
+    if epguides_name in all_keys:
+        redis.delete(redis_queue_key, epguides_name)
 
 def list_all_epguides_keys_redis(redis_queue_key="epguides_api:keys"):
     redis = Redis()
@@ -63,12 +71,14 @@ def parse_date(date):
     return None
 
 
+@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
 def csv_reader_from_url(url):
     data = requests.get(url).text
     csvio = io.StringIO(data, newline="")
     return csv.reader(csvio)
 
 
+@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
 def parse_csv_file(url, row_map):
     result = []
 
@@ -84,12 +94,14 @@ def parse_csv_file(url, row_map):
     return result
 
 
+@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
 def parse_epguides_tvrage_csv_data(id):
     url = 'http://epguides.com/common/exportToCSV.asp?rage={0}'.format(id)
     row_map = {'season': 1, 'number': 2, 'release_date': 4, 'title': 5}
     return parse_csv_file(url, row_map)
 
 
+@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
 def parse_epguides_maze_csv_data(id):
     url = 'http://epguides.com/common/exportToCSVmaze.asp?maze={0}'.format(id)
     row_map = {'season': 1, 'number': 2, 'release_date': 3, 'title': 4}
