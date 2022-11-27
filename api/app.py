@@ -8,19 +8,6 @@ from raven.contrib.flask import Sentry
 config = configparser.ConfigParser()
 config.read(["defaults.cfg", os.path.expanduser('~/epguidesapi.cfg')])
 
-def get_base_url():
-    url = config.get('flask', 'web_domain')
-
-    if config.get('flask', 'web_port') not in ['80', '443']:
-        url = url + ':' + config.get('flask', 'web_port')
-
-    if config.get('flask', 'web_ssl') == 'true':
-        url = 'https://' + url
-    else:
-        url = 'http://' + url
-
-    return url + '/'
-
 CONFIG = {
     'SENTRY_DSN': config.get('flask', 'sentry_dsn'),
     'DEBUG': config.getboolean('flask', 'debug'),
@@ -35,7 +22,7 @@ CONFIG = {
     'WEB_HOST': config.get('flask', 'web_host'),
     'WEB_PORT': config.get('flask', 'web_port'),
     'WEB_SSL': config.get('flask', 'web_ssl') == 'true',
-    'BASE_URL': get_base_url(),
+    'BASE_URL': config.get('flask', 'base_url'),
 }
 
 app = Flask(__name__)
