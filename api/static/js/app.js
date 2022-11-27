@@ -11,7 +11,8 @@ var ApiExample = React.createClass({
 
   queryEndpoint: function() {
     let that = this;
-    let url = this.props.endpoint.path+"?ignore_tracking";
+    let url = this.props.endpoint.path;
+    console.log(url);
     $.ajax({ url:url, 
       error:function (xhr, ajaxOptions, thrownError){
         console.log(xhr.responseJSON);
@@ -78,7 +79,7 @@ var ApiRenderOverview = React.createClass({
 
   fetchExamples() {
     let that = this;
-    let url = "/api/examples";
+    let url = "/api/examples/";
     $.ajax({ url:url}).success(function(res){
         this.setState({examples: res});
      }.bind(this));

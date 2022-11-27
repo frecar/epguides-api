@@ -9,10 +9,15 @@ import requests
 from flask import make_response
 from redis import Redis
 
-from api.app import cache
+from api.app import cache, app
 
-TWELVE_HOURS_SECONDS = 43200
-
+def get_redis():
+    return Redis(
+        host=app.config['REDIS_HOST'], 
+        port=app.config['REDIS_PORT'],
+        db=app.config['REDIS_DB'],
+        password=app.config['REDIS_PASS']
+    )
 
 class SimpleEncoder(json.JSONEncoder):
 
@@ -27,7 +32,7 @@ def json_response(data, status=200):
 
 
 def add_epguides_key_to_redis(epguides_name):
-    redis = Redis()
+    redis = get_redis()
     redis_queue_key = "epguides_api:keys"
 
     all_keys = list_all_epguides_keys_redis(redis_queue_key=redis_queue_key)
@@ -36,7 +41,7 @@ def add_epguides_key_to_redis(epguides_name):
         redis.lpush(redis_queue_key, epguides_name)
 
 def remove_epguides_key_to_redis(epguides_name):
-    redis = Redis()
+    redis = get_redis()
     redis_queue_key = "epguides_api:keys"
 
     all_keys = list_all_epguides_keys_redis(redis_queue_key=redis_queue_key)
@@ -45,7 +50,7 @@ def remove_epguides_key_to_redis(epguides_name):
         redis.delete(redis_queue_key, epguides_name)
 
 def list_all_epguides_keys_redis(redis_queue_key="epguides_api:keys"):
-    redis = Redis()
+    redis = get_redis()
     res = list(set([
         x.decode("utf-8")
         for x in redis.lrange(redis_queue_key, 0, redis.llen(redis_queue_key))
@@ -71,14 +76,13 @@ def parse_date(date):
     return None
 
 
-@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
 def csv_reader_from_url(url):
     data = requests.get(url).text
     csvio = io.StringIO(data, newline="")
     return csv.reader(csvio)
 
 
-@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
+@cache.memoize(timeout=app.config['WEB_CACHE_TTL'])
 def parse_csv_file(url, row_map):
     result = []
 
@@ -94,21 +98,21 @@ def parse_csv_file(url, row_map):
     return result
 
 
-@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
+@cache.memoize(timeout=app.config['WEB_CACHE_TTL'])
 def parse_epguides_tvrage_csv_data(id):
     url = 'http://epguides.com/common/exportToCSV.asp?rage={0}'.format(id)
     row_map = {'season': 1, 'number': 2, 'release_date': 4, 'title': 5}
     return parse_csv_file(url, row_map)
 
 
-@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
+@cache.memoize(timeout=app.config['WEB_CACHE_TTL'])
 def parse_epguides_maze_csv_data(id):
     url = 'http://epguides.com/common/exportToCSVmaze.asp?maze={0}'.format(id)
     row_map = {'season': 1, 'number': 2, 'release_date': 3, 'title': 4}
     return parse_csv_file(url, row_map)
 
 
-@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
+@cache.memoize(timeout=app.config['WEB_CACHE_TTL'])
 def parse_epguides_data(url):
     data = requests.get("http://epguides.com/" + url).text
     if 'exportToCSV.asp' in data:
@@ -123,7 +127,7 @@ def parse_epguides_data(url):
     return []
 
 
-@cache.memoize(timeout=TWELVE_HOURS_SECONDS)
+@cache.memoize(timeout=app.config['WEB_CACHE_TTL'])
 def parse_epguides_info(url):
     try:
         data = requests.get("http://epguides.com/" + url).text
