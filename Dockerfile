@@ -5,7 +5,6 @@ WORKDIR /app
 
 # Install app dependencies
 COPY requirements.txt ./
-ADD ../../epguidesapi.cfg /root/
 
 RUN pip install -r requirements.txt
 
