@@ -4,7 +4,6 @@ import sentry_sdk
 
 from flask import Flask
 from flask_caching import Cache
-from raven.contrib.flask import Sentry
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 config = configparser.ConfigParser()
