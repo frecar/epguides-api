@@ -14,9 +14,13 @@ def overview():
         base_url=app.config['BASE_URL'],
         ga_enabled=app.config['GA_ENABLED'],
         ga_tracker_id=app.config['GA_TRACKER_ID'],
-        web_ssl=app.config['WEB_SSL']
+        web_ssl=app.config['WEB_SSL'],
+        num_total_shows = len(list_all_epguides_keys_redis())
     )
 
+@app.route('/debug-sentry')
+def trigger_error():
+    division_by_zero = 1 / 0
 
 @app.route("/api/examples/")
 def examples():
