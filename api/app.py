@@ -39,7 +39,7 @@ cache = Cache(app, config={
     'CACHE_TYPE': 'redis',
     'CACHE_KEY_PREFIX': 'epguides_cache:',
     'CACHE_REDIS_PASSWORD': app.config['REDIS_PASS'],
-    'CACHE_DEFAULT_TIMEOUT': 1
+    'CACHE_DEFAULT_TIMEOUT': app.config['WEB_CACHE_TTL']
 })
 
 if CONFIG['SENTRY_DSN']:
