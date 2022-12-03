@@ -1,9 +1,11 @@
 import configparser
 import os
+import sentry_sdk
 
 from flask import Flask
 from flask_caching import Cache
 from raven.contrib.flask import Sentry
+from sentry_sdk.integrations.flask import FlaskIntegration
 
 config = configparser.ConfigParser()
 config.read(["defaults.cfg", os.path.expanduser('~/epguidesapi.cfg')])
@@ -35,9 +37,11 @@ cache = Cache(app, config={
     'CACHE_DEFAULT_TIMEOUT': app.config['WEB_CACHE_TTL']
 })
 
-sentry = app
-
 if CONFIG['SENTRY_DSN']:
-    sentry = Sentry(cache, dsn=CONFIG['SENTRY_DSN'])
-
-app = sentry
+    sentry_sdk.init(
+        dsn=CONFIG['SENTRY_DSN'],
+        integrations=[
+            FlaskIntegration(),
+        ],
+        traces_sample_rate=1.0
+    )
