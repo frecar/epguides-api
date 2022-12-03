@@ -25,12 +25,6 @@ class SimpleEncoder(json.JSONEncoder):
         return o.__dict__
 
 
-def json_response(data, status=200):
-    response = make_response(json.dumps(data, cls=SimpleEncoder), status)
-    response.mimetype = 'application/json'
-    return response
-
-
 def add_epguides_key_to_redis(epguides_name):
     redis = get_redis()
     redis_queue_key = "epguides_api:keys"
@@ -39,15 +33,6 @@ def add_epguides_key_to_redis(epguides_name):
 
     if epguides_name not in all_keys:
         redis.lpush(redis_queue_key, epguides_name)
-
-def remove_epguides_key_to_redis(epguides_name):
-    redis = get_redis()
-    redis_queue_key = "epguides_api:keys"
-
-    all_keys = list_all_epguides_keys_redis(redis_queue_key=redis_queue_key)
-
-    if epguides_name in all_keys:
-        redis.delete(redis_queue_key, epguides_name)
 
 def list_all_epguides_keys_redis(redis_queue_key="epguides_api:keys"):
     redis = get_redis()

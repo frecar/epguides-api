@@ -5,6 +5,7 @@ import sentry_sdk
 from flask import Flask
 from flask_caching import Cache
 from sentry_sdk.integrations.flask import FlaskIntegration
+from api.exceptions import EpisodeNotFoundException, SeasonNotFoundException, ShowNotFoundException
 
 config = configparser.ConfigParser()
 config.read(["defaults.cfg", os.path.expanduser('~/epguidesapi.cfg')])
@@ -29,11 +30,16 @@ CONFIG = {
 app = Flask(__name__)
 app.config.update(CONFIG)
 
+app.register_error_handler(404, ShowNotFoundException)
+app.register_error_handler(404, SeasonNotFoundException)
+app.register_error_handler(404, EpisodeNotFoundException)
+
+
 cache = Cache(app, config={
     'CACHE_TYPE': 'redis',
     'CACHE_KEY_PREFIX': 'epguides_cache:',
     'CACHE_REDIS_PASSWORD': app.config['REDIS_PASS'],
-    'CACHE_DEFAULT_TIMEOUT': app.config['WEB_CACHE_TTL']
+    'CACHE_DEFAULT_TIMEOUT': 1
 })
 
 if CONFIG['SENTRY_DSN']:
