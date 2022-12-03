@@ -12,10 +12,8 @@ var ApiExample = React.createClass({
   queryEndpoint: function() {
     let that = this;
     let url = this.props.endpoint.path;
-    console.log(url);
     $.ajax({ url:url, 
       error:function (xhr, ajaxOptions, thrownError){
-        console.log(xhr.responseJSON);
         this.setState({result: JSON.stringify(xhr.responseJSON)});
       }.bind(this)
    }).success(function(res){
@@ -46,6 +44,10 @@ var ApiExample = React.createClass({
     if(this.props.endpoint.limit) {
       results_comment = "Note: Number of results are limited to "
       + this.props.endpoint.limit + " in this example";
+    }
+ 
+    if (this.state.result == undefined) {
+      this.state.result = "Not found"
     }
 
     return (

@@ -1,24 +1,21 @@
 from datetime import datetime, timedelta
 from random import randrange
 from api.app import cache, app
+from flask import jsonify
 from api.exceptions import EpisodeNotFoundException, SeasonNotFoundException, ShowNotFoundException
 from api.utils import (add_epguides_key_to_redis, parse_date, parse_epguides_data,
-                    parse_epguides_info)
+                       parse_epguides_info)
 
 
-@cache.memoize(timeout=app.config['WEB_CACHE_TTL'])
+#@cache.memoize(timeout=app.config['WEB_CACHE_TTL'])
 def get_show_by_key(epguides_name):
     epguides_name = str(epguides_name).lower().replace(" ", "")
     if epguides_name.startswith("the"):
         epguides_name = epguides_name[3:]
 
-    show = Show(epguides_name)
-    add_epguides_key_to_redis(epguides_name)
-    return show
-
+    return Show(epguides_name)
 
 class Episode(object):
-
     def __init__(self, show, season_number, episode_data):
         self.show = show
         self.season = int(season_number)
@@ -26,9 +23,15 @@ class Episode(object):
         self.title = episode_data['title']
         self.release_date = episode_data['release_date']
 
-    def __serialize__(self):
-        return self.__dict__
-
+    def as_dict(self):
+        return {
+            'show': self.show.as_dict(),
+            'season': self.season,
+            'number': self.number,
+            'title': self.title,
+            'relesae_date': self.release_date
+        }
+    
     def valid(self):
         if not self.show:
             return False
@@ -60,7 +63,7 @@ class Episode(object):
         return False
 
     def next(self):
-        episodes = self.show.get_show_data()
+        episodes = self.show.episodes
 
         for episode in episodes[self.season]:
             if episode.number == self.number + 1:
@@ -74,47 +77,45 @@ class Episode(object):
         return None
 
 
-class Show(object):
+class Show:
 
     def __init__(self, epguide_name):
-        self.epguide_name = epguide_name
-        self.title = self.get_title()
-        self.imdb_id = self.get_imdb_id()
-
-    @staticmethod
-    def get(key):
-        return get_show_by_key(key)
-
-    def get_title(self):
         try:
-            return parse_epguides_info(self.epguide_name)[1]
+            self.epguide_name = epguide_name
+            self.metadata = parse_epguides_info(self.epguide_name)
+            self.title = self.metadata[1]
+            self.imdb_id = self.__parse_imdb_id()
+            self.episodes = self.__fetch_episodes()
         except (IndexError, TypeError):
             raise ShowNotFoundException()
 
-    def get_imdb_id(self):
-        try:
-            imdb_id_raw = parse_epguides_info(self.epguide_name)[0]
-            imdb_id_prefix = imdb_id_raw[:2]
-            imdb_id_number = int(imdb_id_raw[2:])
-            return imdb_id_prefix + "%07d" % imdb_id_number
+        add_epguides_key_to_redis(self.epguide_name)
 
-        except (IndexError, TypeError):
-            raise EpisodeNotFoundException()
+    def as_dict(self):
+        return {
+            'epguide_name': self.epguide_name,
+            "title": self.title, 
+            "imdb_id": self.imdb_id
+        }
+
+    def __parse_imdb_id(self):
+        imdb_id_raw = self.metadata[0]
+        imdb_id_prefix = imdb_id_raw[:2]
+        imdb_id_number = int(imdb_id_raw[2:])
+        return imdb_id_prefix + "%07d" % imdb_id_number
+    
 
     def first_episode(self):
-        data = self.get_show_data()
-        first_season_number = sorted(data.keys(), key=int)[0]
-
-        for episode in data[first_season_number]:
+        first_season_number = sorted(self.episodes.keys(), key=int)[0]
+        for episode in self.episodes[first_season_number]:
             if episode.released():
                 return episode
 
         raise EpisodeNotFoundException()
 
     def next_episode(self):
-        data = self.get_show_data()
-        for season in sorted(data.keys(), key=int):
-            for episode in data[season]:
+        for season in sorted(self.episodes.keys(), key=int):
+            for episode in self.episodes[season]:
                 if episode.valid() and not episode.released():
                     return episode
 
@@ -130,13 +131,13 @@ class Show(object):
 
     def season_episodes(self, season, reverse=False):
         try:
-            episodes = self.get_show_data()[season]
+            episodes = self.episodes[season]
             return sorted(episodes, key=lambda ep: ep.number, reverse=reverse)
         except KeyError:
             raise SeasonNotFoundException()
 
     def seasons_keys(self, reverse=False):
-        return sorted(self.get_show_data().keys(), key=int, reverse=reverse)
+        return sorted(self.episodes.keys(), key=int, reverse=reverse)
 
     def get_episode(self, season_number, episode_number):
         try:
@@ -153,7 +154,13 @@ class Show(object):
     def episode_released(self, season_number, episode_number):
         return self.get_episode(season_number, episode_number).released()
 
-    def get_show_data(self):
+    def episodes_as_json(self):
+        res = {}
+        for season in self.episodes.keys():
+            res[season] = [ep.as_dict() for ep in self.episodes[season]]
+        return res
+
+    def __fetch_episodes(self):
         episodes = {}
 
         for episode_data in parse_epguides_data(self.epguide_name):
