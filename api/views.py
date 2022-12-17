@@ -5,7 +5,7 @@ from flask import render_template
 from api.app import app
 from api.exceptions import EpisodeNotFoundException, SeasonNotFoundException, ShowNotFoundException
 from api.models import get_show_by_key
-from api.utils import add_epguides_key_to_redis, list_all_epguides_keys_redis
+from api.utils import list_all_epguides_keys_redis
 from flask import jsonify
 
 
@@ -96,7 +96,7 @@ def view_random_show():
 
 @app.route('/show/<string:show>/')
 def view_show(show):
-    return jsonify(get_show_by_key(show).as_dict())
+    return jsonify(get_show_by_key(show).episodes_as_json())
 
 
 @app.route('/show/<string:show>/info/')
