@@ -29,7 +29,7 @@ class Episode(object):
             'season': self.season,
             'number': self.number,
             'title': self.title,
-            'relesae_date': self.release_date
+            'release_date': self.release_date
         }
     
     def valid(self):
