@@ -1,0 +1,21 @@
+version: '3.12-rc-buster'
+
+services:
+  epguides-api:
+    command: >
+      sh -c "python3 run.py" 
+    build:
+      context: .
+    ports:
+      - 3000:3000 
+    volumes:
+      - ./:/app
+    links: 
+      - redis
+  redis:
+    command: bash -c "redis-server --save 10 1"
+    image: redis
+    ports:
+      - 6379:6379
+    volumes:
+      - ~/docker_volumes/redis-data:/data

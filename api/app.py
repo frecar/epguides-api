@@ -38,6 +38,7 @@ app.register_error_handler(404, EpisodeNotFoundException)
 cache = Cache(app, config={
     'CACHE_TYPE': 'redis',
     'CACHE_KEY_PREFIX': 'epguides_cache:',
+    'CACHE_REDIS_HOST': app.config['REDIS_HOST'],
     'CACHE_REDIS_PASSWORD': app.config['REDIS_PASS'],
     'CACHE_DEFAULT_TIMEOUT': app.config['WEB_CACHE_TTL']
 })
