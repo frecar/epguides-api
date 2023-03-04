@@ -7,7 +7,6 @@ from api.utils import (add_epguides_key_to_redis, parse_date, parse_epguides_dat
                        parse_epguides_info)
 
 
-#@cache.memoize(timeout=app.config['WEB_CACHE_TTL'])
 def get_show_by_key(epguides_name):
     epguides_name = str(epguides_name).lower().replace(" ", "")
     if epguides_name.startswith("the"):

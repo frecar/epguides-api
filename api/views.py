@@ -1,9 +1,7 @@
-import random
-
 from flask import render_template
 
 from api.app import app
-from api.exceptions import EpisodeNotFoundException, SeasonNotFoundException, ShowNotFoundException
+from api.exceptions import EpisodeNotFoundException
 from api.models import get_show_by_key
 from api.utils import list_all_epguides_keys_redis
 from flask import jsonify
@@ -114,14 +112,6 @@ def released(show, season, episode):
     return jsonify({'status': get_show_by_key(show).episode_released(int(season), int(episode))})
 
 
-@app.route('/show/<string:show>/<int:season>/<int:episode>/next/')
-def next_from_given_episode(show, season, episode):
-    show = get_show_by_key(show)
-    next_episode = show.get_episode(season, episode).next()
-    if not next_episode:
-        raise EpisodeNotFoundException
-    return jsonify({'episode': get_show_by_key(show).get_episode(int(season), int(episode)).next().as_dict()})
-
 @app.route('/show/<string:show>/<int:season>/<int:episode>/next/released/')
 def next_released_from_given_episode(show, season, episode):
     show = get_show_by_key(show)
@@ -129,6 +119,15 @@ def next_released_from_given_episode(show, season, episode):
     if not next_episode:
         raise EpisodeNotFoundException
     return jsonify({'status': next_episode.released()})
+
+
+@app.route('/show/<string:show>/<int:season>/<int:episode>/next/')
+def next_from_given_episode(show, season, episode):
+    show = get_show_by_key(show)
+    next_episode = show.get_episode(season, episode).next()
+    if not next_episode:
+        raise EpisodeNotFoundException
+    return jsonify({'episode': next_episode.as_dict()})
 
 
 @app.route('/show/<string:show>/next/')
