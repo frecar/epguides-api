@@ -116,8 +116,11 @@ def released(show, season, episode):
 
 @app.route('/show/<string:show>/<int:season>/<int:episode>/next/')
 def next_from_given_episode(show, season, episode):
+    show = get_show_by_key(show)
+    next_episode = show.get_episode(season, episode).next()
+    if not next_episode:
+        raise EpisodeNotFoundException
     return jsonify({'episode': get_show_by_key(show).get_episode(int(season), int(episode)).next().as_dict()})
-
 
 @app.route('/show/<string:show>/<int:season>/<int:episode>/next/released/')
 def next_released_from_given_episode(show, season, episode):
