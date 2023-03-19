@@ -117,7 +117,7 @@ def parse_epguides_info(url):
     try:
         data = requests.get("http://epguides.com/" + url).text
         return re.findall(r'<h2><a href="[\w\:\/\/.]*title\/(.*)">(.*)<\/a>', data)[0]
-    except ConnectionError:
+    except requests.ConnectionError:
         return
     except IndexError:
         return
