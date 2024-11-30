@@ -1,4 +1,4 @@
-Flask==2.2.2
+Flask==2.3.2
 Flask-Caching==2.0.1
 redis==4.3.4
 flake8==5.0.4
