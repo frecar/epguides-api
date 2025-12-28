@@ -4,8 +4,7 @@ Tests for MCP HTTP endpoints.
 Tests the HTTP interface for the MCP server.
 """
 
-import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient
@@ -99,4 +98,3 @@ async def test_mcp_endpoint_missing_body(async_client: AsyncClient):
     """Test MCP endpoint with missing body."""
     response = await async_client.post("/mcp")
     assert response.status_code == 400  # FastAPI returns 400 for missing JSON body
-
