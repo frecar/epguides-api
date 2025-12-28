@@ -4,7 +4,6 @@ MCP (Model Context Protocol) HTTP endpoints.
 Exposes MCP server functionality over HTTP for network access.
 """
 
-import json
 import logging
 
 from fastapi import APIRouter, HTTPException

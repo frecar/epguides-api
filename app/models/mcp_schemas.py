@@ -76,4 +76,3 @@ class JSONRPCResponse(BaseModel):
     id: str | int | None = Field(None, description="Request ID")
     result: dict[str, Any] | None = Field(None, description="Result (on success)")
     error: dict[str, Any] | None = Field(None, description="Error (on failure)")
-
