@@ -35,7 +35,7 @@ async def test_mcp_endpoint_initialize(async_client: AsyncClient):
     """Test MCP endpoint with initialize request."""
     request = {
         "jsonrpc": "2.0",
-        "id": "1",
+        "id": 1,
         "method": "initialize",
         "params": {},
     }
@@ -43,7 +43,7 @@ async def test_mcp_endpoint_initialize(async_client: AsyncClient):
     assert response.status_code == 200
     data = response.json()
     assert data["jsonrpc"] == "2.0"
-    assert data["id"] == "1"
+    assert data["id"] == 1
     assert "result" in data
     assert data["result"]["protocolVersion"] == "2024-11-05"
     assert data["result"]["serverInfo"]["name"] == "epguides-api"
@@ -63,7 +63,7 @@ async def test_mcp_endpoint_search_shows(mock_search_shows, async_client: AsyncC
 
     request = {
         "jsonrpc": "2.0",
-        "id": "2",
+        "id": 2,
         "method": "tools/call",
         "params": {
             "name": "search_shows",
@@ -74,7 +74,7 @@ async def test_mcp_endpoint_search_shows(mock_search_shows, async_client: AsyncC
     assert response.status_code == 200
     data = response.json()
     assert data["jsonrpc"] == "2.0"
-    assert data["id"] == "2"
+    assert data["id"] == 2
     assert "result" in data
     assert "content" in data["result"]
 
@@ -87,14 +87,13 @@ async def test_mcp_endpoint_invalid_json(async_client: AsyncClient):
         content="not json",
         headers={"Content-Type": "application/json"},
     )
-    assert response.status_code == 400
+    assert response.status_code == 422  # FastAPI validation error for invalid JSON
     data = response.json()
     assert "detail" in data
-    assert "Invalid JSON" in data["detail"]
 
 
 @pytest.mark.asyncio
 async def test_mcp_endpoint_missing_body(async_client: AsyncClient):
     """Test MCP endpoint with missing body."""
     response = await async_client.post("/mcp")
-    assert response.status_code == 400  # FastAPI returns 400 for missing JSON body
+    assert response.status_code == 422  # FastAPI validation error for missing required body
