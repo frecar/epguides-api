@@ -1,0 +1,11 @@
+repos:
+  - repo: local
+    hooks:
+      - id: make-fix
+        name: Format and fix code
+        entry: make fix
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [commit]
+

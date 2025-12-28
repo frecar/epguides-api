@@ -232,7 +232,19 @@ make run
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+
+# Install pre-commit hook (optional but recommended)
+pre-commit install
 ```
+
+**Pre-commit Hook:**
+The project includes a pre-commit hook that automatically runs `make fix` before each commit. This ensures code is properly formatted and linted. To set it up:
+
+```bash
+pre-commit install
+```
+
+To skip the hook (not recommended): `git commit --no-verify`
 
 ## Production Deployment
 
