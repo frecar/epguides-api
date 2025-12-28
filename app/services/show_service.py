@@ -146,6 +146,7 @@ async def get_show(show_id: str) -> ShowSchema | None:
             if raw_data:
                 # Find the last valid episode date
                 from datetime import timedelta
+
                 from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
 
                 last_release_date = None
@@ -182,12 +183,11 @@ async def get_show(show_id: str) -> ShowSchema | None:
     return None
 
 
-async def get_episodes(show_id: str, filter_query: str | None = None) -> list[EpisodeSchema]:
+async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     """
-    Get episodes for a show, optionally filtered.
+    Get episodes for a show.
 
     Episodes are sorted by season and episode number.
-    Supports fast regex-based filtering via filter_query parameter.
     Enriched with show metadata like runtime.
     """
     normalized_id = normalize_show_id(show_id)
@@ -252,79 +252,7 @@ async def get_episodes(show_id: str, filter_query: str | None = None) -> list[Ep
         episodes_with_number.append(episode.model_copy(update={"episode_number": idx}))
     episodes = episodes_with_number
 
-    if filter_query:
-        episodes = await _filter_episodes(episodes, filter_query)
-
     return episodes
-
-
-async def _filter_episodes(episodes: list[EpisodeSchema], query: str) -> list[EpisodeSchema]:
-    """
-    Smart episode filtering with regex and optional LLM fallback.
-
-    First tries fast regex-based filtering for common patterns:
-    - Season: "season 2", "s2", "s 2"
-    - Episode: "episode 5", "e5", "ep 5"
-    - Year: "2008", "from 2008"
-    - Title: Any text (searches in episode titles)
-
-    If regex doesn't match and LLM is enabled, falls back to LLM for natural language queries.
-    """
-    query_lower = query.lower().strip()
-    filtered = episodes
-
-    # Fast regex-based filtering
-    season_match = re.search(r"(?:season|s)\s*(\d+)", query_lower)
-    episode_match = re.search(r"(?:episode|ep|e)\s*(\d+)", query_lower)
-    year_match = re.search(r"\b(19|20)\d{2}\b", query)
-
-    # Season filter
-    if season_match:
-        season = int(season_match.group(1))
-        filtered = [e for e in filtered if e.season == season]
-
-    # Episode number filter
-    if episode_match:
-        ep_num = int(episode_match.group(1))
-        filtered = [e for e in filtered if e.number == ep_num]
-
-    # Year filter
-    if year_match:
-        year = int(year_match.group(0))
-        filtered = [e for e in filtered if e.release_date.year == year]
-
-    # Title search (if no other filters matched)
-    if not (season_match or episode_match or year_match):
-        filtered = [e for e in filtered if query_lower in e.title.lower()]
-
-    # If regex didn't match anything and LLM is enabled, try LLM
-    if not (season_match or episode_match or year_match) and query_lower not in " ".join(
-        [e.title.lower() for e in episodes]
-    ):
-        try:
-            from app.services import llm_service
-
-            # Convert to dict format for LLM
-            episodes_dict = [
-                {
-                    "season": e.season,
-                    "number": e.number,
-                    "title": e.title,
-                    "release_date": str(e.release_date),
-                }
-                for e in episodes
-            ]
-
-            llm_filtered = await llm_service.parse_natural_language_query(query, episodes_dict)
-            if llm_filtered:
-                # Map back to EpisodeSchema
-                filtered_dict = {f"{e['season']}:{e['number']}": e for e in llm_filtered}
-                filtered = [e for e in episodes if f"{e.season}:{e.number}" in filtered_dict]
-        except Exception:
-            # LLM failed, fall back to regex results
-            pass
-
-    return filtered
 
 
 def _parse_run_time(run_time_str: str | None) -> int | None:

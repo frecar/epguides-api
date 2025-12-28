@@ -7,7 +7,7 @@ All endpoints are async and use dependency injection for services.
 from fastapi import APIRouter, HTTPException, Query
 
 from app.models.responses import PaginatedResponse
-from app.models.schemas import EpisodeSchema, ShowDetailsSchema, ShowListSchema, ShowSchema
+from app.models.schemas import EpisodeSchema, ShowDetailsSchema, ShowListSchema
 from app.services import show_service
 
 router = APIRouter()
@@ -137,7 +137,6 @@ async def get_show_episodes(
     episode: int | None = Query(None, ge=1, description="Filter by episode number (requires season)"),
     year: int | None = Query(None, ge=1900, le=2100, description="Filter by release year"),
     title_search: str | None = Query(None, description="Search in episode titles"),
-    filter: str | None = Query(None, alias="q", description="Legacy filter string (e.g., 'season 2', 's2e5', '2008')"),
 ):
     """
     Get episodes for a show with optional filtering.
@@ -148,12 +147,6 @@ async def get_show_episodes(
     - `year` - Filter by release year
     - `title_search` - Search in episode titles
 
-    Also supports legacy `filter` string for backward compatibility:
-    - `season 2` or `s2` - Filter by season
-    - `s2e5` - Specific season and episode
-    - `2008` - Filter by release year
-    - `fly` - Search in episode titles
-
     Examples:
     - `/shows/BreakingBad/episodes?season=2`
     - `/shows/BreakingBad/episodes?season=2&episode=5`
@@ -161,7 +154,7 @@ async def get_show_episodes(
     - `/shows/BreakingBad/episodes?title_search=pilot`
     """
     # Get episodes (this will fail fast if show doesn't exist)
-    episodes = await show_service.get_episodes(epguides_key, filter_query=filter)
+    episodes = await show_service.get_episodes(epguides_key)
 
     # Apply structured filters if provided
     if season is not None:

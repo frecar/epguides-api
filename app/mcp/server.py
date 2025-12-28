@@ -4,10 +4,8 @@ MCP (Model Context Protocol) server implementation.
 Exposes TV show data and operations as MCP resources and tools for AI assistants.
 """
 
-import asyncio
 import json
 import logging
-import sys
 from typing import Any
 
 from app.core.constants import MCP_PROTOCOL_VERSION, VERSION
@@ -156,17 +154,13 @@ class MCPServer:
                     },
                     {
                         "name": "get_episodes",
-                        "description": "Get episodes for a TV show, optionally filtered",
+                        "description": "Get all episodes for a TV show",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "epguides_key": {
                                     "type": "string",
                                     "description": "Epguides show key/identifier (e.g., 'BreakingBad')",
-                                },
-                                "filter": {
-                                    "type": "string",
-                                    "description": "Optional filter (e.g., 'season 2', 's2e5', '2008')",
                                 },
                             },
                             "required": ["epguides_key"],
@@ -225,8 +219,7 @@ class MCPServer:
 
             elif tool_name == "get_episodes":
                 epguides_key = arguments.get("epguides_key", "")
-                filter_query = arguments.get("filter")
-                episodes = await show_service.get_episodes(epguides_key, filter_query=filter_query)
+                episodes = await show_service.get_episodes(epguides_key)
                 if not episodes:
                     return self.error_response(-32602, f"Episodes not found for show: {epguides_key}")
                 result = [ep.model_dump() for ep in episodes]
@@ -274,66 +267,3 @@ class MCPServer:
                 "message": message,
             },
         }
-
-
-async def run_mcp_server():
-    """Run MCP server on stdio."""
-    server = MCPServer()
-
-    # Setup logging to stderr (stdio is for JSON-RPC)
-    logging.basicConfig(
-        level=logging.WARNING,
-        stream=sys.stderr,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-    logger.info("MCP server starting on stdio")
-
-    # Read from stdin, write to stdout
-    while True:
-        try:
-            line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
-            if not line:
-                break
-
-            line = line.strip()
-            if not line:
-                continue
-
-            request = json.loads(line)
-            response = await server.handle_request(request)
-            print(json.dumps(response), flush=True)
-
-        except json.JSONDecodeError as e:
-            error_response = {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {
-                    "code": -32700,
-                    "message": f"Parse error: {str(e)}",
-                },
-            }
-            print(json.dumps(error_response), flush=True)
-        except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
-            error_response = {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {
-                    "code": -32603,
-                    "message": f"Internal error: {str(e)}",
-                },
-            }
-            print(json.dumps(error_response), flush=True)
-
-
-def main():
-    """Main entry point for MCP server."""
-    try:
-        asyncio.run(run_mcp_server())
-    except KeyboardInterrupt:
-        sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()

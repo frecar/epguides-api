@@ -184,11 +184,12 @@ async def test_get_episodes_with_filter(mock_get_episodes, mock_get_show, async_
     ]
     mock_get_episodes.return_value = all_episodes
 
-    response = await async_client.get("/shows/breakingbad/episodes?q=season%202")
+    response = await async_client.get("/shows/breakingbad/episodes?season=2")
     assert response.status_code == 200
     data = response.json()
-    # Note: Filtering logic is tested in service tests
     assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["season"] == 2
 
 
 @pytest.mark.asyncio
@@ -214,9 +215,17 @@ async def test_get_show_details(mock_get_episodes, mock_get_show, async_client: 
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.get_show")
 @patch("app.services.show_service.get_episodes")
-async def test_get_next_episode(mock_get_episodes, async_client: AsyncClient):
+async def test_get_next_episode(mock_get_episodes, mock_get_show, async_client: AsyncClient):
     """Test getting next unreleased episode."""
+    mock_show = create_show_schema(
+        epguides_key="breakingbad",
+        title="Breaking Bad",
+        end_date=None,  # Show is not finished
+    )
+    mock_get_show.return_value = mock_show
+
     mock_episodes = [
         EpisodeSchema(season=1, number=1, title="Released", release_date=date(2000, 1, 1), is_released=True),
         EpisodeSchema(season=1, number=2, title="Next", release_date=date(2030, 1, 1), is_released=False),

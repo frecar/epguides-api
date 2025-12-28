@@ -4,12 +4,10 @@ Unit tests for service functions.
 Tests business logic independently of HTTP layer.
 """
 
-from datetime import date
 from unittest.mock import patch
 
 import pytest
 
-from app.models.schemas import EpisodeSchema
 from app.services import epguides, show_service
 
 
@@ -82,38 +80,3 @@ def test_parse_imdb_id():
     assert show_service.parse_imdb_id("tt0903747") == "tt0903747"
     assert show_service.parse_imdb_id("tt123456") == "tt0123456"  # Padded
     assert show_service.parse_imdb_id("invalid") == "invalid"
-
-
-@pytest.mark.asyncio
-async def test_filter_episodes():
-    """Test episode filtering logic."""
-    episodes = [
-        EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2008, 1, 20), is_released=True),
-        EpisodeSchema(season=2, number=1, title="Seven Thirty-Seven", release_date=date(2009, 3, 8), is_released=True),
-        EpisodeSchema(season=2, number=5, title="Breakage", release_date=date(2009, 4, 5), is_released=True),
-    ]
-
-    # Filter by season
-    filtered = await show_service._filter_episodes(episodes, "season 2")
-    assert len(filtered) == 2
-    assert all(e.season == 2 for e in filtered)
-
-    # Filter by episode number
-    filtered = await show_service._filter_episodes(episodes, "e5")
-    assert len(filtered) == 1
-    assert filtered[0].number == 5
-
-    # Filter by year
-    filtered = await show_service._filter_episodes(episodes, "2008")
-    assert len(filtered) == 1
-    assert filtered[0].release_date.year == 2008
-
-    # Filter by title
-    filtered = await show_service._filter_episodes(episodes, "pilot")
-    assert len(filtered) == 1
-    assert "pilot" in filtered[0].title.lower()
-
-    # Combined filter
-    filtered = await show_service._filter_episodes(episodes, "s2e5")
-    assert len(filtered) == 1
-    assert filtered[0].season == 2 and filtered[0].number == 5

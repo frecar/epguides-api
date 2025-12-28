@@ -12,7 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from app.api.endpoints import shows
+from app.api.endpoints import mcp, shows
 from app.core.cache import close_redis_pool
 from app.core.config import settings
 from app.core.constants import VERSION
@@ -101,6 +101,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # Register Routers
 app.include_router(shows.router, prefix="/shows", tags=["Shows"])
+app.include_router(mcp.router, tags=["MCP"])
 
 
 @app.get("/", include_in_schema=False)
