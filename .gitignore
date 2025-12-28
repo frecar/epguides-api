@@ -1,14 +1,50 @@
+# Python
 *.py[cod]
+*.pyc
+__pycache__/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
 error.log
 info.log
-.idea
-venv
-local.cfg
-.eggs
-.vscode
 
-.DS_Store
+# Environment
+.env
+local.cfg
+.env.local
+
+# Testing
+.coverage
 coverage.xml
+htmlcov/
+.pytest_cache/
+.tox/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
 
 # C extensions
 *.so

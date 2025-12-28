@@ -1,0 +1,47 @@
+# Cursor AI Rules for Epguides API
+
+## Code Style
+- Follow PEP 8 with line length of 120 characters
+- Use type hints for all function parameters and return types
+- Use async/await for all I/O operations
+- Prefer composition over inheritance
+- Use dependency injection via FastAPI Depends()
+
+## Python Standards
+- Maximum line length: 120 characters
+- Use double quotes for strings (black default)
+- Use f-strings for string formatting
+- Use pathlib for file paths
+- Use dataclasses or Pydantic models for data structures
+
+## FastAPI Best Practices
+- Use Pydantic models for request/response validation
+- Use async endpoints for all routes
+- Use dependency injection for services
+- Return proper HTTP status codes
+- Use descriptive endpoint summaries and descriptions
+
+## Error Handling
+- Use specific exception types
+- Log errors with appropriate levels
+- Return meaningful error messages to clients
+- Use HTTPException for API errors
+
+## Testing
+- Write tests for all service methods
+- Use pytest and pytest-asyncio
+- Mock external dependencies
+- Test error cases
+
+## Performance
+- Use async/await for all I/O
+- Cache expensive operations with Redis
+- Use connection pooling for databases/Redis
+- Avoid blocking operations in async code
+
+## Documentation
+- Add docstrings to all public functions and classes
+- Use type hints for better IDE support
+- Keep README.md up to date
+
+
