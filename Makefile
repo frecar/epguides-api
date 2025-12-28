@@ -1,9 +1,27 @@
+# Detect if venv exists and use it, otherwise use system Python
+PYTHON := $(shell if [ -d venv ]; then echo venv/bin/python; else echo python3; fi)
+
 setup:
-	virtualenv -p /usr/bin/python3 venv
+	virtualenv -p python3 venv
 	venv/bin/pip install -r requirements.txt
 
 run:
-	PYTHONPATH=$(shell pwd) venv/bin/python api/views.py
+	$(PYTHON) -m uvicorn app.main:app --reload
 
 test:
-	PYTHONPATH=$(shell pwd) venv/bin/python api/tests.py
+	$(PYTHON) -m pytest
+
+format:
+	$(PYTHON) -m black --line-length 120 app/
+	$(PYTHON) -m isort app/
+
+lint:
+	$(PYTHON) -m ruff check app/
+
+fix:
+	$(PYTHON) -m black --line-length 120 app/
+	$(PYTHON) -m isort app/
+	$(PYTHON) -m ruff check --fix --unsafe-fixes app/
+
+mcp:
+	$(PYTHON) -m app.mcp.server

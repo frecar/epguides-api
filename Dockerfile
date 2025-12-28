@@ -1,4 +1,4 @@
-FROM python:3-alpine
+FROM python:3.11-alpine
 
 # Create app directory
 WORKDIR /app
@@ -12,4 +12,4 @@ RUN pip install -r requirements.txt
 COPY . .
 
 EXPOSE 3000
-CMD [ "gunicorn", "-b", "0.0.0.0:3000", "run:app"]
+CMD [ "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "3000"]

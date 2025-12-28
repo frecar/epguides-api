@@ -1,17 +1,33 @@
-version: '3.12-rc-buster'
-
 services:
   epguides-api:
     command: >
-      sh -c "python3 run.py" 
+      uvicorn app.main:app --reload --host 0.0.0.0 --port 3000
     build:
       context: .
     ports:
-      - 3000:3000 
+      - 3000:3000
     volumes:
       - ./:/app
-    links: 
+    links:
       - redis
+    dns:
+      - 8.8.8.8
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+  epguides-mcp:
+    command: python -m app.mcp.server
+    build:
+      context: .
+    volumes:
+      - ./:/app
+    links:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    stdin_open: true
+    tty: true
   redis:
     command: bash -c "redis-server --save 10 1"
     image: redis
