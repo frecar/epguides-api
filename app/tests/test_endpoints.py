@@ -91,7 +91,7 @@ async def test_search_shows(mock_search_shows, async_client: AsyncClient):
     ]
     mock_search_shows.return_value = mock_shows
 
-    response = await async_client.get("/shows/search?q=breaking")
+    response = await async_client.get("/shows/search?query=breaking")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
@@ -290,5 +290,5 @@ async def test_invalid_pagination(async_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_search_query_too_short(async_client: AsyncClient):
     """Test search query validation."""
-    response = await async_client.get("/shows/search?q=a")
+    response = await async_client.get("/shows/search?query=a")
     assert response.status_code == 422  # min_length=2

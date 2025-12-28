@@ -73,7 +73,9 @@ async def list_shows(
 
 
 @router.get("/search", response_model=list[ShowListSchema], summary="Search shows")
-async def search_shows(query: str = Query(..., min_length=2, alias="q", description="Search query (show title)")):
+async def search_shows(
+    query: str = Query(..., min_length=2, description="Search query (show title)"),
+):
     """
     Search for shows by title.
 
@@ -82,8 +84,6 @@ async def search_shows(query: str = Query(..., min_length=2, alias="q", descript
 
     Returns simplified show information. For detailed information including IMDB ID,
     runtime, and episode count, use the individual show endpoint: GET /shows/{epguides_key}
-
-    Supports both `query` and `q` parameter names for backward compatibility.
     """
     shows = await show_service.search_shows(query)
 

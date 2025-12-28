@@ -98,7 +98,7 @@ async def test_search_shows_end_to_end(mock_search_shows, async_client: AsyncCli
     ]
     mock_search_shows.return_value = mock_shows
 
-    response = await async_client.get("/shows/search?q=breaking")
+    response = await async_client.get("/shows/search?query=breaking")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
@@ -288,7 +288,7 @@ async def test_validation_errors(async_client: AsyncClient):
     assert response.status_code == 422
 
     # Search query too short
-    response = await async_client.get("/shows/search?q=a")
+    response = await async_client.get("/shows/search?query=a")
     assert response.status_code == 422
 
 
