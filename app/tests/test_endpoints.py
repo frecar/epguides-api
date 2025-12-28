@@ -147,6 +147,8 @@ async def test_get_show_episodes(mock_get_episodes, mock_get_show, async_client:
             title="Pilot",
             release_date=date(2008, 1, 20),
             is_released=True,
+            run_time_min=None,
+            episode_number=None,
         ),
         EpisodeSchema(
             season=1,
@@ -154,6 +156,8 @@ async def test_get_show_episodes(mock_get_episodes, mock_get_show, async_client:
             title="Cat's in the Bag...",
             release_date=date(2008, 1, 27),
             is_released=True,
+            run_time_min=None,
+            episode_number=None,
         ),
     ]
     mock_get_episodes.return_value = mock_episodes
@@ -179,8 +183,8 @@ async def test_get_episodes_with_filter(mock_get_episodes, mock_get_show, async_
     mock_get_show.return_value = mock_show
 
     all_episodes = [
-        EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2008, 1, 20), is_released=True),
-        EpisodeSchema(season=2, number=1, title="Seven Thirty-Seven", release_date=date(2009, 3, 8), is_released=True),
+        EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2008, 1, 20), is_released=True, run_time_min=None, episode_number=None),
+        EpisodeSchema(season=2, number=1, title="Seven Thirty-Seven", release_date=date(2009, 3, 8), is_released=True, run_time_min=None, episode_number=None),
     ]
     mock_get_episodes.return_value = all_episodes
 
@@ -203,7 +207,7 @@ async def test_get_show_details(mock_get_episodes, mock_get_show, async_client: 
     )
     mock_get_show.return_value = mock_show
 
-    mock_episodes = [EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2008, 1, 20), is_released=True)]
+    mock_episodes = [EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2008, 1, 20), is_released=True, run_time_min=None, episode_number=None)]
     mock_get_episodes.return_value = mock_episodes
 
     response = await async_client.get("/shows/breakingbad?include=episodes")
@@ -227,8 +231,8 @@ async def test_get_next_episode(mock_get_episodes, mock_get_show, async_client: 
     mock_get_show.return_value = mock_show
 
     mock_episodes = [
-        EpisodeSchema(season=1, number=1, title="Released", release_date=date(2000, 1, 1), is_released=True),
-        EpisodeSchema(season=1, number=2, title="Next", release_date=date(2030, 1, 1), is_released=False),
+        EpisodeSchema(season=1, number=1, title="Released", release_date=date(2000, 1, 1), is_released=True, run_time_min=None, episode_number=None),
+        EpisodeSchema(season=1, number=2, title="Next", release_date=date(2030, 1, 1), is_released=False, run_time_min=None, episode_number=None),
     ]
     mock_get_episodes.return_value = mock_episodes
 
@@ -244,7 +248,7 @@ async def test_get_next_episode(mock_get_episodes, mock_get_show, async_client: 
 async def test_get_next_episode_not_found(mock_get_episodes, async_client: AsyncClient):
     """Test 404 when no next episode exists."""
     mock_episodes = [
-        EpisodeSchema(season=1, number=1, title="All Released", release_date=date(2000, 1, 1), is_released=True)
+        EpisodeSchema(season=1, number=1, title="All Released", release_date=date(2000, 1, 1), is_released=True, run_time_min=None, episode_number=None)
     ]
     mock_get_episodes.return_value = mock_episodes
 
@@ -257,9 +261,9 @@ async def test_get_next_episode_not_found(mock_get_episodes, async_client: Async
 async def test_get_latest_episode(mock_get_episodes, async_client: AsyncClient):
     """Test getting latest released episode."""
     mock_episodes = [
-        EpisodeSchema(season=1, number=1, title="First", release_date=date(2000, 1, 1), is_released=True),
-        EpisodeSchema(season=1, number=2, title="Last", release_date=date(2000, 1, 8), is_released=True),
-        EpisodeSchema(season=1, number=3, title="Future", release_date=date(2030, 1, 1), is_released=False),
+        EpisodeSchema(season=1, number=1, title="First", release_date=date(2000, 1, 1), is_released=True, run_time_min=None, episode_number=None),
+        EpisodeSchema(season=1, number=2, title="Last", release_date=date(2000, 1, 8), is_released=True, run_time_min=None, episode_number=None),
+        EpisodeSchema(season=1, number=3, title="Future", release_date=date(2030, 1, 1), is_released=False, run_time_min=None, episode_number=None),
     ]
     mock_get_episodes.return_value = mock_episodes
 
@@ -275,7 +279,7 @@ async def test_get_latest_episode(mock_get_episodes, async_client: AsyncClient):
 async def test_get_latest_episode_not_found(mock_get_episodes, async_client: AsyncClient):
     """Test 404 when no released episodes exist."""
     mock_episodes = [
-        EpisodeSchema(season=1, number=1, title="Unreleased", release_date=date(2030, 1, 1), is_released=False)
+        EpisodeSchema(season=1, number=1, title="Unreleased", release_date=date(2030, 1, 1), is_released=False, run_time_min=None, episode_number=None)
     ]
     mock_get_episodes.return_value = mock_episodes
 
