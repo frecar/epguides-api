@@ -51,6 +51,7 @@ jobs:
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           pytest --cov=app --cov-report=xml --cov-report=term
 
