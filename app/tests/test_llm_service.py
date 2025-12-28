@@ -40,9 +40,10 @@ async def test_llm_no_api_url_returns_none(mock_settings):
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
 async def test_llm_empty_episodes_returns_empty_list(mock_settings):
-    """Test that LLM returns empty list when no episodes provided."""
-    mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL
+    """Test that LLM returns empty list when no episodes provided, even if LLM is disabled."""
+    # Test with LLM disabled (should still return [] for empty episodes)
+    mock_settings.LLM_ENABLED = False
+    mock_settings.LLM_API_URL = None
 
     result = await llm_service.parse_natural_language_query("test query", [])
     assert result == []

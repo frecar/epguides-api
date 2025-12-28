@@ -26,12 +26,13 @@ async def parse_natural_language_query(query: str, episodes: list[dict]) -> list
 
     Returns filtered episodes or None if LLM is disabled or query is too complex.
     """
+    # Return empty list immediately if no episodes provided (regardless of LLM config)
+    if not episodes:
+        return []
+
     if not settings.LLM_ENABLED or not settings.LLM_API_URL:
         logger.debug("LLM not enabled or configured, skipping natural language parsing")
         return None
-
-    if not episodes:
-        return []
 
     try:
         # Prepare context for LLM
