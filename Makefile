@@ -22,6 +22,3 @@ fix:
 	$(PYTHON) -m black --line-length 120 app/
 	$(PYTHON) -m isort app/
 	$(PYTHON) -m ruff check --fix --unsafe-fixes app/
-
-mcp:
-	$(PYTHON) -m app.mcp.server

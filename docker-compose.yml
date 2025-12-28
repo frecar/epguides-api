@@ -15,19 +15,6 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-  epguides-mcp:
-    command: python -m app.mcp.server
-    build:
-      context: .
-    volumes:
-      - ./:/app
-    links:
-      - redis
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    stdin_open: true
-    tty: true
   redis:
     command: bash -c "redis-server --save 10 1"
     image: redis
