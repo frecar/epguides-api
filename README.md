@@ -8,7 +8,7 @@ A high-performance, asynchronous REST API and MCP server for accessing TV show m
 ## 🚀 Features
 
 *   **Modern Architecture**: Built with [FastAPI](https://fastapi.tiangolo.com/), fully asynchronous using `httpx` and `redis-py`.
-*   **Rich Metadata**: Combines epguides' master show list with scraped metadata (Network, Runtime, Country, IMDB ID).
+*   **Rich Metadata**: Combines epguides' master show list with scraped metadata (Network, Runtime, Country, IMDB ID). List endpoints return simplified data; detailed metadata available on individual show endpoints.
 *   **Smart Filtering**: Fast regex-based filtering with optional LLM-powered natural language queries.
 *   **MCP Server**: Exposes TV show data as [Model Context Protocol](https://modelcontextprotocol.io/) server for AI assistants.
 *   **Performance**: Redis connection pooling and intelligent caching for sub-150ms cached responses.
@@ -69,7 +69,7 @@ uvicorn app.main:app --reload
 | `GET` | `/shows/{epguides_key}` | Get show metadata |
 | `GET` | `/shows/{epguides_key}?include=episodes` | Get show + episodes |
 | `GET` | `/shows/{epguides_key}/episodes` | Get episodes (with optional filters) |
-| `GET` | `/shows/{epguides_key}/episodes/next` | Get next unreleased episode |
+| `GET` | `/shows/{epguides_key}/episodes/next` | Get next unreleased episode (404 if show finished) |
 | `GET` | `/shows/{epguides_key}/episodes/latest` | Get latest released episode |
 | `GET` | `/health` | Health check |
 
@@ -93,6 +93,7 @@ curl "http://localhost:3000/shows/BreakingBad/episodes?title_search=pilot"
 
 # Legacy filter (still supported)
 curl "http://localhost:3000/shows/BreakingBad/episodes?filter=s2e5"
+curl "http://localhost:3000/shows/BreakingBad/episodes?q=s2e5"
 ```
 
 ### Filter Syntax
@@ -108,6 +109,7 @@ curl "http://localhost:3000/shows/BreakingBad/episodes?filter=s2e5"
 - `filter=s2e5` - Specific season and episode
 - `filter=2008` - Filter by release year
 - `filter=fly` - Search in episode titles
+- `q=season 2` - Alternative parameter name for `filter` (episodes endpoint only)
 
 **LLM-Enhanced Queries** (when `LLM_ENABLED=true`):
 - Natural language queries like "episodes where Walter dies"
@@ -143,7 +145,7 @@ docker compose up epguides-mcp redis
 - `search_shows` - Search for TV shows by title
 - `get_show` - Get detailed information about a show
 - `get_episodes` - Get episodes with optional filtering
-- `get_next_episode` - Get next unreleased episode
+- `get_next_episode` - Get next unreleased episode (returns 404 if show has finished airing)
 - `get_latest_episode` - Get latest released episode
 
 ### Claude Desktop Configuration
