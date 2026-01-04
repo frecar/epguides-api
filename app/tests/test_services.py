@@ -85,9 +85,7 @@ def test_parse_imdb_id():
 @pytest.mark.asyncio
 @patch("app.services.epguides.get_episodes_data")
 @patch("app.services.show_service.get_all_shows")
-async def test_get_show_does_not_set_end_date_with_unreleased_episodes(
-    mock_get_all, mock_get_episodes_data
-):
+async def test_get_show_does_not_set_end_date_with_unreleased_episodes(mock_get_all, mock_get_episodes_data):
     """Test that get_show does NOT set end_date when there are unreleased episodes."""
     from datetime import datetime, timedelta
 
@@ -135,9 +133,7 @@ async def test_get_show_does_not_set_end_date_with_unreleased_episodes(
 @pytest.mark.asyncio
 @patch("app.services.epguides.get_episodes_data")
 @patch("app.services.show_service.get_all_shows")
-async def test_get_show_sets_end_date_when_all_episodes_released(
-    mock_get_all, mock_get_episodes_data
-):
+async def test_get_show_sets_end_date_when_all_episodes_released(mock_get_all, mock_get_episodes_data):
     """Test that get_show DOES set end_date when all episodes are released."""
     from datetime import datetime, timedelta
 

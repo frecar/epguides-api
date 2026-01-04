@@ -149,25 +149,25 @@ async def get_show(show_id: str) -> ShowSchema | None:
                 from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
 
                 threshold_date = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
-                
+
                 # Check if there are any unreleased episodes (future episodes)
                 has_unreleased = False
                 last_release_date = None
-                
+
                 for item in raw_data:
                     release_date_str = item.get("release_date")
                     if not release_date_str or not isinstance(release_date_str, str):
                         continue
-                    
+
                     parsed = epguides.parse_date_string(release_date_str)
                     if not parsed:
                         continue
-                    
+
                     # Check if this episode is unreleased (future episode)
                     if parsed > threshold_date:
                         has_unreleased = True
                         break
-                    
+
                     # Track the last released episode date
                     if parsed.date() > (last_release_date or date.min):
                         last_release_date = parsed.date()
