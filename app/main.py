@@ -1,10 +1,12 @@
 """
 Epguides API - High-performance TV show metadata API.
 
-This module provides the main FastAPI application with all routes and middleware configured.
+This module configures the FastAPI application with all routes,
+middleware, and exception handlers.
 """
 
 import logging.config
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -19,28 +21,42 @@ from app.core.constants import VERSION
 from app.core.middleware import RequestLoggingMiddleware
 from app.exceptions import EpguidesAPIException, ExternalServiceError
 
-# Setup logging
+# =============================================================================
+# Logging Setup
+# =============================================================================
+
 try:
     from app.core.logging_config import setup_logging
 
     setup_logging()
 except Exception:
-    # Fallback to basic logging config
-    logging.config.fileConfig("logging.conf", disable_existing_loggers=False)
+    # Fallback to basic config if custom setup fails
+    logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Application Lifespan
+# =============================================================================
+
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifespan context manager for startup and shutdown events."""
-    # Startup
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """
+    Application lifespan context manager.
+
+    Handles startup and shutdown events.
+    """
     logger.info("Application startup")
     yield
-    # Shutdown
     await close_redis_pool()
     logger.info("Application shutdown complete")
 
+
+# =============================================================================
+# Application Instance
+# =============================================================================
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -52,24 +68,37 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Request Logging Middleware (if enabled)
+
+# =============================================================================
+# Middleware
+# =============================================================================
+
+# Request logging (if enabled)
 if settings.LOG_REQUESTS:
     app.add_middleware(RequestLoggingMiddleware)
 
-# CORS Middleware
+# CORS - allow all origins (configure appropriately for production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+# =============================================================================
+# Exception Handlers
+# =============================================================================
+
+
 @app.exception_handler(EpguidesAPIException)
-async def epguides_exception_handler(request: Request, exc: EpguidesAPIException):
-    """Handle custom Epguides API exceptions."""
-    logger.error(f"Epguides API error: {exc}", exc_info=True)
+async def epguides_exception_handler(
+    request: Request,
+    exc: EpguidesAPIException,
+) -> JSONResponse:
+    """Handle custom API exceptions."""
+    logger.error("API error: %s", exc, exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "An internal error occurred. Please try again later."},
@@ -77,45 +106,54 @@ async def epguides_exception_handler(request: Request, exc: EpguidesAPIException
 
 
 @app.exception_handler(ExternalServiceError)
-async def external_service_exception_handler(request: Request, exc: ExternalServiceError):
-    """Handle external service errors."""
-    logger.error(f"External service error: {exc}", exc_info=True)
+async def external_service_exception_handler(
+    request: Request,
+    exc: ExternalServiceError,
+) -> JSONResponse:
+    """Handle external service failures."""
+    logger.error("External service error: %s", exc, exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={"detail": "External service temporarily unavailable. Please try again later."},
+        content={"detail": "External service temporarily unavailable."},
     )
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle request validation errors with detailed messages."""
-    errors = exc.errors()
+async def validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    """Handle request validation errors with details."""
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "detail": "Validation error",
-            "errors": errors,
-        },
+        content={"detail": "Validation error", "errors": exc.errors()},
     )
 
 
-# Register Routers
+# =============================================================================
+# Routers
+# =============================================================================
+
 app.include_router(shows.router, prefix="/shows", tags=["Shows"])
 app.include_router(mcp.router, tags=["MCP"])
 
 
+# =============================================================================
+# Root Endpoints
+# =============================================================================
+
+
 @app.get("/", include_in_schema=False)
-def root_redirect():
-    """Redirects the root URL to the API documentation."""
+def root_redirect() -> RedirectResponse:
+    """Redirect root to API documentation."""
     return RedirectResponse(url="/docs")
 
 
 @app.get("/health", tags=["Health"])
-def health_check():
+def health_check() -> dict[str, str]:
     """
-    Health check endpoint for monitoring.
+    Health check endpoint.
 
-    Returns service status. Use this endpoint for load balancer health checks
-    and monitoring systems.
+    Use for load balancer health checks and monitoring.
     """
     return {"status": "healthy", "service": "epguides-api", "version": VERSION}

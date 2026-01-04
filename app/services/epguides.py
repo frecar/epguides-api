@@ -2,8 +2,8 @@
 Epguides.com data fetching and parsing.
 
 This module handles all external API calls to epguides.com:
-- Fetching master show list
-- Scraping show metadata
+- Fetching the master show list
+- Scraping show metadata (IMDB IDs)
 - Parsing episode CSV data
 
 All functions are async and use Redis caching for performance.
@@ -20,21 +20,31 @@ import httpx
 
 from app.core.cache import cache
 from app.core.config import settings
-from app.core.constants import DATE_FORMATS, EPGUIDES_BASE_URL
+from app.core.constants import CACHE_TTL_SHOWS_METADATA_SECONDS, DATE_FORMATS, EPGUIDES_BASE_URL, HTTP_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Date Parsing
+# =============================================================================
 
 
 def parse_date_string(date_string: str) -> datetime | None:
     """
     Parse date string in various formats.
 
-    Supports:
-    - "%d %b %y" (e.g., "20 Jan 08")
-    - "%d/%b/%y" (e.g., "20/Jan/08")
-    - "%Y-%m-%d" (e.g., "2008-01-20")
+    Supports multiple formats common in epguides data:
+    - "20 Jan 08" (%d %b %y)
+    - "20/Jan/08" (%d/%b/%y)
+    - "2008-01-20" (%Y-%m-%d)
 
-    Automatically fixes century for old shows (e.g., "08" -> 2008, not 2108).
+    Automatically corrects century for old shows (e.g., "08" -> 2008, not 2108).
+
+    Args:
+        date_string: Date string to parse.
+
+    Returns:
+        Parsed datetime or None if unparseable.
     """
     if not date_string:
         return None
@@ -42,69 +52,108 @@ def parse_date_string(date_string: str) -> datetime | None:
     for fmt in DATE_FORMATS:
         try:
             parsed = datetime.strptime(date_string, fmt)
-            # Fix century for old shows
+            # Fix century for two-digit years that end up in the future
             if parsed.year > datetime.now().year + 2:
                 parsed = parsed.replace(year=parsed.year - 100)
             return parsed
         except ValueError:
             continue
+
     return None
+
+
+# =============================================================================
+# HTTP Utilities
+# =============================================================================
+
+
+def _clean_unicode_text(response: httpx.Response) -> str:
+    """
+    Extract and clean text from HTTP response.
+
+    Handles encoding issues and Unicode replacement characters.
+    """
+    response.encoding = response.encoding or "utf-8"
+    text = response.text
+
+    # Clean up replacement characters (U+FFFD)
+    if "\ufffd" in text:
+        text = response.content.decode("utf-8", errors="replace")
+        text = text.replace("\ufffd", "")
+
+    return text
+
+
+async def _fetch_url(url: str) -> httpx.Response | None:
+    """
+    Fetch URL with standard timeout and error handling.
+
+    Returns None on any error (logged).
+    """
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=HTTP_TIMEOUT_SECONDS) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            return response
+    except Exception as e:
+        logger.error("Error fetching %s: %s", url, e)
+        return None
+
+
+# =============================================================================
+# CSV Fetching
+# =============================================================================
 
 
 async def fetch_csv(url: str) -> list[list[str]]:
     """
     Fetch and parse CSV from URL.
 
-    Uses httpx with 10 second timeout and follows redirects.
-    Handles encoding issues gracefully.
+    Args:
+        url: URL to fetch CSV from.
+
+    Returns:
+        List of rows (each row is a list of strings).
+        Returns empty list on error.
     """
-    try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            # Ensure proper encoding
-            response.encoding = response.encoding or "utf-8"
-            text = response.text
-            # Clean up replacement characters (Unicode replacement char U+FFFD)
-            if "\ufffd" in text:
-                # Try to decode with error handling
-                text = response.content.decode("utf-8", errors="replace")
-                # Remove replacement characters
-                text = text.replace("\ufffd", "")
-            return list(csv.reader(io.StringIO(text, newline="")))
-    except Exception as e:
-        logger.error(f"Error fetching CSV from {url}: {e}")
+    response = await _fetch_url(url)
+    if not response:
         return []
 
+    text = _clean_unicode_text(response)
+    return list(csv.reader(io.StringIO(text, newline="")))
 
-@cache(ttl_seconds=86400, key_prefix="shows_metadata")
+
+# =============================================================================
+# Show Metadata
+# =============================================================================
+
+
+@cache(ttl_seconds=CACHE_TTL_SHOWS_METADATA_SECONDS, key_prefix="shows_metadata")
 async def get_all_shows_metadata() -> list[dict[str, str]]:
     """
     Fetch master list of all shows from epguides.
 
-    Returns list of dictionaries with show metadata from epguides.com/common/allshows.txt.
+    Returns list of dictionaries with show metadata.
     Cached for 24 hours.
     """
     url = f"{EPGUIDES_BASE_URL}/common/allshows.txt"
-    try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                return []
-            # Ensure proper encoding handling
-            response.encoding = response.encoding or "utf-8"
-            # Clean up any replacement characters and normalize unicode
-            text = response.text
-            # Replace replacement characters with empty string or try to fix encoding
-            if "\ufffd" in text:
-                # Try to decode with errors='replace' to handle malformed sequences
-                text = response.content.decode("utf-8", errors="replace")
-                # Remove replacement characters
-                text = text.replace("\ufffd", "")
-            return list(csv.DictReader(io.StringIO(text, newline="")))
-    except Exception as e:
-        logger.error(f"Error fetching shows metadata: {e}")
+    response = await _fetch_url(url)
+
+    if not response or response.status_code != 200:
         return []
+
+    text = _clean_unicode_text(response)
+    return list(csv.DictReader(io.StringIO(text, newline="")))
+
+
+# =============================================================================
+# Episode Data
+# =============================================================================
+
+# Column mappings for different CSV export formats
+_TVRAGE_COLUMNS = {"season": 1, "number": 2, "release_date": 4, "title": 5}
+_TVMAZE_COLUMNS = {"season": 1, "number": 2, "release_date": 3, "title": 4}
 
 
 @cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="episodes")
@@ -112,120 +161,161 @@ async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
     """
     Fetch episode data for a show.
 
-    Scrapes epguides.com to find the CSV export URL, then fetches and parses the CSV.
-    Supports both TVRage and TVMaze export formats.
+    Scrapes the epguides show page to find CSV export URL,
+    then fetches and parses the episode data.
 
-    Returns list of episode dictionaries with season, number, title, release_date.
+    Args:
+        show_id: Epguides show identifier.
+
+    Returns:
+        List of episode dictionaries with season, number, title, release_date.
+        Returns empty list on error.
     """
     url = f"{EPGUIDES_BASE_URL}/{show_id}"
-    try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                return []
+    response = await _fetch_url(url)
 
-            text = response.text
-            data_url = None
-            column_map = {}
-
-            # Extract CSV URL
-            if "exportToCSV.asp" in text:
-                match = re.search(r"exportToCSV\.asp\?rage=([\d+]+)", text)
-                if match:
-                    data_url = f"{EPGUIDES_BASE_URL}/common/exportToCSV.asp?rage={match.group(1)}"
-                    column_map = {"season": 1, "number": 2, "release_date": 4, "title": 5}
-            elif "exportToCSVmaze" in text:
-                match = re.search(r"exportToCSVmaze\.asp\?maze=([\d]+)", text)
-                if match:
-                    data_url = f"{EPGUIDES_BASE_URL}/common/exportToCSVmaze.asp?maze={match.group(1)}"
-                    column_map = {"season": 1, "number": 2, "release_date": 3, "title": 4}
-
-            if not data_url:
-                logger.warning(f"No CSV URL found for {show_id}")
-                return []
-
-            # Parse CSV
-            rows = await fetch_csv(data_url)
-            episodes = []
-            for row in rows:
-                if not row:
-                    continue
-                try:
-                    episode = {key: row[idx] for key, idx in column_map.items() if len(row) > idx}
-                    if episode:
-                        episodes.append(episode)
-                except (IndexError, KeyError):
-                    continue
-
-            return episodes
-    except Exception as e:
-        logger.error(f"Error fetching episodes for {show_id}: {e}")
+    if not response or response.status_code != 200:
         return []
+
+    text = response.text
+    csv_url, column_map = _extract_csv_url(text)
+
+    if not csv_url:
+        logger.warning("No CSV URL found for %s", show_id)
+        return []
+
+    rows = await fetch_csv(csv_url)
+    return _parse_episode_rows(rows, column_map)
+
+
+def _extract_csv_url(page_html: str) -> tuple[str | None, dict[str, int]]:
+    """
+    Extract CSV export URL and column mapping from show page HTML.
+
+    Returns:
+        Tuple of (csv_url, column_map) or (None, {}) if not found.
+    """
+    # Try TVRage format
+    if "exportToCSV.asp" in page_html:
+        match = re.search(r"exportToCSV\.asp\?rage=([\d+]+)", page_html)
+        if match:
+            url = f"{EPGUIDES_BASE_URL}/common/exportToCSV.asp?rage={match.group(1)}"
+            return url, _TVRAGE_COLUMNS
+
+    # Try TVMaze format
+    if "exportToCSVmaze" in page_html:
+        match = re.search(r"exportToCSVmaze\.asp\?maze=([\d]+)", page_html)
+        if match:
+            url = f"{EPGUIDES_BASE_URL}/common/exportToCSVmaze.asp?maze={match.group(1)}"
+            return url, _TVMAZE_COLUMNS
+
+    return None, {}
+
+
+def _parse_episode_rows(rows: list[list[str]], column_map: dict[str, int]) -> list[dict[str, Any]]:
+    """
+    Parse CSV rows into episode dictionaries.
+
+    Args:
+        rows: Raw CSV rows.
+        column_map: Mapping of field names to column indices.
+
+    Returns:
+        List of episode dictionaries.
+    """
+    episodes: list[dict[str, Any]] = []
+
+    for row in rows:
+        if not row:
+            continue
+
+        try:
+            episode = {key: row[idx] for key, idx in column_map.items() if len(row) > idx}
+            if episode:
+                episodes.append(episode)
+        except (IndexError, KeyError):
+            continue
+
+    return episodes
+
+
+# =============================================================================
+# IMDB Metadata
+# =============================================================================
+
+# Regex patterns for extracting IMDB data from show pages
+_IMDB_URL_PATTERN = re.compile(r"imdb\.com/title/(tt\d+)", re.IGNORECASE)
+_H2_LINK_PATTERN = re.compile(
+    r'<h2>.*?<a[^>]*href=["\']?[^"\']*title/([^"\'/]+)[^"\']*["\' ]?[^>]*>([^<]+)</a>',
+    re.IGNORECASE | re.DOTALL,
+)
+_H2_SIMPLE_PATTERN = re.compile(r"<h2>([^<]+)</h2>", re.IGNORECASE)
+_TITLE_TAG_PATTERN = re.compile(r"<title>([^<]+)</title>", re.IGNORECASE)
 
 
 @cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="show_metadata")
 async def get_show_metadata(show_id: str) -> tuple[str, str] | None:
     """
-    Fetch basic show metadata (IMDB ID and title).
+    Fetch IMDB ID and title for a show.
 
-    Scrapes the epguides.com show page to extract IMDB ID and title.
-    Returns tuple of (imdb_id_raw, title) or None if not found.
+    Scrapes the epguides show page to extract metadata.
+
+    Args:
+        show_id: Epguides show identifier.
+
+    Returns:
+        Tuple of (imdb_id, title) or None if not found.
     """
-    try:
-        url = f"{EPGUIDES_BASE_URL}/{show_id}"
-        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
-            response = await client.get(url)
-            if response.status_code != 200:
-                logger.warning(f"Failed to fetch {url}: status {response.status_code}")
-                return None
+    url = f"{EPGUIDES_BASE_URL}/{show_id}"
+    response = await _fetch_url(url)
 
-            text = response.text
-
-            # Try multiple patterns to find IMDB ID
-            imdb_id = None
-            title = None
-
-            # Pattern 1: Direct IMDB URL in the page
-            imdb_match = re.search(r"imdb\.com/title/(tt\d+)", text, re.IGNORECASE)
-            if imdb_match:
-                imdb_id = imdb_match.group(1)
-
-            # Pattern 2: H2 tag with link containing title/ID
-            h2_match = re.search(
-                r'<h2>.*?<a[^>]*href=["\']?[^"\']*title/([^"\'/]+)[^"\']*["\' ]?[^>]*>([^<]+)</a>',
-                text,
-                re.IGNORECASE | re.DOTALL,
-            )
-            if h2_match:
-                if not imdb_id:
-                    imdb_id = h2_match.group(1)
-                title = h2_match.group(2).strip()
-
-            # Pattern 3: Simple H2 tag with title
-            if not title:
-                h2_simple = re.search(r"<h2>([^<]+)</h2>", text, re.IGNORECASE)
-                if h2_simple:
-                    title = h2_simple.group(1).strip()
-
-            # Pattern 4: Title tag as fallback
-            if not title:
-                title_match = re.search(r"<title>([^<]+)</title>", text, re.IGNORECASE)
-                if title_match:
-                    title = title_match.group(1).strip()
-
-            if imdb_id and title:
-                return (imdb_id, title)
-            elif imdb_id:
-                # Return with placeholder title if we have IMDB ID
-                return (imdb_id, "Unknown")
-            elif title:
-                # Return None for IMDB ID if we only have title
-                logger.debug(f"Found title but no IMDB ID for {show_id}")
-                return None
-
-            logger.warning(f"Could not extract IMDB ID or title for {show_id}")
-            return None
-
-    except Exception as e:
-        logger.error(f"Error fetching metadata for {show_id}: {e}", exc_info=True)
+    if not response or response.status_code != 200:
+        logger.warning("Failed to fetch metadata for %s", show_id)
         return None
+
+    text = response.text
+    imdb_id = _extract_imdb_id(text)
+    title = _extract_title(text)
+
+    if imdb_id and title:
+        return (imdb_id, title)
+    elif imdb_id:
+        return (imdb_id, "Unknown")
+
+    logger.debug("Could not extract IMDB ID for %s", show_id)
+    return None
+
+
+def _extract_imdb_id(html: str) -> str | None:
+    """Extract IMDB ID from page HTML."""
+    # Try direct IMDB URL
+    match = _IMDB_URL_PATTERN.search(html)
+    if match:
+        return match.group(1)
+
+    # Try H2 link
+    match = _H2_LINK_PATTERN.search(html)
+    if match:
+        return match.group(1)
+
+    return None
+
+
+def _extract_title(html: str) -> str | None:
+    """Extract show title from page HTML."""
+    # Try H2 with link
+    match = _H2_LINK_PATTERN.search(html)
+    if match:
+        return match.group(2).strip()
+
+    # Try simple H2
+    match = _H2_SIMPLE_PATTERN.search(html)
+    if match:
+        return match.group(1).strip()
+
+    # Fallback to title tag
+    match = _TITLE_TAG_PATTERN.search(html)
+    if match:
+        return match.group(1).strip()
+
+    return None

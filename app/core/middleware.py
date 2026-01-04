@@ -1,7 +1,7 @@
 """
-Request/response logging middleware for FastAPI.
+HTTP middleware for request/response logging and timing.
 
-Logs all requests and responses with timing information.
+Provides detailed request logging with timing information for monitoring.
 """
 
 import logging
@@ -15,52 +15,74 @@ logger = logging.getLogger(__name__)
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Middleware to log all HTTP requests and responses."""
+    """
+    Middleware to log all HTTP requests and responses.
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        """Log request and response with timing."""
-        start_time = time.time()
+    Logs:
+    - Request method, path, query params, client IP
+    - Response status code and processing time
+    - Adds X-Process-Time header to responses
+    """
 
-        # Log request
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Process request and log details."""
+        start_time = time.perf_counter()
+
+        # Extract request info once
+        method = request.method
+        path = request.url.path
+        client_host = request.client.host if request.client else None
+
         logger.info(
-            f"Request: {request.method} {request.url.path}",
+            "Request: %s %s",
+            method,
+            path,
             extra={
-                "method": request.method,
-                "path": request.url.path,
+                "method": method,
+                "path": path,
                 "query_params": dict(request.query_params),
-                "client": request.client.host if request.client else None,
+                "client": client_host,
             },
         )
 
-        # Process request
         try:
             response = await call_next(request)
-            process_time = time.time() - start_time
+            process_time = time.perf_counter() - start_time
 
-            # Log response
             logger.info(
-                f"Response: {request.method} {request.url.path} - {response.status_code}",
+                "Response: %s %s - %d (%.3fs)",
+                method,
+                path,
+                response.status_code,
+                process_time,
                 extra={
-                    "method": request.method,
-                    "path": request.url.path,
+                    "method": method,
+                    "path": path,
                     "status_code": response.status_code,
-                    "process_time": f"{process_time:.3f}s",
+                    "process_time_seconds": process_time,
                 },
             )
 
-            # Add timing header
-            response.headers["X-Process-Time"] = str(process_time)
+            response.headers["X-Process-Time"] = f"{process_time:.3f}"
             return response
 
         except Exception as e:
-            process_time = time.time() - start_time
+            process_time = time.perf_counter() - start_time
             logger.error(
-                f"Request failed: {request.method} {request.url.path}",
+                "Request failed: %s %s (%.3fs) - %s",
+                method,
+                path,
+                process_time,
+                e,
                 extra={
-                    "method": request.method,
-                    "path": request.url.path,
+                    "method": method,
+                    "path": path,
                     "error": str(e),
-                    "process_time": f"{process_time:.3f}s",
+                    "process_time_seconds": process_time,
                 },
                 exc_info=True,
             )
