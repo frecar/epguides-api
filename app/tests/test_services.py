@@ -80,3 +80,105 @@ def test_parse_imdb_id():
     assert show_service.parse_imdb_id("tt0903747") == "tt0903747"
     assert show_service.parse_imdb_id("tt123456") == "tt0123456"  # Padded
     assert show_service.parse_imdb_id("invalid") == "invalid"
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.get_episodes_data")
+@patch("app.services.show_service.get_all_shows")
+async def test_get_show_does_not_set_end_date_with_unreleased_episodes(
+    mock_get_all, mock_get_episodes_data
+):
+    """Test that get_show does NOT set end_date when there are unreleased episodes."""
+    from datetime import datetime, timedelta
+
+    from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
+    from app.models.schemas import create_show_schema
+
+    # Create a show without end_date
+    mock_show = create_show_schema(
+        epguides_key="fallout",
+        title="Fallout",
+        end_date=None,
+    )
+    mock_get_all.return_value = [mock_show]
+
+    # Create episode data with:
+    # - Some released episodes (old dates)
+    # - Some unreleased episodes (future dates)
+    threshold = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
+    old_date = (threshold - timedelta(days=30)).strftime("%d %b %y")
+    future_date = (datetime.now() + timedelta(days=30)).strftime("%d %b %y")
+
+    mock_episodes_data = [
+        {
+            "season": 1,
+            "number": 1,
+            "title": "Released Episode",
+            "release_date": old_date,
+        },
+        {
+            "season": 1,
+            "number": 2,
+            "title": "Unreleased Episode",
+            "release_date": future_date,
+        },
+    ]
+    mock_get_episodes_data.return_value = mock_episodes_data
+
+    result = await show_service.get_show("fallout")
+
+    # Should NOT have end_date set because there are unreleased episodes
+    assert result is not None
+    assert result.end_date is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.get_episodes_data")
+@patch("app.services.show_service.get_all_shows")
+async def test_get_show_sets_end_date_when_all_episodes_released(
+    mock_get_all, mock_get_episodes_data
+):
+    """Test that get_show DOES set end_date when all episodes are released."""
+    from datetime import datetime, timedelta
+
+    from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
+    from app.models.schemas import create_show_schema
+
+    # Create a show without end_date
+    mock_show = create_show_schema(
+        epguides_key="finishedshow",
+        title="Finished Show",
+        end_date=None,
+    )
+    mock_get_all.return_value = [mock_show]
+
+    # Create episode data with all episodes released (old dates)
+    threshold = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
+    old_date_1 = (threshold - timedelta(days=60)).strftime("%d %b %y")
+    old_date_2 = (threshold - timedelta(days=30)).strftime("%d %b %y")  # Last episode
+
+    mock_episodes_data = [
+        {
+            "season": 1,
+            "number": 1,
+            "title": "First Episode",
+            "release_date": old_date_1,
+        },
+        {
+            "season": 1,
+            "number": 2,
+            "title": "Last Episode",
+            "release_date": old_date_2,
+        },
+    ]
+    mock_get_episodes_data.return_value = mock_episodes_data
+
+    result = await show_service.get_show("finishedshow")
+
+    # Should have end_date set to the last episode's release date
+    assert result is not None
+    assert result.end_date is not None
+    # Verify it's the last episode's date (old_date_2)
+    expected_date = epguides.parse_date_string(old_date_2)
+    assert expected_date is not None
+    assert result.end_date == expected_date.date()
