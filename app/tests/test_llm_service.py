@@ -97,7 +97,7 @@ async def test_llm_successful_query(mock_client_class, mock_settings):
 @patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
 async def test_llm_no_api_key(mock_client_class, mock_settings):
-    """Test LLM query without API key."""
+    """Test LLM query without API key - should not send Authorization header."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.local.carlsen.io/v1"
     mock_settings.LLM_API_KEY = None
@@ -117,9 +117,9 @@ async def test_llm_no_api_key(mock_client_class, mock_settings):
     result = await llm_service.parse_natural_language_query("test", episodes)
 
     assert result is not None
-    # Verify Authorization header is empty string when no API key
+    # Verify Authorization header is NOT included when no API key
     call_args = mock_client.post.call_args
-    assert call_args[1]["headers"]["Authorization"] == ""
+    assert "Authorization" not in call_args[1]["headers"]
 
 
 @pytest.mark.asyncio

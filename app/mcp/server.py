@@ -1,7 +1,8 @@
 """
 MCP (Model Context Protocol) server implementation.
 
-Exposes TV show data and operations as MCP resources and tools for AI assistants.
+Exposes TV show data and operations as MCP resources and tools
+for AI assistants to consume.
 """
 
 import json
@@ -14,256 +15,302 @@ from app.services import show_service
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# JSON-RPC Error Codes
+# =============================================================================
+
+_ERROR_METHOD_NOT_FOUND = -32601
+_ERROR_INVALID_PARAMS = -32602
+_ERROR_INTERNAL = -32603
+
+
+# =============================================================================
+# Tool Definitions
+# =============================================================================
+
+_TOOLS = [
+    {
+        "name": "search_shows",
+        "description": "Search for TV shows by title",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query (show title)",
+                }
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "get_show",
+        "description": "Get detailed information about a specific TV show",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "epguides_key": {
+                    "type": "string",
+                    "description": "Epguides show identifier (e.g., 'BreakingBad')",
+                }
+            },
+            "required": ["epguides_key"],
+        },
+    },
+    {
+        "name": "get_episodes",
+        "description": "Get all episodes for a TV show",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "epguides_key": {
+                    "type": "string",
+                    "description": "Epguides show identifier",
+                }
+            },
+            "required": ["epguides_key"],
+        },
+    },
+    {
+        "name": "get_next_episode",
+        "description": "Get the next unreleased episode for a show",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "epguides_key": {
+                    "type": "string",
+                    "description": "Epguides show identifier",
+                }
+            },
+            "required": ["epguides_key"],
+        },
+    },
+    {
+        "name": "get_latest_episode",
+        "description": "Get the most recently released episode for a show",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "epguides_key": {
+                    "type": "string",
+                    "description": "Epguides show identifier",
+                }
+            },
+            "required": ["epguides_key"],
+        },
+    },
+]
+
+
+# =============================================================================
+# MCP Server
+# =============================================================================
+
+
 class MCPServer:
-    """MCP server for Epguides API."""
+    """
+    MCP server for Epguides API.
+
+    Implements JSON-RPC 2.0 protocol for MCP communication.
+    """
 
     def __init__(self) -> None:
-        self.request_id: str | None = None
-
-    def _jsonrpc_response(self, result: dict[str, Any]) -> dict[str, Any]:
-        """Helper to build JSON-RPC 2.0 response."""
-        return {"jsonrpc": "2.0", "id": self.request_id, "result": result}
-
-    def _text_content(self, text: str) -> dict[str, Any]:
-        """Helper to build text content response."""
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": text,
-                }
-            ],
-        }
+        self._request_id: str | int | None = None
 
     async def handle_request(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Handle incoming MCP request."""
-        method = request.get("method")
+        """
+        Route incoming MCP request to appropriate handler.
+
+        Args:
+            request: JSON-RPC 2.0 request object.
+
+        Returns:
+            JSON-RPC 2.0 response object.
+        """
+        method = request.get("method", "")
         params = request.get("params", {})
-        self.request_id = request.get("id")
+        self._request_id = request.get("id")
 
-        try:
-            if method == "initialize":
-                return await self.handle_initialize(params)
-            elif method == "resources/list":
-                return await self.handle_resources_list()
-            elif method == "resources/read":
-                return await self.handle_resource_read(params)
-            elif method == "tools/list":
-                return await self.handle_tools_list()
-            elif method == "tools/call":
-                return await self.handle_tool_call(params)
-            else:
-                return self.error_response(-32601, f"Method not found: {method}")
-        except Exception as e:
-            logger.error(f"Error handling request: {e}", exc_info=True)
-            return self.error_response(-32603, f"Internal error: {str(e)}")
-
-    async def handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Handle initialize request."""
-        return {
-            "jsonrpc": "2.0",
-            "id": self.request_id,
-            "result": {
-                "protocolVersion": MCP_PROTOCOL_VERSION,
-                "capabilities": {
-                    "resources": {},
-                    "tools": {},
-                },
-                "serverInfo": {
-                    "name": "epguides-api",
-                    "version": VERSION,
-                },
-            },
+        # Route to handler
+        handlers = {
+            "initialize": self._handle_initialize,
+            "resources/list": self._handle_resources_list,
+            "resources/read": self._handle_resource_read,
+            "tools/list": self._handle_tools_list,
+            "tools/call": self._handle_tool_call,
         }
 
-    async def handle_resources_list(self) -> dict[str, Any]:
-        """List available resources."""
-        return {
-            "jsonrpc": "2.0",
-            "id": self.request_id,
-            "result": {
+        handler = handlers.get(method)
+        if not handler:
+            return self._error(_ERROR_METHOD_NOT_FOUND, f"Method not found: {method}")
+
+        try:
+            return await handler(params)
+        except Exception as e:
+            logger.exception("Error handling %s request", method)
+            return self._error(_ERROR_INTERNAL, f"Internal error: {e}")
+
+    # -------------------------------------------------------------------------
+    # Protocol Handlers
+    # -------------------------------------------------------------------------
+
+    async def _handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Handle MCP initialize request."""
+        return self._success(
+            {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "capabilities": {"resources": {}, "tools": {}},
+                "serverInfo": {"name": "epguides-api", "version": VERSION},
+            }
+        )
+
+    async def _handle_resources_list(self, params: dict[str, Any]) -> dict[str, Any]:
+        """List available MCP resources."""
+        return self._success(
+            {
                 "resources": [
                     {
                         "uri": "epguides://shows",
                         "name": "All Shows",
-                        "description": "Complete list of all TV shows from epguides.com",
+                        "description": "Complete list of all TV shows",
                         "mimeType": "application/json",
                     },
                 ],
-            },
-        }
+            }
+        )
 
-    async def handle_resource_read(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Read a resource."""
+    async def _handle_resource_read(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Read an MCP resource."""
         uri = params.get("uri", "")
 
-        if uri == "epguides://shows":
-            shows = await show_service.get_all_shows()
-            # Limit to first 100 for performance
-            shows_data = [show.model_dump() for show in shows[:100]]
-            return {
-                "jsonrpc": "2.0",
-                "id": self.request_id,
-                "result": {
-                    "contents": [
-                        {
-                            "uri": uri,
-                            "mimeType": "application/json",
-                            "text": json.dumps(shows_data, indent=2, default=str),
-                        }
-                    ],
-                },
-            }
-        else:
-            return self.error_response(-32602, f"Unknown resource: {uri}")
+        if uri != "epguides://shows":
+            return self._error(_ERROR_INVALID_PARAMS, f"Unknown resource: {uri}")
 
-    async def handle_tools_list(self) -> dict[str, Any]:
-        """List available tools."""
-        return {
-            "jsonrpc": "2.0",
-            "id": self.request_id,
-            "result": {
-                "tools": [
+        shows = await show_service.get_all_shows()
+        # Limit for performance
+        shows_data = [show.model_dump() for show in shows[:100]]
+
+        return self._success(
+            {
+                "contents": [
                     {
-                        "name": "search_shows",
-                        "description": "Search for TV shows by title",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "query": {
-                                    "type": "string",
-                                    "description": "Search query (show title)",
-                                }
-                            },
-                            "required": ["query"],
-                        },
-                    },
-                    {
-                        "name": "get_show",
-                        "description": "Get detailed information about a specific TV show",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "epguides_key": {
-                                    "type": "string",
-                                    "description": "Epguides show key/identifier (e.g., 'BreakingBad')",
-                                }
-                            },
-                            "required": ["epguides_key"],
-                        },
-                    },
-                    {
-                        "name": "get_episodes",
-                        "description": "Get all episodes for a TV show",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "epguides_key": {
-                                    "type": "string",
-                                    "description": "Epguides show key/identifier (e.g., 'BreakingBad')",
-                                },
-                            },
-                            "required": ["epguides_key"],
-                        },
-                    },
-                    {
-                        "name": "get_next_episode",
-                        "description": "Get the next unreleased episode for a show",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "epguides_key": {
-                                    "type": "string",
-                                    "description": "Epguides show key/identifier (e.g., 'BreakingBad')",
-                                }
-                            },
-                            "required": ["epguides_key"],
-                        },
-                    },
-                    {
-                        "name": "get_last_episode",
-                        "description": "Get the last released episode for a show",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "epguides_key": {
-                                    "type": "string",
-                                    "description": "Epguides show key/identifier (e.g., 'BreakingBad')",
-                                }
-                            },
-                            "required": ["epguides_key"],
-                        },
-                    },
+                        "uri": uri,
+                        "mimeType": "application/json",
+                        "text": json.dumps(shows_data, indent=2, default=str),
+                    }
                 ],
-            },
-        }
+            }
+        )
 
-    async def handle_tool_call(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Handle tool call."""
-        tool_name = params.get("name")
+    async def _handle_tools_list(self, params: dict[str, Any]) -> dict[str, Any]:
+        """List available MCP tools."""
+        return self._success({"tools": _TOOLS})
+
+    async def _handle_tool_call(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Execute an MCP tool."""
+        tool_name = params.get("name", "")
         arguments = params.get("arguments", {})
 
+        # Route to tool handler
+        tool_handlers = {
+            "search_shows": self._tool_search_shows,
+            "get_show": self._tool_get_show,
+            "get_episodes": self._tool_get_episodes,
+            "get_next_episode": self._tool_get_next_episode,
+            "get_latest_episode": self._tool_get_latest_episode,
+        }
+
+        handler = tool_handlers.get(tool_name)
+        if not handler:
+            return self._error(_ERROR_METHOD_NOT_FOUND, f"Unknown tool: {tool_name}")
+
         try:
-            if tool_name == "search_shows":
-                query = arguments.get("query", "")
-                shows = await show_service.search_shows(query)
-                result = [show.model_dump() for show in shows[:50]]  # Limit results
-                return self._jsonrpc_response(self._text_content(json.dumps(result, indent=2, default=str)))
-
-            elif tool_name == "get_show":
-                epguides_key = arguments.get("epguides_key", "")
-                show = await show_service.get_show(epguides_key)
-                if not show:
-                    return self.error_response(-32602, f"Show not found: {epguides_key}")
-                return self._jsonrpc_response(self._text_content(json.dumps(show.model_dump(), indent=2, default=str)))
-
-            elif tool_name == "get_episodes":
-                epguides_key = arguments.get("epguides_key", "")
-                episodes = await show_service.get_episodes(epguides_key)
-                if not episodes:
-                    return self.error_response(-32602, f"Episodes not found for show: {epguides_key}")
-                result = [ep.model_dump() for ep in episodes]
-                return self._jsonrpc_response(self._text_content(json.dumps(result, indent=2, default=str)))
-
-            elif tool_name == "get_next_episode":
-                epguides_key = arguments.get("epguides_key", "")
-                episodes = await show_service.get_episodes(epguides_key)
-                if not episodes:
-                    return self.error_response(-32602, f"Episodes not found for show: {epguides_key}")
-                for ep in episodes:
-                    if not ep.is_released and ep.title:
-                        return self._jsonrpc_response(
-                            self._text_content(json.dumps(ep.model_dump(), indent=2, default=str))
-                        )
-                return self.error_response(-32602, "Next episode not found")
-
-            elif tool_name == "get_latest_episode":
-                epguides_key = arguments.get("epguides_key", "")
-                episodes = await show_service.get_episodes(epguides_key)
-                if not episodes:
-                    return self.error_response(-32602, f"Episodes not found for show: {epguides_key}")
-                released = [ep for ep in episodes if ep.is_released]
-                if not released:
-                    return self.error_response(-32602, "No released episodes found")
-                last_ep = released[-1]
-                return self._jsonrpc_response(
-                    self._text_content(json.dumps(last_ep.model_dump(), indent=2, default=str))
-                )
-
-            else:
-                return self.error_response(-32601, f"Unknown tool: {tool_name}")
-
+            return await handler(arguments)
         except Exception as e:
-            logger.error(f"Error executing tool {tool_name}: {e}", exc_info=True)
-            return self.error_response(-32603, f"Tool execution error: {str(e)}")
+            logger.exception("Error executing tool %s", tool_name)
+            return self._error(_ERROR_INTERNAL, f"Tool execution error: {e}")
 
-    def error_response(self, code: int, message: str) -> dict[str, Any]:
-        """Create error response."""
+    # -------------------------------------------------------------------------
+    # Tool Implementations
+    # -------------------------------------------------------------------------
+
+    async def _tool_search_shows(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Search for shows by title."""
+        query = args.get("query", "")
+        shows = await show_service.search_shows(query)
+        result = [show.model_dump() for show in shows[:50]]
+        return self._success(self._text_content(json.dumps(result, indent=2, default=str)))
+
+    async def _tool_get_show(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get show details."""
+        epguides_key = args.get("epguides_key", "")
+        show = await show_service.get_show(epguides_key)
+
+        if not show:
+            return self._error(_ERROR_INVALID_PARAMS, f"Show not found: {epguides_key}")
+
+        return self._success(self._text_content(json.dumps(show.model_dump(), indent=2, default=str)))
+
+    async def _tool_get_episodes(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get all episodes for a show."""
+        epguides_key = args.get("epguides_key", "")
+        episodes = await show_service.get_episodes(epguides_key)
+
+        if not episodes:
+            return self._error(_ERROR_INVALID_PARAMS, f"No episodes found for: {epguides_key}")
+
+        result = [ep.model_dump() for ep in episodes]
+        return self._success(self._text_content(json.dumps(result, indent=2, default=str)))
+
+    async def _tool_get_next_episode(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get next unreleased episode."""
+        epguides_key = args.get("epguides_key", "")
+        episodes = await show_service.get_episodes(epguides_key)
+
+        if not episodes:
+            return self._error(_ERROR_INVALID_PARAMS, f"No episodes found for: {epguides_key}")
+
+        for ep in episodes:
+            if not ep.is_released and ep.title:
+                return self._success(self._text_content(json.dumps(ep.model_dump(), indent=2, default=str)))
+
+        return self._error(_ERROR_INVALID_PARAMS, "No unreleased episodes found")
+
+    async def _tool_get_latest_episode(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get most recently released episode."""
+        epguides_key = args.get("epguides_key", "")
+        episodes = await show_service.get_episodes(epguides_key)
+
+        if not episodes:
+            return self._error(_ERROR_INVALID_PARAMS, f"No episodes found for: {epguides_key}")
+
+        released = [ep for ep in episodes if ep.is_released]
+        if not released:
+            return self._error(_ERROR_INVALID_PARAMS, "No released episodes found")
+
+        last_ep = released[-1]
+        return self._success(self._text_content(json.dumps(last_ep.model_dump(), indent=2, default=str)))
+
+    # -------------------------------------------------------------------------
+    # Response Helpers
+    # -------------------------------------------------------------------------
+
+    def _success(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Build successful JSON-RPC response."""
         return {
             "jsonrpc": "2.0",
-            "id": self.request_id,
-            "error": {
-                "code": code,
-                "message": message,
-            },
+            "id": self._request_id,
+            "result": result,
         }
+
+    def _error(self, code: int, message: str) -> dict[str, Any]:
+        """Build error JSON-RPC response."""
+        return {
+            "jsonrpc": "2.0",
+            "id": self._request_id,
+            "error": {"code": code, "message": message},
+        }
+
+    def _text_content(self, text: str) -> dict[str, Any]:
+        """Build MCP text content response."""
+        return {"content": [{"type": "text", "text": text}]}

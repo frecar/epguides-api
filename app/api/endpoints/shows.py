@@ -1,44 +1,48 @@
 """
-API endpoints for TV show operations.
+REST API endpoints for TV show operations.
 
-All endpoints are async and use dependency injection for services.
+All endpoints are async and return Pydantic models for automatic validation.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.models.responses import PaginatedResponse
-from app.models.schemas import EpisodeSchema, ShowDetailsSchema, ShowListSchema
+from app.models.schemas import EpisodeSchema, ShowDetailsSchema, ShowListSchema, ShowSchema
 from app.services import show_service
 
 router = APIRouter()
 
 
-@router.get("/", response_model=PaginatedResponse[ShowListSchema], summary="List all shows")
+# =============================================================================
+# List & Search Endpoints
+# =============================================================================
+
+
+@router.get(
+    "/",
+    response_model=PaginatedResponse[ShowListSchema],
+    summary="List all shows",
+)
 async def list_shows(
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    limit: int = Query(50, ge=1, le=100, description="Number of items per page"),
-):
+    page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(default=50, ge=1, le=100, description="Items per page"),
+) -> PaginatedResponse[ShowListSchema]:
     """
     List all available shows with pagination.
 
-    Returns a simplified paginated list of shows with basic information:
-    - Title, epguides key, network, country
-    - Start/end dates
-    - Links to detailed show information
-
-    For detailed information including IMDB ID, runtime, and episode count,
-    use the individual show endpoint: GET /shows/{epguides_key}
+    Returns simplified show information suitable for browsing.
+    For detailed metadata (IMDB ID, runtime, episode count),
+    use the individual show endpoint.
     """
     all_shows = await show_service.get_all_shows()
+
     total = len(all_shows)
     start = (page - 1) * limit
     end = start + limit
-    items = all_shows[start:end]
+    page_items = all_shows[start:end]
 
     # Convert to simplified list schema
-    # Note: We don't derive end_date here to keep the endpoint fast.
-    # If end_date is needed, use the individual show endpoint.
-    simplified_items = [
+    items = [
         ShowListSchema(
             epguides_key=show.epguides_key,
             title=show.title,
@@ -47,11 +51,11 @@ async def list_shows(
             start_date=show.start_date,
             end_date=show.end_date,
         )
-        for show in items
+        for show in page_items
     ]
 
     return PaginatedResponse(
-        items=simplified_items,
+        items=items,
         total=total,
         page=page,
         limit=limit,
@@ -60,22 +64,22 @@ async def list_shows(
     )
 
 
-@router.get("/search", response_model=list[ShowListSchema], summary="Search shows")
+@router.get(
+    "/search",
+    response_model=list[ShowListSchema],
+    summary="Search shows",
+)
 async def search_shows(
     query: str = Query(..., min_length=2, description="Search query (show title)"),
-):
+) -> list[ShowListSchema]:
     """
     Search for shows by title.
 
-    Performs case-insensitive substring matching on show titles.
-    Returns all shows where the query appears in the title.
-
-    Returns simplified show information. For detailed information including IMDB ID,
-    runtime, and episode count, use the individual show endpoint: GET /shows/{epguides_key}
+    Performs case-insensitive substring matching.
+    Returns simplified show information.
     """
     shows = await show_service.search_shows(query)
 
-    # Convert to simplified list schema
     return [
         ShowListSchema(
             epguides_key=show.epguides_key,
@@ -89,28 +93,35 @@ async def search_shows(
     ]
 
 
-@router.get("/{epguides_key}", summary="Get show metadata")
+# =============================================================================
+# Individual Show Endpoints
+# =============================================================================
+
+
+@router.get(
+    "/{epguides_key}",
+    response_model=ShowSchema | ShowDetailsSchema,
+    summary="Get show metadata",
+)
 async def get_show_metadata(
     epguides_key: str,
-    include: str | None = Query(None, description="Include related resources (e.g., 'episodes')"),
-):
+    include: str | None = Query(default=None, description="Include 'episodes' for full episode list"),
+) -> ShowSchema | ShowDetailsSchema:
     """
-    Get metadata for a show.
+    Get complete metadata for a show.
 
-    Returns show information including:
-    - Title, IMDB ID, epguides URL
-    - Network, runtime, country
-    - Start/end dates, total episodes
+    Returns full show details including IMDB ID, runtime, and episode count.
+    The epguides_key is case-insensitive.
 
-    The epguides_key is case-insensitive and "the" prefix is automatically handled.
-
-    Use `?include=episodes` to also return the full episode list in the response.
+    Use `?include=episodes` to embed the full episode list in the response.
     """
     show = await show_service.get_show(epguides_key)
     if not show:
-        raise HTTPException(status_code=404, detail="Show not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Show not found: {epguides_key}",
+        )
 
-    # If episodes are requested, return full show details
     if include == "episodes":
         episodes = await show_service.get_episodes(epguides_key)
         return ShowDetailsSchema(**show.model_dump(), episodes=episodes)
@@ -118,33 +129,39 @@ async def get_show_metadata(
     return show
 
 
-@router.get("/{epguides_key}/episodes", response_model=list[EpisodeSchema], summary="Get episodes")
+# =============================================================================
+# Episode Endpoints
+# =============================================================================
+
+
+@router.get(
+    "/{epguides_key}/episodes",
+    response_model=list[EpisodeSchema],
+    summary="Get episodes",
+)
 async def get_show_episodes(
     epguides_key: str,
-    season: int | None = Query(None, ge=1, description="Filter by season number"),
-    episode: int | None = Query(None, ge=1, description="Filter by episode number (requires season)"),
-    year: int | None = Query(None, ge=1900, le=2100, description="Filter by release year"),
-    title_search: str | None = Query(None, description="Search in episode titles"),
-):
+    season: int | None = Query(default=None, ge=1, description="Filter by season"),
+    episode: int | None = Query(default=None, ge=1, description="Filter by episode (requires season)"),
+    year: int | None = Query(default=None, ge=1900, le=2100, description="Filter by release year"),
+    title_search: str | None = Query(default=None, description="Search in episode titles"),
+) -> list[EpisodeSchema]:
     """
     Get episodes for a show with optional filtering.
 
-    Supports structured filtering via query parameters:
-    - `season` - Filter by season number
-    - `episode` - Filter by episode number (requires season)
-    - `year` - Filter by release year
-    - `title_search` - Search in episode titles
+    Filter options:
+    - `season`: Filter by season number
+    - `episode`: Filter by episode number (requires season)
+    - `year`: Filter by release year
+    - `title_search`: Search in episode titles
 
     Examples:
     - `/shows/BreakingBad/episodes?season=2`
-    - `/shows/BreakingBad/episodes?season=2&episode=5`
     - `/shows/BreakingBad/episodes?year=2008`
-    - `/shows/BreakingBad/episodes?title_search=pilot`
     """
-    # Get episodes (this will fail fast if show doesn't exist)
     episodes = await show_service.get_episodes(epguides_key)
 
-    # Apply structured filters if provided
+    # Apply filters
     if season is not None:
         episodes = [ep for ep in episodes if ep.season == season]
         if episode is not None:
@@ -157,60 +174,84 @@ async def get_show_episodes(
         search_lower = title_search.lower()
         episodes = [ep for ep in episodes if search_lower in ep.title.lower()]
 
-    # If no episodes returned, validate show exists
-    # (Empty episodes list is valid if show exists but has no episodes)
+    # Validate show exists if no results
     if not episodes:
         show = await show_service.get_show(epguides_key)
         if not show:
-            raise HTTPException(status_code=404, detail="Show not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Show not found: {epguides_key}",
+            )
 
     return episodes
 
 
-@router.get("/{epguides_key}/episodes/next", response_model=EpisodeSchema, summary="Get next episode")
-async def get_next_episode(epguides_key: str):
+@router.get(
+    "/{epguides_key}/episodes/next",
+    response_model=EpisodeSchema,
+    summary="Get next episode",
+)
+async def get_next_episode(epguides_key: str) -> EpisodeSchema:
     """
     Get the next unreleased episode.
 
-    Returns the first episode that hasn't been released yet.
-    Returns 404 if the show has finished airing (has end_date and all episodes are released).
+    Returns 404 if the show has finished airing or has no upcoming episodes.
     """
-    # Check if show is finished first
     show = await show_service.get_show(epguides_key)
     if not show:
-        raise HTTPException(status_code=404, detail="Show not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Show not found: {epguides_key}",
+        )
 
-    # If show has an end_date, it's finished - no next episode
+    # Show with end_date has finished airing
     if show.end_date:
-        raise HTTPException(status_code=404, detail="Show has finished airing")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Show has finished airing",
+        )
 
     episodes = await show_service.get_episodes(epguides_key)
     if not episodes:
-        raise HTTPException(status_code=404, detail="Episodes not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No episodes found",
+        )
 
+    # Find first unreleased episode with a title
     for ep in episodes:
         if not ep.is_released and ep.title:
             return ep
 
-    # All episodes are released but show doesn't have end_date yet
-    # This can happen if the show just finished but end_date hasn't been derived
-    raise HTTPException(status_code=404, detail="No unreleased episodes found")
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="No unreleased episodes found",
+    )
 
 
-@router.get("/{epguides_key}/episodes/latest", response_model=EpisodeSchema, summary="Get latest episode")
-async def get_latest_episode(epguides_key: str):
+@router.get(
+    "/{epguides_key}/episodes/latest",
+    response_model=EpisodeSchema,
+    summary="Get latest episode",
+)
+async def get_latest_episode(epguides_key: str) -> EpisodeSchema:
     """
-    Get the latest released episode.
+    Get the most recently released episode.
 
-    Returns the most recently released episode for the show.
-    Useful for checking the latest episode you should have watched.
+    Useful for checking the latest episode to watch.
     """
     episodes = await show_service.get_episodes(epguides_key)
     if not episodes:
-        raise HTTPException(status_code=404, detail="Episodes not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No episodes found",
+        )
 
     released = [ep for ep in episodes if ep.is_released]
     if not released:
-        raise HTTPException(status_code=404, detail="No released episodes found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No released episodes found",
+        )
 
     return released[-1]

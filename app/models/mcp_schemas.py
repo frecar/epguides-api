@@ -1,29 +1,32 @@
 """
-MCP (Model Context Protocol) request and response schemas.
+JSON-RPC 2.0 schemas for MCP (Model Context Protocol).
 
-Defines Pydantic models for JSON-RPC 2.0 requests and responses.
+These schemas define the request/response format for MCP over HTTP.
 """
 
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# Example requests for different methods
-EXAMPLE_INITIALIZE = {
+# =============================================================================
+# Example Requests (for OpenAPI documentation)
+# =============================================================================
+
+_EXAMPLE_INITIALIZE: dict[str, Any] = {
     "jsonrpc": "2.0",
     "id": 1,
     "method": "initialize",
     "params": {},
 }
 
-EXAMPLE_TOOLS_LIST = {
+_EXAMPLE_TOOLS_LIST: dict[str, Any] = {
     "jsonrpc": "2.0",
     "id": 2,
     "method": "tools/list",
     "params": {},
 }
 
-EXAMPLE_TOOLS_CALL = {
+_EXAMPLE_TOOLS_CALL: dict[str, Any] = {
     "jsonrpc": "2.0",
     "id": 3,
     "method": "tools/call",
@@ -33,7 +36,7 @@ EXAMPLE_TOOLS_CALL = {
     },
 }
 
-EXAMPLE_RESOURCES_LIST = {
+_EXAMPLE_RESOURCES_LIST: dict[str, Any] = {
     "jsonrpc": "2.0",
     "id": 4,
     "method": "resources/list",
@@ -41,38 +44,66 @@ EXAMPLE_RESOURCES_LIST = {
 }
 
 
-class JSONRPCRequest(BaseModel):
-    """JSON-RPC 2.0 request model."""
+# =============================================================================
+# Request/Response Models
+# =============================================================================
 
-    jsonrpc: str = Field("2.0", description="JSON-RPC version (must be '2.0')")
-    id: str | int | None = Field(None, description="Request ID (optional, can be string or number)")
+
+class JSONRPCRequest(BaseModel):
+    """
+    JSON-RPC 2.0 request model.
+
+    Used for all MCP HTTP endpoint requests.
+    """
+
+    jsonrpc: str = Field(
+        default="2.0",
+        description="JSON-RPC version (must be '2.0')",
+        pattern=r"^2\.0$",
+    )
+    id: str | int | None = Field(
+        default=None,
+        description="Request ID for response correlation",
+    )
     method: str = Field(
         ...,
-        description="Method name. Available methods: 'initialize', 'tools/list', 'tools/call', 'resources/list', 'resources/read'",
+        description="Method to call",
         examples=["initialize", "tools/list", "tools/call", "resources/list", "resources/read"],
     )
     params: dict[str, Any] = Field(
         default_factory=dict,
-        description="Method parameters. For 'tools/call', use: {'name': 'tool_name', 'arguments': {...}}",
+        description="Method parameters",
     )
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": EXAMPLE_TOOLS_LIST,
+            "example": _EXAMPLE_TOOLS_LIST,
             "examples": [
-                EXAMPLE_INITIALIZE,
-                EXAMPLE_TOOLS_LIST,
-                EXAMPLE_TOOLS_CALL,
-                EXAMPLE_RESOURCES_LIST,
+                _EXAMPLE_INITIALIZE,
+                _EXAMPLE_TOOLS_LIST,
+                _EXAMPLE_TOOLS_CALL,
+                _EXAMPLE_RESOURCES_LIST,
             ],
         }
     )
 
 
-class JSONRPCResponse(BaseModel):
-    """JSON-RPC 2.0 response model."""
+class JSONRPCError(BaseModel):
+    """JSON-RPC 2.0 error object."""
 
-    jsonrpc: str = Field("2.0", description="JSON-RPC version")
-    id: str | int | None = Field(None, description="Request ID")
-    result: dict[str, Any] | None = Field(None, description="Result (on success)")
-    error: dict[str, Any] | None = Field(None, description="Error (on failure)")
+    code: int = Field(..., description="Error code")
+    message: str = Field(..., description="Error message")
+    data: Any | None = Field(default=None, description="Additional error data")
+
+
+class JSONRPCResponse(BaseModel):
+    """
+    JSON-RPC 2.0 response model.
+
+    Either result or error will be present, never both.
+    """
+
+    jsonrpc: str = Field(default="2.0", description="JSON-RPC version")
+    id: str | int | None = Field(default=None, description="Request ID")
+    result: dict[str, Any] | None = Field(default=None, description="Success result")
+    error: JSONRPCError | None = Field(default=None, description="Error details")

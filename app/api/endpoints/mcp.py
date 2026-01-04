@@ -6,7 +6,7 @@ Exposes MCP server functionality over HTTP for network access.
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from app.mcp.server import MCPServer
@@ -15,37 +15,31 @@ from app.models.mcp_schemas import JSONRPCRequest
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-mcp_server = MCPServer()
+
+# Singleton MCP server instance
+_mcp_server = MCPServer()
 
 
 @router.post(
     "/mcp",
     summary="MCP JSON-RPC endpoint",
     response_model_exclude_none=True,
-    response_description="JSON-RPC 2.0 response with result or error",
+    response_description="JSON-RPC 2.0 response",
 )
-async def mcp_endpoint(request: JSONRPCRequest):
+async def mcp_endpoint(request: JSONRPCRequest) -> JSONResponse:
     """
     Handle MCP JSON-RPC 2.0 requests over HTTP.
-
-    This endpoint allows network-based access to the MCP server.
-    Send JSON-RPC 2.0 requests as POST with JSON body.
 
     **Available Methods:**
     - `initialize` - Initialize the MCP connection
     - `tools/list` - List available tools
-    - `tools/call` - Call a tool (e.g., search_shows, get_show, get_episodes)
+    - `tools/call` - Call a tool (search_shows, get_show, get_episodes, etc.)
     - `resources/list` - List available resources
-    - `resources/read` - Read a resource (requires `uri` in params)
+    - `resources/read` - Read a resource
 
     **Example: List Tools**
     ```json
-    {
-      "jsonrpc": "2.0",
-      "id": 1,
-      "method": "tools/list",
-      "params": {}
-    }
+    {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
     ```
 
     **Example: Search Shows**
@@ -54,24 +48,26 @@ async def mcp_endpoint(request: JSONRPCRequest):
       "jsonrpc": "2.0",
       "id": 2,
       "method": "tools/call",
-      "params": {
-        "name": "search_shows",
-        "arguments": {"query": "breaking"}
-      }
+      "params": {"name": "search_shows", "arguments": {"query": "breaking"}}
     }
     ```
     """
     try:
-        # Convert Pydantic model to dict for MCP server
         body = request.model_dump(exclude_none=True)
-        response = await mcp_server.handle_request(body)
+        response = await _mcp_server.handle_request(body)
         return JSONResponse(content=response)
     except Exception as e:
-        logger.error(f"Error handling MCP request: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}") from e
+        logger.exception("Error handling MCP request")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal error: {e}",
+        ) from e
 
 
-@router.get("/mcp/health", summary="MCP server health check")
-async def mcp_health():
+@router.get(
+    "/mcp/health",
+    summary="MCP server health check",
+)
+async def mcp_health() -> dict[str, str]:
     """Check if MCP server is available."""
     return {"status": "healthy", "service": "mcp-server"}
