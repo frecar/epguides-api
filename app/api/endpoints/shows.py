@@ -36,31 +36,19 @@ async def list_shows(
     items = all_shows[start:end]
 
     # Convert to simplified list schema
-    # Derive end_date for shows on current page if missing (cached, so efficient)
-    simplified_items = []
-    for show in items:
-        end_date = show.end_date
-        # If end_date is missing, try to derive it (only for current page)
-        # This is efficient because get_show() caches episode data
-        if not end_date:
-            try:
-                updated_show = await show_service.get_show(show.epguides_key)
-                if updated_show and updated_show.end_date:
-                    end_date = updated_show.end_date
-            except Exception:
-                # If derivation fails, use original end_date (None)
-                pass
-
-        simplified_items.append(
-            ShowListSchema(
-                epguides_key=show.epguides_key,
-                title=show.title,
-                network=show.network,
-                country=show.country,
-                start_date=show.start_date,
-                end_date=end_date,
-            )
+    # Note: We don't derive end_date here to keep the endpoint fast.
+    # If end_date is needed, use the individual show endpoint.
+    simplified_items = [
+        ShowListSchema(
+            epguides_key=show.epguides_key,
+            title=show.title,
+            network=show.network,
+            country=show.country,
+            start_date=show.start_date,
+            end_date=show.end_date,
         )
+        for show in items
+    ]
 
     return PaginatedResponse(
         items=simplified_items,

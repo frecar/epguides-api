@@ -49,6 +49,10 @@ docker compose up epguides-api redis  # API only (includes MCP HTTP endpoint)
 | `POST` | `/mcp` | MCP JSON-RPC endpoint (network access) |
 | `GET` | `/mcp/health` | MCP server health check |
 
+### Response Format Notes
+
+- **`end_date` field**: The `end_date` field in list/search responses may be `null` if the show's end date is not available in the master CSV (approximately 10.8% of shows). For shows without `end_date` in the master list, you can use the individual show endpoint (`GET /shows/{epguides_key}`) which will derive it from episode data if available.
+
 ### Examples
 
 ```bash
