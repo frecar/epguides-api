@@ -144,25 +144,38 @@ async def get_show(show_id: str) -> ShowSchema | None:
         if not show.end_date:
             raw_data = await epguides.get_episodes_data(normalized_id)
             if raw_data:
-                # Find the last valid episode date
                 from datetime import timedelta
 
                 from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
 
+                threshold_date = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
+                
+                # Check if there are any unreleased episodes (future episodes)
+                has_unreleased = False
                 last_release_date = None
-                for item in reversed(raw_data):  # Start from the end
+                
+                for item in raw_data:
                     release_date_str = item.get("release_date")
-                    if release_date_str and isinstance(release_date_str, str):
-                        parsed = epguides.parse_date_string(release_date_str)
-                        if parsed:
-                            last_release_date = parsed.date()
-                            break
+                    if not release_date_str or not isinstance(release_date_str, str):
+                        continue
+                    
+                    parsed = epguides.parse_date_string(release_date_str)
+                    if not parsed:
+                        continue
+                    
+                    # Check if this episode is unreleased (future episode)
+                    if parsed > threshold_date:
+                        has_unreleased = True
+                        break
+                    
+                    # Track the last released episode date
+                    if parsed.date() > (last_release_date or date.min):
+                        last_release_date = parsed.date()
 
-                if last_release_date:
-                    # Check if all episodes are released (last episode is old enough)
-                    threshold_date = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
-                    if last_release_date < threshold_date.date():
-                        updates["end_date"] = last_release_date
+                # Only set end_date if there are no unreleased episodes
+                # and we found at least one released episode
+                if not has_unreleased and last_release_date:
+                    updates["end_date"] = last_release_date
 
         if updates:
             return show.model_copy(update=updates)

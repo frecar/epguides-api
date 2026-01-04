@@ -307,6 +307,84 @@ async def test_get_next_episode_not_found(mock_get_episodes, async_client: Async
 
 
 @pytest.mark.asyncio
+@patch("app.services.epguides.get_episodes_data")
+@patch("app.services.show_service.get_all_shows")
+@patch("app.services.show_service.get_episodes")
+async def test_get_next_episode_with_unreleased_episodes_after_released_ones(
+    mock_get_episodes,
+    mock_get_all,
+    mock_get_episodes_data,
+    async_client: AsyncClient,
+):
+    """
+    Test that /episodes/next works correctly when show has unreleased episodes.
+
+    This test verifies the bug fix: shows with unreleased episodes should not
+    have end_date set, allowing /episodes/next to return the next episode.
+    """
+    from datetime import datetime, timedelta
+
+    from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
+    from app.models.schemas import create_show_schema
+
+    # Create a show without end_date (simulating the scenario)
+    mock_show = create_show_schema(
+        epguides_key="fallout",
+        title="Fallout",
+        end_date=None,
+    )
+    mock_get_all.return_value = [mock_show]
+
+    # Mock raw episode data for get_show's end_date derivation logic
+    threshold = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
+    old_date = (threshold - timedelta(days=30)).strftime("%d %b %y")
+    future_date = (datetime.now() + timedelta(days=30)).strftime("%d %b %y")
+
+    mock_get_episodes_data.return_value = [
+        {
+            "season": 1,
+            "number": 1,
+            "title": "Released Episode",
+            "release_date": old_date,
+        },
+        {
+            "season": 2,
+            "number": 1,
+            "title": "Next Unreleased Episode",
+            "release_date": future_date,
+        },
+    ]
+
+    # Mock processed episodes for get_episodes
+    mock_get_episodes.return_value = [
+        EpisodeSchema(
+            season=1,
+            number=1,
+            title="Released Episode",
+            release_date=date(2024, 1, 1),
+            is_released=True,
+            run_time_min=None,
+            episode_number=1,
+        ),
+        EpisodeSchema(
+            season=2,
+            number=1,
+            title="Next Unreleased Episode",
+            release_date=date(2026, 1, 7),
+            is_released=False,
+            run_time_min=None,
+            episode_number=2,
+        ),
+    ]
+
+    response = await async_client.get("/shows/fallout/episodes/next")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Next Unreleased Episode"
+    assert data["is_released"] is False
+
+
+@pytest.mark.asyncio
 @patch("app.services.show_service.get_episodes")
 async def test_get_latest_episode(mock_get_episodes, async_client: AsyncClient):
     """Test getting latest released episode."""
