@@ -5,11 +5,15 @@
 
 FROM python:3.11-alpine AS base
 
+# Build argument for version (set by docker-compose or CI)
+ARG APP_VERSION=dev
+
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    APP_VERSION=${APP_VERSION}
 
 # Create non-root user for security
 RUN addgroup -g 1000 appgroup && \

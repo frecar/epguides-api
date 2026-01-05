@@ -16,11 +16,58 @@ EPGUIDES_BASE_URL = "http://www.epguides.com"
 # Versioning
 # =============================================================================
 
-VERSION = "2.2.0"
-"""Application version (semver format). Update for releases."""
-
-MCP_PROTOCOL_VERSION = "2024-11-05"
+MCP_PROTOCOL_VERSION = "2025-06-18"
 """Model Context Protocol version this server implements."""
+
+
+def get_version() -> str:
+    """
+    Get application version (build number).
+
+    Priority:
+    1. VERSION file (auto-updated by pre-commit hook)
+    2. APP_VERSION environment variable (for CI/Docker)
+    3. Git commit count (fallback for local dev)
+    4. "dev" fallback
+
+    The version is a simple incrementing number based on commit count.
+    """
+    import os
+    from pathlib import Path
+
+    # Try VERSION file first (auto-updated by pre-commit hook)
+    version_file = Path(__file__).parent.parent.parent / "VERSION"
+    if version_file.exists():
+        try:
+            return version_file.read_text().strip()
+        except Exception:
+            pass
+
+    # Check environment variable (set by Docker build or CI)
+    env_version = os.environ.get("APP_VERSION")
+    if env_version and env_version != "dev":
+        return env_version
+
+    # Try git commit count for local development
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+
+    return "dev"
+
+
+# Cached version (computed once at import time)
+VERSION = get_version()
 
 # =============================================================================
 # Episode Configuration
