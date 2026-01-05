@@ -380,3 +380,150 @@ async def test_error_handling(async_client: AsyncClient):
 
     response = await async_client.get("/shows/nonexistentshow/episodes")
     assert response.status_code == 404
+
+
+# =============================================================================
+# LLM Integration Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_llm_health_endpoint(async_client: AsyncClient):
+    """Test LLM health check endpoint returns correct structure."""
+    response = await async_client.get("/health/llm")
+    assert response.status_code == 200
+    data = response.json()
+    assert "enabled" in data
+    assert "configured" in data
+    assert "api_url" in data
+    assert isinstance(data["enabled"], bool)
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_show")
+@patch("app.services.show_service.get_episodes")
+@patch("app.services.llm_service.parse_natural_language_query")
+async def test_nlq_parameter_calls_llm_service(
+    mock_llm_parse, mock_get_episodes, mock_get_show, async_client: AsyncClient
+):
+    """Test that nlq parameter triggers LLM service call."""
+    mock_show = create_show_schema(epguides_key="test", title="Test Show")
+    mock_get_show.return_value = mock_show
+
+    all_episodes = [
+        EpisodeSchema(
+            season=1, number=1, title="Pilot", release_date=date(2008, 1, 20),
+            is_released=True, run_time_min=None, episode_number=1,
+        ),
+        EpisodeSchema(
+            season=1, number=2, title="Second", release_date=date(2008, 1, 27),
+            is_released=True, run_time_min=None, episode_number=2,
+        ),
+        EpisodeSchema(
+            season=1, number=3, title="Finale", release_date=date(2008, 2, 3),
+            is_released=True, run_time_min=None, episode_number=3,
+        ),
+    ]
+    mock_get_episodes.return_value = all_episodes
+
+    # LLM returns only the "Finale" episode
+    mock_llm_parse.return_value = [
+        {"season": 1, "number": 3, "title": "Finale", "release_date": "2008-02-03",
+         "is_released": True, "run_time_min": None, "episode_number": 3}
+    ]
+
+    response = await async_client.get("/shows/test/episodes?nlq=finale+episode")
+    assert response.status_code == 200
+
+    # Verify LLM service was called
+    mock_llm_parse.assert_called_once()
+    call_args = mock_llm_parse.call_args
+    assert call_args[0][0] == "finale episode"  # Query
+    assert len(call_args[0][1]) == 3  # All episodes passed to LLM
+
+    # Verify filtered result
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["title"] == "Finale"
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_show")
+@patch("app.services.show_service.get_episodes")
+@patch("app.services.llm_service.parse_natural_language_query")
+async def test_nlq_graceful_fallback_when_llm_fails(
+    mock_llm_parse, mock_get_episodes, mock_get_show, async_client: AsyncClient
+):
+    """Test that nlq returns all episodes when LLM fails."""
+    mock_show = create_show_schema(epguides_key="test", title="Test Show")
+    mock_get_show.return_value = mock_show
+
+    all_episodes = [
+        EpisodeSchema(
+            season=1, number=1, title="Pilot", release_date=date(2008, 1, 20),
+            is_released=True, run_time_min=None, episode_number=1,
+        ),
+        EpisodeSchema(
+            season=1, number=2, title="Second", release_date=date(2008, 1, 27),
+            is_released=True, run_time_min=None, episode_number=2,
+        ),
+    ]
+    mock_get_episodes.return_value = all_episodes
+
+    # LLM returns None (failure)
+    mock_llm_parse.return_value = None
+
+    response = await async_client.get("/shows/test/episodes?nlq=some+query")
+    assert response.status_code == 200
+
+    # Should return all episodes as fallback
+    data = response.json()
+    assert len(data) == 2
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_show")
+@patch("app.services.show_service.get_episodes")
+@patch("app.services.llm_service.parse_natural_language_query")
+async def test_nlq_combined_with_structured_filters(
+    mock_llm_parse, mock_get_episodes, mock_get_show, async_client: AsyncClient
+):
+    """Test that structured filters are applied before nlq."""
+    mock_show = create_show_schema(epguides_key="test", title="Test Show")
+    mock_get_show.return_value = mock_show
+
+    all_episodes = [
+        EpisodeSchema(
+            season=1, number=1, title="S1 Pilot", release_date=date(2008, 1, 20),
+            is_released=True, run_time_min=None, episode_number=1,
+        ),
+        EpisodeSchema(
+            season=2, number=1, title="S2 Premiere", release_date=date(2009, 1, 20),
+            is_released=True, run_time_min=None, episode_number=2,
+        ),
+        EpisodeSchema(
+            season=2, number=2, title="S2 Finale", release_date=date(2009, 1, 27),
+            is_released=True, run_time_min=None, episode_number=3,
+        ),
+    ]
+    mock_get_episodes.return_value = all_episodes
+
+    # LLM only gets season 2 episodes (after structured filter)
+    mock_llm_parse.return_value = [
+        {"season": 2, "number": 2, "title": "S2 Finale", "release_date": "2009-01-27",
+         "is_released": True, "run_time_min": None, "episode_number": 3}
+    ]
+
+    response = await async_client.get("/shows/test/episodes?season=2&nlq=finale")
+    assert response.status_code == 200
+
+    # LLM should only receive season 2 episodes
+    call_args = mock_llm_parse.call_args
+    episodes_passed_to_llm = call_args[0][1]
+    assert len(episodes_passed_to_llm) == 2  # Only S2 episodes
+    assert all(ep["season"] == 2 for ep in episodes_passed_to_llm)
+
+    # Result should be the filtered finale
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["title"] == "S2 Finale"
