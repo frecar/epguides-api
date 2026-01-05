@@ -24,18 +24,22 @@ router = APIRouter()
 @router.get(
     "/",
     response_model=PaginatedResponse[ShowListSchema],
-    summary="List all shows",
+    summary="📋 List all shows",
 )
 async def list_shows(
-    page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
-    limit: int = Query(default=50, ge=1, le=100, description="Items per page"),
+    page: int = Query(default=1, ge=1, description="Page number", examples=[1, 2, 3]),
+    limit: int = Query(default=50, ge=1, le=100, description="Items per page (max 100)", examples=[20, 50, 100]),
 ) -> PaginatedResponse[ShowListSchema]:
     """
-    List all available shows with pagination.
+    **Browse all available TV shows** with pagination.
 
     Returns simplified show information suitable for browsing.
-    For detailed metadata (IMDB ID, runtime, episode count),
-    use the individual show endpoint.
+    Use the individual show endpoint for full metadata (IMDB ID, runtime, etc.).
+
+    ### Example
+    ```
+    GET /shows/?page=1&limit=20
+    ```
     """
     all_shows = await show_service.get_all_shows()
 
@@ -70,16 +74,24 @@ async def list_shows(
 @router.get(
     "/search",
     response_model=list[ShowListSchema],
-    summary="Search shows",
+    summary="🔍 Search shows",
 )
 async def search_shows(
-    query: str = Query(..., min_length=2, description="Search query (show title)"),
+    query: str = Query(
+        ..., min_length=2, description="Search query (show title)", examples=["breaking", "game of", "office"]
+    ),
 ) -> list[ShowListSchema]:
     """
-    Search for shows by title.
+    **Search for TV shows** by title.
 
-    Performs case-insensitive substring matching.
-    Returns simplified show information.
+    Performs case-insensitive substring matching across all show titles.
+
+    ### Examples
+    ```
+    GET /shows/search?query=breaking     → Breaking Bad, Breaking Pointe, ...
+    GET /shows/search?query=game of      → Game of Thrones
+    GET /shows/search?query=office       → The Office (US), The Office (UK), ...
+    ```
     """
     shows = await show_service.search_shows(query)
 
@@ -104,21 +116,34 @@ async def search_shows(
 @router.get(
     "/{epguides_key}",
     response_model=ShowSchema | ShowDetailsSchema,
-    summary="Get show metadata",
+    summary="📺 Get show metadata",
 )
 async def get_show_metadata(
     epguides_key: str,
-    include: str | None = Query(default=None, description="Include 'episodes' for full episode list"),
+    include: str | None = Query(
+        default=None, description="Set to 'episodes' to include full episode list", examples=["episodes"]
+    ),
     refresh: bool = Query(default=False, description="Bypass cache and fetch fresh data"),
 ) -> ShowSchema | ShowDetailsSchema:
     """
-    Get complete metadata for a show.
+    **Get complete metadata** for a specific TV show.
 
-    Returns full show details including IMDB ID, runtime, and episode count.
-    The epguides_key is case-insensitive.
+    Returns full details including IMDB ID, runtime, network, air dates, and episode count.
 
-    Use `?include=episodes` to embed the full episode list in the response.
-    Use `?refresh=true` to bypass cache and get fresh data from source.
+    ### Options
+    | Parameter | Description |
+    |-----------|-------------|
+    | `include=episodes` | Embed the full episode list in response |
+    | `refresh=true` | Bypass cache, fetch fresh data |
+
+    ### Examples
+    ```
+    GET /shows/BreakingBad                     → Show metadata only
+    GET /shows/BreakingBad?include=episodes    → Show + all episodes
+    GET /shows/BreakingBad?refresh=true        → Force fresh data
+    ```
+
+    **Note:** The `epguides_key` is case-insensitive.
     """
     # Invalidate cache if refresh requested
     if refresh:
@@ -148,22 +173,33 @@ async def get_show_metadata(
 @router.get(
     "/{epguides_key}/episodes",
     response_model=list[EpisodeSchema],
-    summary="Get episodes with filtering",
-    description="Get episodes for a show with optional structured filters and AI-powered natural language queries.",
+    summary="📋 Get episodes with filtering",
+    description="Get episodes for a show with structured filters and AI-powered natural language queries.",
 )
 async def get_show_episodes(
     epguides_key: str,
-    season: int | None = Query(default=None, ge=1, description="Filter by season number"),
-    episode: int | None = Query(default=None, ge=1, description="Filter by episode number (requires season)"),
-    year: int | None = Query(default=None, ge=1900, le=2100, description="Filter by release year"),
-    title_search: str | None = Query(default=None, description="Search in episode titles (case-insensitive)"),
+    season: int | None = Query(default=None, ge=1, description="Filter by season number", examples=[1, 2, 5]),
+    episode: int | None = Query(
+        default=None, ge=1, description="Filter by episode number (requires season)", examples=[1, 5, 10]
+    ),
+    year: int | None = Query(
+        default=None, ge=1900, le=2100, description="Filter by release year", examples=[2008, 2020, 2024]
+    ),
+    title_search: str | None = Query(
+        default=None, description="Search in episode titles", examples=["pilot", "finale", "wedding"]
+    ),
     nlq: str | None = Query(
         default=None,
-        description="Natural language query - use AI to filter episodes. Requires LLM to be configured. "
-        "Examples: 'finale episodes', 'pilot', 'episodes with cliffhangers'",
-        examples=["finale episodes", "pilot", "episodes where characters die", "season premiere"],
+        description="🤖 AI-powered natural language query. Requires LLM configuration (check /health/llm).",
+        examples=[
+            "finale episodes",
+            "pilot",
+            "most intense episodes",
+            "episodes where characters die",
+            "season premiere",
+        ],
     ),
-    refresh: bool = Query(default=False, description="Bypass cache and fetch fresh data from source"),
+    refresh: bool = Query(default=False, description="Bypass cache and fetch fresh data"),
 ) -> list[EpisodeSchema]:
     """
     Get episodes for a show with optional filtering.
@@ -243,16 +279,28 @@ async def get_show_episodes(
 @router.get(
     "/{epguides_key}/episodes/next",
     response_model=EpisodeSchema,
-    summary="Get next episode",
+    summary="⏭️ Get next episode",
 )
 async def get_next_episode(epguides_key: str) -> EpisodeSchema:
     """
-    Get the next unreleased episode.
+    **Get the next unreleased episode** for a show.
 
-    Returns 404 if the show has finished airing or has no upcoming episodes.
+    Perfect for tracking upcoming episodes of shows you're watching.
 
-    **Smart Cache:** If the cached "next episode" date has passed, the cache is
-    automatically refreshed to ensure up-to-date information.
+    ### Smart Caching
+    If the cached "next episode" date has passed, the cache is **automatically refreshed**
+    to ensure you always get accurate information.
+
+    ### Response Codes
+    | Code | Meaning |
+    |------|---------|
+    | `200` | Next episode found |
+    | `404` | Show finished airing or no upcoming episodes |
+
+    ### Example
+    ```
+    GET /shows/Severance/episodes/next
+    ```
     """
     show = await show_service.get_show(epguides_key)
     if not show:
@@ -311,13 +359,20 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
 @router.get(
     "/{epguides_key}/episodes/latest",
     response_model=EpisodeSchema,
-    summary="Get latest episode",
+    summary="⏮️ Get latest episode",
 )
 async def get_latest_episode(epguides_key: str) -> EpisodeSchema:
     """
-    Get the most recently released episode.
+    **Get the most recently released episode** for a show.
 
-    Useful for checking the latest episode to watch.
+    Perfect for finding out what episode to watch next or catching up on a series.
+
+    ### Example
+    ```
+    GET /shows/BreakingBad/episodes/latest
+    ```
+
+    Returns the last episode that has already aired.
     """
     episodes = await show_service.get_episodes(epguides_key)
     if not episodes:
