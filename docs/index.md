@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  <a href="https://epguides.frecar.no"><img src="https://img.shields.io/badge/🚀_Live_API-epguides.frecar.no-blue?style=for-the-badge" alt="Live API"></a>
+  <a href="https://epguides.frecar.no/shows"><img src="https://img.shields.io/badge/🚀_API-epguides.frecar.no-blue?style=for-the-badge" alt="API"></a>
+  <a href="https://epguides.frecar.no/docs"><img src="https://img.shields.io/badge/📖_Swagger-Interactive_Docs-green?style=for-the-badge" alt="Swagger"></a>
 </p>
 
 <p align="center">
