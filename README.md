@@ -60,8 +60,8 @@ Visit https://epguides.frecar.no/docs for interactive API documentation. The doc
 gh repo clone frecar/epguides-api
 cd epguides-api
 
-# Start all services (API with MCP HTTP endpoint, Redis)
-docker compose up --build
+# Start all services (auto-sets version from git commit count)
+make up
 
 # Access local API docs
 open http://localhost:3000/docs
@@ -386,8 +386,11 @@ pre-commit install
 ```
 
 **Pre-commit Hook:**
-The project includes a pre-commit hook that automatically runs `make fix` before each commit. This ensures code is properly formatted and linted. To set it up:
+The project includes pre-commit hooks that automatically:
+1. **Update version number** - Increments the build number in `VERSION` file
+2. **Format and lint code** - Runs `make fix`
 
+To set it up:
 ```bash
 pre-commit install
 ```

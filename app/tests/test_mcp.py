@@ -31,7 +31,7 @@ async def test_initialize(mcp_server):
     assert response["jsonrpc"] == "2.0"
     assert response["id"] == "1"
     assert "result" in response
-    assert response["result"]["protocolVersion"] == "2024-11-05"
+    assert response["result"]["protocolVersion"] == "2025-06-18"
     assert response["result"]["serverInfo"]["name"] == "epguides-api"
 
 

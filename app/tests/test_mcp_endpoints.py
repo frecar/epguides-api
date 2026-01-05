@@ -45,7 +45,7 @@ async def test_mcp_endpoint_initialize(async_client: AsyncClient):
     assert data["jsonrpc"] == "2.0"
     assert data["id"] == 1
     assert "result" in data
-    assert data["result"]["protocolVersion"] == "2024-11-05"
+    assert data["result"]["protocolVersion"] == "2025-06-18"
     assert data["result"]["serverInfo"]["name"] == "epguides-api"
 
 

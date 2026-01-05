@@ -8,6 +8,15 @@ setup:
 run:
 	$(PYTHON) -m uvicorn app.main:app --reload
 
+up:
+	docker compose up -d
+
+down:
+	docker compose down
+
+logs:
+	docker compose logs -f epguides-api
+
 test:
 	$(PYTHON) -m pytest
 
