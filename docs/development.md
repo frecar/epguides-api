@@ -1,6 +1,10 @@
-# Development Guide
+# :material-code-braces: Development Guide
 
-## Quick Start
+Everything you need to contribute to the Epguides API.
+
+---
+
+## :material-rocket-launch: Quick Start
 
 ```bash
 # Clone and start
@@ -8,40 +12,43 @@ git clone https://github.com/frecar/epguides-api.git
 cd epguides-api
 make up
 
-# API is now running at http://localhost:3000
+# 🎉 API running at http://localhost:3000
 ```
 
 ---
 
-## Commands
+## :material-console: Commands
 
 | Command | Description |
 |---------|-------------|
-| `make up` | Start Docker services (API + Redis) |
-| `make down` | Stop Docker services |
-| `make test` | Run all tests |
-| `make fix` | Format and lint code |
-| `make run` | Run API locally (without Docker) |
-| `make docs` | Serve documentation locally |
-| `make docs-build` | Build static documentation |
+| `make up` | :material-play: Start Docker services |
+| `make down` | :material-stop: Stop Docker services |
+| `make test` | :material-test-tube: Run all tests |
+| `make fix` | :material-auto-fix: Format and lint |
+| `make run` | :material-play-outline: Run locally |
+| `make docs` | :material-book: Serve docs |
+| `make docs-build` | :material-package: Build static docs |
 
 ---
 
-## Pre-commit Hooks
+## :material-git: Pre-commit Hooks
 
-The project includes pre-commit hooks that automatically:
+!!! success "Automatic Quality Checks"
+    Pre-commit hooks ensure code quality on every commit.
 
-1. **Update version number** - Increments build number in `VERSION` file
-2. **Format and lint code** - Runs `make fix`
+### :material-check-all: What They Do
 
-### Setup
+1. :material-numeric-plus: **Update version** - Increments build number
+2. :material-auto-fix: **Format & lint** - Runs `make fix`
+
+### :material-download: Setup
 
 ```bash
-# After cloning, install hooks
+# Install hooks (one-time)
 pre-commit install
 ```
 
-### Skip (Not Recommended)
+### :material-skip-forward: Skip (Not Recommended)
 
 ```bash
 git commit --no-verify
@@ -49,13 +56,16 @@ git commit --no-verify
 
 ---
 
-## Versioning
+## :material-tag: Versioning
 
-The API uses a simple incrementing build number based on git commit count.
+!!! info "Automatic Versioning"
+    Version is a simple incrementing number based on git commits.
 
-- The `VERSION` file contains the current build number
-- Pre-commit hook automatically updates it
-- No manual version management needed
+| Component | Location |
+|-----------|----------|
+| Version file | `VERSION` |
+| Updated by | Pre-commit hook |
+| Manual management | Not needed |
 
 ```bash
 # Check current version
@@ -67,72 +77,73 @@ curl http://localhost:3000/health
 
 ---
 
-## Testing
+## :material-test-tube: Testing
+
+### :material-play: Run Tests
 
 ```bash
-# Run all tests
+# All tests
 make test
 
-# Run with coverage
+# With coverage
 pytest --cov=app --cov-report=term-missing
 
-# Run specific test file
+# Specific file
 pytest app/tests/test_endpoints.py
 
-# Run specific test
+# Specific test
 pytest app/tests/test_endpoints.py::test_get_show
 
-# Run only LLM integration tests (requires LLM configured)
+# LLM integration tests (requires LLM)
 pytest app/tests/test_e2e.py -k "llm"
 ```
 
-### Test Structure
+### :material-folder-outline: Test Structure
 
 ```
 app/tests/
-├── test_endpoints.py      # REST API unit tests
-├── test_e2e.py            # End-to-end tests
-├── test_llm_service.py    # LLM service tests
-├── test_mcp.py            # MCP server unit tests
-├── test_mcp_endpoints.py  # MCP HTTP endpoint tests
-└── test_services.py       # Service layer tests
+├── 📄 test_endpoints.py      # REST API unit tests
+├── 📄 test_e2e.py            # End-to-end tests
+├── 📄 test_llm_service.py    # LLM service tests
+├── 📄 test_mcp.py            # MCP server tests
+├── 📄 test_mcp_endpoints.py  # MCP HTTP tests
+└── 📄 test_services.py       # Service layer tests
 ```
 
 ---
 
-## Code Quality
+## :material-check-decagram: Code Quality
 
-The project enforces code quality with:
+!!! abstract "Tooling"
+    The project enforces consistent code quality.
 
 | Tool | Purpose |
 |------|---------|
-| **Black** | Code formatting (120 char line length) |
-| **isort** | Import sorting |
-| **Ruff** | Fast linting |
-| **pytest** | Testing |
+| :material-format-paint: **Black** | Code formatting (120 chars) |
+| :material-sort-alphabetical-ascending: **isort** | Import sorting |
+| :material-lightning-bolt: **Ruff** | Fast linting |
+| :material-test-tube: **pytest** | Testing |
 
-All checks run automatically via `make fix` and pre-commit hooks.
-
-### Manual Checks
+### :material-console: Manual Checks
 
 ```bash
-# Format code
+# Format only
 make format
 
 # Lint only
 make lint
 
-# Fix all (format + lint)
+# Fix all
 make fix
 ```
 
 ---
 
-## Architecture
+## :material-chart-box: Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        FastAPI App                          │
+│                    🏗️ Architecture                          │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────────┐  ┌─────────────────┐                  │
@@ -141,18 +152,17 @@ make fix
 │  └────────┬────────┘  └────────┬────────┘                  │
 │           │                    │                            │
 │           └──────────┬─────────┘                            │
-│                      │                                      │
-│           ┌──────────▼──────────┐                          │
-│           │   Service Layer     │                          │
-│           │   (show_service)    │                          │
-│           └──────────┬──────────┘                          │
+│                      ▼                                      │
+│           ┌───────────────────┐                            │
+│           │   Service Layer   │                            │
+│           │  (show_service)   │                            │
+│           └──────────┬────────┘                            │
 │                      │                                      │
 │    ┌─────────────────┼─────────────────┐                   │
-│    │                 │                 │                   │
 │    ▼                 ▼                 ▼                   │
 │ ┌──────┐       ┌──────────┐     ┌───────────┐             │
 │ │Cache │       │ epguides │     │  TVMaze   │             │
-│ │(Redis)│       │ scraper  │     │  client   │             │
+│ │Redis │       │ scraper  │     │  client   │             │
 │ └──────┘       └──────────┘     └───────────┘             │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -160,15 +170,15 @@ make fix
 
 ---
 
-## Production Deployment
+## :material-docker: Production Deployment
 
-### Build Image
+### :material-package: Build Image
 
 ```bash
 docker build -t epguides-api .
 ```
 
-### Run Container
+### :material-play: Run Container
 
 ```bash
 docker run -d -p 3000:3000 \
@@ -178,35 +188,67 @@ docker run -d -p 3000:3000 \
   epguides-api
 ```
 
-### Docker Features
+### :material-shield-check: Docker Features
 
-The Dockerfile includes:
-
-- ✅ Non-root user for security
-- ✅ Health check for orchestration
-- ✅ Optimized layer caching
-- ✅ Alpine-based for smaller image
-
-### Health Check
-
-```bash
-curl http://your-domain/health
-```
+| Feature | Description |
+|---------|-------------|
+| :material-account: Non-root user | Security best practice |
+| :material-heart-pulse: Health check | For orchestration |
+| :material-layers: Layer caching | Fast rebuilds |
+| :material-size-s: Alpine base | Smaller image |
 
 ---
 
-## Contributing
+## :material-source-pull: Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing`)
-3. Make your changes
-4. Run tests (`make test`)
-5. Commit (pre-commit hooks will format code)
-6. Push and create a Pull Request
+### :material-numeric-1-circle: Fork & Clone
 
-### Code Style
+```bash
+gh repo fork frecar/epguides-api --clone
+cd epguides-api
+```
 
-- Follow PEP 8 with 120 char line length
-- Use type hints for all functions
-- Use async/await for I/O operations
-- Add docstrings to public functions
+### :material-numeric-2-circle: Create Branch
+
+```bash
+git checkout -b feature/amazing-feature
+```
+
+### :material-numeric-3-circle: Make Changes
+
+- Write code
+- Add tests
+- Update docs
+
+### :material-numeric-4-circle: Test
+
+```bash
+make test
+```
+
+### :material-numeric-5-circle: Commit
+
+```bash
+git commit -m "feat: add amazing feature"
+```
+
+!!! tip "Pre-commit hooks will auto-format"
+
+### :material-numeric-6-circle: Push & PR
+
+```bash
+git push origin feature/amazing-feature
+```
+
+Then open a Pull Request on GitHub.
+
+---
+
+## :material-file-document-edit: Code Style
+
+| Rule | Standard |
+|------|----------|
+| :material-ruler: Line length | 120 characters |
+| :material-tag-text: Type hints | Required for all functions |
+| :material-sync: Async | Use for all I/O operations |
+| :material-text-box: Docstrings | Required for public functions |

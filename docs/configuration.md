@@ -1,10 +1,15 @@
-# Configuration
+# :material-cog: Configuration
 
-Configuration is loaded from environment variables. Create a `.env` file for local development (see `.env.example`).
+Configure the Epguides API using environment variables.
 
-## Environment Variables
+!!! tip "Quick Setup"
+    Copy `.env.example` to `.env` and customize for your environment.
 
-### Redis
+---
+
+## :material-format-list-bulleted: Environment Variables
+
+### :material-database: Redis
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -13,87 +18,88 @@ Configuration is loaded from environment variables. Create a `.env` file for loc
 | `REDIS_DB` | `0` | Redis database number |
 | `REDIS_PASSWORD` | - | Redis password (optional) |
 
-### Cache
+### :material-cached: Cache
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CACHE_TTL_SECONDS` | `604800` | Default cache TTL (7 days) |
 
-### API
+### :material-api: API
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `API_BASE_URL` | `http://localhost:3000/` | Base URL for generated links |
 
-### LLM (Optional)
+### :material-robot: LLM (Optional)
 
 | Variable | Required | Description |
-|----------|----------|-------------|
-| `LLM_ENABLED` | No | Set to `true` to enable NLQ (default: `false`) |
+|----------|:--------:|-------------|
+| `LLM_ENABLED` | ⚪ | Set to `true` to enable NLQ |
 | `LLM_API_URL` | If enabled | OpenAI-compatible API endpoint |
-| `LLM_API_KEY` | If required | API key for authentication |
+| `LLM_API_KEY` | If needed | API key for authentication |
 
-### Logging
+### :material-text-box-outline: Logging
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LOG_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
-| `LOG_REQUESTS` | `true` | Enable request logging middleware |
+| `LOG_REQUESTS` | `true` | Enable request logging |
 
 ---
 
-## Example `.env`
+## :material-file-document: Example `.env`
 
 ```bash
-# Redis
+# 🗄️ Redis
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_PASSWORD=
 
-# Cache (7 days for ongoing shows)
+# ⏱️ Cache (7 days for ongoing shows)
 CACHE_TTL_SECONDS=604800
 
-# API
+# 🌐 API
 API_BASE_URL=http://localhost:3000/
 
-# LLM (optional)
+# 🤖 LLM (optional)
 LLM_ENABLED=true
 LLM_API_URL=https://api.openai.com/v1
 LLM_API_KEY=sk-your-api-key
 
-# Logging
+# 📝 Logging
 LOG_LEVEL=INFO
 LOG_REQUESTS=true
 ```
 
 ---
 
-## LLM Provider Examples
+## :material-robot: LLM Provider Examples
 
-The LLM feature requires an **OpenAI-compatible API**.
+!!! abstract "OpenAI-Compatible APIs"
+    The LLM feature works with any OpenAI-compatible API.
 
-=== "OpenAI"
+=== ":material-openai: OpenAI"
 
     ```bash
     LLM_API_URL=https://api.openai.com/v1
     LLM_API_KEY=sk-...
     ```
 
-=== "Azure OpenAI"
+=== ":material-microsoft-azure: Azure OpenAI"
 
     ```bash
     LLM_API_URL=https://your-resource.openai.azure.com/openai/deployments/your-deployment
     LLM_API_KEY=your-azure-key
     ```
 
-=== "Ollama (Local)"
+=== ":material-llama: Ollama (Local)"
 
     ```bash
     LLM_API_URL=http://localhost:11434/v1
     LLM_API_KEY=  # Not required
     ```
 
-=== "Self-hosted"
+=== ":material-server: Self-hosted"
 
     ```bash
     # vLLM, text-generation-inference, etc.
@@ -103,21 +109,24 @@ The LLM feature requires an **OpenAI-compatible API**.
 
 ---
 
-## Caching Strategy
+## :material-lightning-bolt: Caching Strategy
 
-Smart caching minimizes external API calls while keeping data fresh:
+!!! info "Smart Caching"
+    The API uses intelligent caching to minimize external requests while keeping data fresh.
 
-| Data Type | Cache Duration | Notes |
-|-----------|----------------|-------|
-| Finished shows | 1 year | Data won't change |
-| Shows master list | 30 days | New shows added infrequently |
-| Ongoing show episodes | 7 days | Episodes air weekly at most |
+### :material-timer-sand: Cache Durations
 
-### How It Works
+| Data Type | Duration | Rationale |
+|-----------|----------|-----------|
+| :material-check-circle:{ .green } Finished shows | **1 year** | Data won't change |
+| :material-format-list-bulleted: Shows master list | **30 days** | New shows added infrequently |
+| :material-play-circle: Ongoing shows | **7 days** | Episodes air weekly at most |
+
+### :material-chart-timeline-variant: Cache Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Cache Decision Flow                       │
+│                    📦 Cache Decision Flow                    │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │   Request comes in                                          │
@@ -130,41 +139,60 @@ Smart caching minimizes external API calls while keeping data fresh:
 │          │ No                                               │
 │          ▼                                                  │
 │   ┌─────────────┐  Yes   ┌─────────────┐                   │
-│   │ In cache?   │───────▶│ Return      │                   │
-│   │             │        │ cached data │                   │
+│   │ In cache?   │───────▶│   Return    │                   │
+│   │             │        │   cached    │                   │
 │   └──────┬──────┘        └─────────────┘                   │
 │          │ No                                               │
 │          ▼                                                  │
 │   ┌─────────────┐                                          │
 │   │ Fetch from  │                                          │
 │   │  external   │                                          │
-│   │   APIs      │                                          │
+│   │    APIs     │                                          │
 │   └──────┬──────┘                                          │
 │          │                                                  │
 │          ▼                                                  │
-│   ┌─────────────┐                                          │
-│   │ Show has    │  Yes   Cache for 1 year                  │
-│   │ end_date?   │───────▶(finished show)                   │
+│   ┌─────────────┐  Yes                                     │
+│   │   Show has  │───────▶ Cache for 1 year ✓              │
+│   │  end_date?  │        (finished show)                   │
 │   └──────┬──────┘                                          │
 │          │ No                                               │
 │          ▼                                                  │
-│   Cache for 7 days (ongoing show)                          │
+│   Cache for 7 days                                         │
+│   (ongoing show)                                           │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Finished Show Detection
+### :material-auto-fix: Automatic Behaviors
 
-When a show has an `end_date`, caches are automatically extended to 1 year since the data is stable.
+| Feature | Behavior |
+|---------|----------|
+| :material-check-circle: **Finished Shows** | When `end_date` is set, cache extends to 1 year |
+| :material-refresh: **Manual Refresh** | Use `?refresh=true` to bypass cache |
+| :material-clock-fast: **Smart `/next`** | Auto-refreshes when cached episode date has passed |
 
-### Cache Refresh
+---
 
-Use `?refresh=true` on endpoints to bypass cache:
+## :material-check-decagram: Verification
+
+### :material-heart-pulse: Check API Health
 
 ```bash
-curl "https://epguides.frecar.no/shows/BreakingBad/episodes?refresh=true"
+curl "https://epguides.frecar.no/health"
 ```
 
-### Smart `/next` Endpoint
+### :material-robot-outline: Check LLM Status
 
-The `/episodes/next` endpoint automatically refreshes if the cached "next" episode date has passed, ensuring you always get accurate data about upcoming episodes.
+```bash
+curl "https://epguides.frecar.no/health/llm"
+```
+
+Expected response when configured:
+
+```json
+{
+  "enabled": true,
+  "configured": true,
+  "api_url": "https://api.openai.com/v1"
+}
+```
