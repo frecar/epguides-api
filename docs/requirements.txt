@@ -1,5 +1,4 @@
 # Documentation dependencies
-mkdocs==1.5.3
-mkdocs-material==9.5.3
-pymdown-extensions==10.7
-
+mkdocs==1.6.1
+mkdocs-material==9.6.14
+pymdown-extensions>=10.16.1
