@@ -1,5 +1,18 @@
 # Cursor AI Rules for Epguides API
 
+## Terminal Commands
+**ALWAYS source the virtual environment before running Python commands:**
+```bash
+cd /Users/frecar/code/epguides-api && source venv/bin/activate && <command>
+```
+
+Common commands:
+- `make test` - Run tests
+- `make fix` - Format and lint code
+- `make up` - Start Docker services
+- `make down` - Stop Docker services
+- `make docs` - Serve documentation locally
+
 ## Code Style
 - Follow PEP 8 with line length of 120 characters
 - Use type hints for all function parameters and return types
@@ -89,5 +102,4 @@ When making changes, ALWAYS update ALL relevant documentation:
 - Ongoing shows: 7 days (settings.CACHE_TTL_SECONDS)
 - Shows master list: 30 days (CACHE_TTL_SHOWS_METADATA_SECONDS)
 - Update these in `app/core/constants.py` and `app/core/cache.py`
-
 
