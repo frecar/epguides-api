@@ -35,9 +35,9 @@ Smart caching minimizes external API calls while keeping data fresh:
 
 | Data Type | Cache Duration | Notes |
 |-----------|----------------|-------|
-| **Finished shows** | 1 year | Data won't change |
+| Finished shows | 1 year | Data won't change |
+| Shows master list | 30 days | New shows added infrequently |
 | Ongoing show episodes | 7 days | Episodes air weekly at most |
-| Shows master list | 7 days | Rarely changes |
 
 **Finished Show Detection**: When a show has an `end_date`, caches are automatically extended to 1 year since the data is stable.
 
