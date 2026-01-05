@@ -135,7 +135,7 @@ async def get_all_shows_metadata() -> list[dict[str, str]]:
     Fetch master list of all shows from epguides.
 
     Returns list of dictionaries with show metadata.
-    Cached for 7 days.
+    Cached for 30 days (new shows added infrequently).
     """
     url = f"{EPGUIDES_BASE_URL}/common/allshows.txt"
     response = await _fetch_url(url)

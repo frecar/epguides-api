@@ -55,7 +55,7 @@ async def get_all_shows() -> list[ShowSchema]:
     Get all shows from master list.
 
     Fetches the complete list of shows from epguides master CSV.
-    Results are cached for 7 days via the epguides module.
+    Results are cached for 30 days via the epguides module.
 
     Returns:
         List of all available shows.
