@@ -8,14 +8,10 @@ services:
       - 3000:3000
     volumes:
       - ./:/app
-    links:
+    env_file:
+      - .env
+    depends_on:
       - redis
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - LLM_ENABLED=true
-      - LLM_API_URL=https://llm.carlsen.io/v1
-      - LLM_API_KEY=${LLM_API_KEY}
   redis:
     command: bash -c "redis-server --save 10 1"
     image: redis
