@@ -1,42 +1,55 @@
-# MCP Server
+# :material-robot: MCP Server
 
 The Epguides API includes a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for AI assistant integration.
 
-!!! tip "Public MCP Endpoint"
+!!! success "Public MCP Endpoint"
     **URL:** `https://epguides.frecar.no/mcp`  
     **Protocol:** JSON-RPC 2.0 over HTTP POST
 
-## Overview
+---
 
-The MCP server exposes the same functionality as the REST API through a protocol designed for AI assistants like Claude, ChatGPT, or custom agents.
+## :material-information: Overview
 
-## Resources
+The MCP server exposes TV show data through a protocol designed for AI assistants like Claude, ChatGPT, or custom agents.
+
+| Feature | Description |
+|---------|-------------|
+| :material-protocol: **Protocol** | JSON-RPC 2.0 |
+| :material-web: **Transport** | HTTP POST |
+| :material-database: **Data** | Same as REST API |
+| :material-cached: **Caching** | Shared with REST API |
+
+---
+
+## :material-file-tree: Resources
 
 Resources provide read-only access to data:
 
 | URI | Description |
 |-----|-------------|
-| `epguides://shows` | Complete list of all TV shows (limited to first 100) |
+| :material-database: `epguides://shows` | Complete list of TV shows (limited to 100) |
 
-## Tools
+---
+
+## :material-tools: Tools
 
 Tools provide interactive operations:
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `search_shows` | Search for TV shows by title | `query` (string, required) |
-| `get_show` | Get detailed information about a show | `epguides_key` (string, required) |
-| `get_episodes` | Get all episodes for a TV show | `epguides_key` (string, required) |
-| `get_next_episode` | Get next unreleased episode | `epguides_key` (string, required) |
-| `get_latest_episode` | Get latest released episode | `epguides_key` (string, required) |
+| :material-magnify: `search_shows` | Search for shows | `query` (required) |
+| :material-television: `get_show` | Get show details | `epguides_key` (required) |
+| :material-playlist-play: `get_episodes` | Get all episodes | `epguides_key` (required) |
+| :material-skip-next: `get_next_episode` | Next unreleased episode | `epguides_key` (required) |
+| :material-skip-previous: `get_latest_episode` | Latest aired episode | `epguides_key` (required) |
 
 ---
 
-## HTTP Endpoint
+## :material-connection: HTTP Endpoint
 
 Send JSON-RPC 2.0 requests via HTTP POST:
 
-=== "Public API"
+=== ":material-cloud: Public API"
 
     ```bash
     curl -X POST https://epguides.frecar.no/mcp \
@@ -52,7 +65,7 @@ Send JSON-RPC 2.0 requests via HTTP POST:
       }'
     ```
 
-=== "Local Development"
+=== ":material-laptop: Local Development"
 
     ```bash
     curl -X POST http://localhost:3000/mcp \
@@ -70,9 +83,9 @@ Send JSON-RPC 2.0 requests via HTTP POST:
 
 ---
 
-## Examples
+## :material-code-json: Examples
 
-### Initialize Connection
+### :material-handshake: Initialize Connection
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -85,27 +98,28 @@ curl -X POST https://epguides.frecar.no/mcp \
   }'
 ```
 
-**Response:**
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "protocolVersion": "2025-06-18",
-    "serverInfo": {
-      "name": "epguides-mcp",
-      "version": "123"
-    },
-    "capabilities": {
-      "tools": {},
-      "resources": {}
+??? success "Response"
+    ```json
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "protocolVersion": "2025-06-18",
+        "serverInfo": {
+          "name": "epguides-mcp",
+          "version": "123"
+        },
+        "capabilities": {
+          "tools": {},
+          "resources": {}
+        }
+      }
     }
-  }
-}
-```
+    ```
 
-### List Available Tools
+---
+
+### :material-format-list-bulleted: List Available Tools
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -118,7 +132,9 @@ curl -X POST https://epguides.frecar.no/mcp \
   }'
 ```
 
-### Search Shows
+---
+
+### :material-magnify: Search Shows
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -134,24 +150,25 @@ curl -X POST https://epguides.frecar.no/mcp \
   }'
 ```
 
-**Response:**
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "content": [
-      {
-        "type": "text",
-        "text": "{\"shows\": [{\"epguides_key\": \"BreakingBad\", ...}]}"
+??? success "Response"
+    ```json
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"shows\": [{\"epguides_key\": \"BreakingBad\", ...}]}"
+          }
+        ]
       }
-    ]
-  }
-}
-```
+    }
+    ```
 
-### Get Show Details
+---
+
+### :material-television: Get Show Details
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -167,7 +184,9 @@ curl -X POST https://epguides.frecar.no/mcp \
   }'
 ```
 
-### Get Episodes
+---
+
+### :material-playlist-play: Get Episodes
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -183,7 +202,9 @@ curl -X POST https://epguides.frecar.no/mcp \
   }'
 ```
 
-### Get Next Episode
+---
+
+### :material-skip-next: Get Next Episode
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -201,13 +222,11 @@ curl -X POST https://epguides.frecar.no/mcp \
 
 ---
 
-## Health Check
+## :material-heart-pulse: Health Check
 
 ```bash
 curl https://epguides.frecar.no/mcp/health
 ```
-
-**Response:**
 
 ```json
 {
@@ -218,18 +237,18 @@ curl https://epguides.frecar.no/mcp/health
 
 ---
 
-## AI Assistant Integration
+## :material-head-cog: AI Assistant Integration
 
-### Use Cases
+### :material-lightbulb: Use Cases
 
-The MCP server enables AI assistants to:
+| Use Case | Example Query |
+|----------|---------------|
+| :material-help-circle: Episode Lookup | "What episode of Breaking Bad has the fly?" |
+| :material-calendar-clock: Next Episode | "When does Severance season 2 continue?" |
+| :material-magnify: Show Discovery | "Find shows similar to The Office" |
+| :material-trophy: Season Planning | "List all Game of Thrones finales" |
 
-- **Episode Lookup**: "What episode of Breaking Bad is the one with the fly?"
-- **Next Episode**: "When does the next episode of Severance air?"
-- **Show Discovery**: "Find shows similar to The Office"
-- **Season Planning**: "List all Game of Thrones season finales"
-
-### Response Format
+### :material-code-json: Response Format
 
 All MCP responses follow JSON-RPC 2.0:
 
@@ -248,7 +267,7 @@ All MCP responses follow JSON-RPC 2.0:
 }
 ```
 
-### Error Handling
+### :material-alert-circle: Error Handling
 
 ```json
 {
@@ -262,10 +281,10 @@ All MCP responses follow JSON-RPC 2.0:
 }
 ```
 
-| Error Code | Meaning |
-|------------|---------|
-| -32700 | Parse error |
-| -32600 | Invalid request |
-| -32601 | Method not found |
-| -32602 | Invalid params |
-| -32603 | Internal error |
+| Code | Meaning |
+|------|---------|
+| `-32700` | :material-close-circle: Parse error |
+| `-32600` | :material-close-circle: Invalid request |
+| `-32601` | :material-close-circle: Method not found |
+| `-32602` | :material-close-circle: Invalid params |
+| `-32603` | :material-close-circle: Internal error |

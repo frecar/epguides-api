@@ -1,69 +1,85 @@
-# Getting Started
+# :material-rocket-launch: Getting Started
 
-## Using the Public API
+Get up and running with the Epguides API in minutes.
 
-The fastest way to get started is using the public API:
+---
 
-| Resource | URL |
-|----------|-----|
-| Base URL | `https://epguides.frecar.no` |
-| Swagger UI | [https://epguides.frecar.no/docs](https://epguides.frecar.no/docs) |
-| ReDoc | [https://epguides.frecar.no/redoc](https://epguides.frecar.no/redoc) |
+## :material-cloud: Using the Public API
 
-### Quick Examples
+!!! success "Fastest way to start"
+    The public API requires **no setup** - just start making requests!
+
+| | Resource | URL |
+|---|----------|-----|
+| :material-api: | **Base URL** | `https://epguides.frecar.no` |
+| :material-file-document: | **Swagger UI** | [epguides.frecar.no/docs](https://epguides.frecar.no/docs) |
+| :material-book-open: | **ReDoc** | [epguides.frecar.no/redoc](https://epguides.frecar.no/redoc) |
+
+### :material-console: Quick Examples
 
 ```bash
-# Get show details
+# 📺 Get show details
 curl "https://epguides.frecar.no/shows/BreakingBad"
 
-# Search shows
+# 🔍 Search shows
 curl "https://epguides.frecar.no/shows/search?query=breaking"
 
-# Get episodes
+# 📋 Get episodes
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes"
 
-# Filter by season
+# 🎯 Filter by season
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
 ```
 
 ---
 
-## Local Development
+## :material-docker: Local Development
 
-### Prerequisites
+### :material-clipboard-check: Prerequisites
 
-- Docker and Docker Compose
-- Git
-- Python 3.11+ (optional, for running tests locally)
+| Requirement | Version | Required |
+|-------------|---------|----------|
+| :material-docker: Docker | Latest | ✅ Yes |
+| :material-git: Git | Latest | ✅ Yes |
+| :material-language-python: Python | 3.11+ | ⚪ Optional (for tests) |
 
-### Quick Start
+### :material-play-circle: Quick Start
 
-```bash
-# Clone repository
-git clone https://github.com/frecar/epguides-api.git
-cd epguides-api
+=== ":material-numeric-1-circle: Clone"
 
-# Start all services (API + Redis)
-make up
+    ```bash
+    git clone https://github.com/frecar/epguides-api.git
+    cd epguides-api
+    ```
 
-# Open local API docs
-open http://localhost:3000/docs
-```
+=== ":material-numeric-2-circle: Start"
 
-That's it! The API is now running at `http://localhost:3000`.
+    ```bash
+    make up
+    ```
 
-### What `make up` Does
+=== ":material-numeric-3-circle: Open"
 
-1. Builds the Docker image
-2. Starts the FastAPI server with hot-reload
-3. Starts Redis for caching
-4. Sets the version from git commit count
+    ```bash
+    open http://localhost:3000/docs
+    ```
+
+!!! tip "That's it!"
+    The API is now running at `http://localhost:3000` with hot-reload enabled.
+
+### :material-information: What `make up` Does
+
+1. :material-docker: Builds the Docker image
+2. :material-play: Starts FastAPI with hot-reload
+3. :material-database: Starts Redis for caching
+4. :material-tag: Sets version from git commit count
 
 ---
 
-## First Time Setup (Optional)
+## :material-cog-outline: First Time Setup (Optional)
 
-If you want to run tests or use development tools locally (outside Docker):
+!!! note "Only needed for running tests locally"
+    If you just want to run the API, `make up` is all you need!
 
 ```bash
 # Create virtual environment
@@ -79,42 +95,73 @@ pre-commit install
 
 ---
 
-## Development Commands
+## :material-console: Development Commands
 
 | Command | Description |
 |---------|-------------|
-| `make up` | Start Docker services |
-| `make down` | Stop Docker services |
-| `make test` | Run tests |
-| `make fix` | Format and lint code |
-| `make run` | Run API locally (without Docker) |
-| `make docs` | Serve documentation locally |
+| `make up` | :material-play: Start Docker services |
+| `make down` | :material-stop: Stop Docker services |
+| `make test` | :material-test-tube: Run tests |
+| `make fix` | :material-auto-fix: Format and lint code |
+| `make run` | :material-play-outline: Run locally (without Docker) |
+| `make docs` | :material-book: Serve documentation |
 
 ---
 
-## Project Structure
+## :material-folder-outline: Project Structure
 
 ```
 epguides-api/
-├── app/
-│   ├── api/endpoints/      # REST endpoints (shows.py, mcp.py)
-│   ├── core/               # Config, cache, middleware, constants
-│   ├── mcp/                # MCP server implementation
-│   ├── models/             # Pydantic schemas
-│   ├── services/           # Business logic
-│   └── tests/              # Test suite
-├── docs/                   # Documentation (ReadTheDocs)
-├── Dockerfile              # Production container
-├── docker-compose.yml      # Development setup
-├── Makefile                # Development commands
-└── requirements.txt        # Python dependencies
+├── 📂 app/
+│   ├── 📂 api/endpoints/      # REST endpoints
+│   ├── 📂 core/               # Config, cache, middleware
+│   ├── 📂 mcp/                # MCP server
+│   ├── 📂 models/             # Pydantic schemas
+│   ├── 📂 services/           # Business logic
+│   └── 📂 tests/              # Test suite
+├── 📂 docs/                   # Documentation
+├── 🐳 Dockerfile              # Production container
+├── 🐳 docker-compose.yml      # Development setup
+├── 📄 Makefile                # Dev commands
+└── 📄 requirements.txt        # Dependencies
 ```
 
 ---
 
-## Next Steps
+## :material-arrow-right-circle: Next Steps
 
-- [REST API Reference](rest-api.md) - Explore all endpoints
-- [MCP Server](mcp-server.md) - AI assistant integration
-- [Configuration](configuration.md) - Environment variables
-- [Development](development.md) - Contributing guide
+<div class="grid cards" markdown>
+
+-   :material-api:{ .lg .middle } **REST API Reference**
+
+    ---
+
+    Explore all endpoints and response formats
+
+    [:octicons-arrow-right-24: REST API](rest-api.md)
+
+-   :material-robot:{ .lg .middle } **MCP Server**
+
+    ---
+
+    Integrate with AI assistants
+
+    [:octicons-arrow-right-24: MCP Server](mcp-server.md)
+
+-   :material-cog:{ .lg .middle } **Configuration**
+
+    ---
+
+    Environment variables and caching
+
+    [:octicons-arrow-right-24: Configuration](configuration.md)
+
+-   :material-code-braces:{ .lg .middle } **Development**
+
+    ---
+
+    Contributing and testing
+
+    [:octicons-arrow-right-24: Development](development.md)
+
+</div>

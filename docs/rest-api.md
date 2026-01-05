@@ -1,29 +1,32 @@
-# REST API Reference
+# :material-api: REST API Reference
 
-The Epguides API provides a RESTful interface to access TV show and episode data.
+Complete reference for all REST API endpoints.
 
-!!! tip "Public API"
-    Base URL: `https://epguides.frecar.no`
-
-## Endpoints Overview
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/shows/` | List all shows (paginated) |
-| `GET` | `/shows/search` | Search shows by title |
-| `GET` | `/shows/{key}` | Get show metadata |
-| `GET` | `/shows/{key}/episodes` | Get episodes with filtering |
-| `GET` | `/shows/{key}/episodes/next` | Get next unreleased episode |
-| `GET` | `/shows/{key}/episodes/latest` | Get latest released episode |
-| `GET` | `/health` | Health check |
-| `GET` | `/health/llm` | LLM configuration status |
-| `POST` | `/mcp` | MCP JSON-RPC endpoint |
+!!! tip "Base URL"
+    **Public:** `https://epguides.frecar.no`  
+    **Local:** `http://localhost:3000`
 
 ---
 
-## Shows
+## :material-format-list-bulleted: Endpoints Overview
 
-### List Shows
+| Method | Endpoint | Description |
+|:------:|----------|-------------|
+| :material-arrow-down-bold-circle:{ .get } | `/shows/` | List all shows (paginated) |
+| :material-arrow-down-bold-circle:{ .get } | `/shows/search` | Search shows by title |
+| :material-arrow-down-bold-circle:{ .get } | `/shows/{key}` | Get show metadata |
+| :material-arrow-down-bold-circle:{ .get } | `/shows/{key}/episodes` | Get episodes with filtering |
+| :material-arrow-down-bold-circle:{ .get } | `/shows/{key}/episodes/next` | Get next unreleased episode |
+| :material-arrow-down-bold-circle:{ .get } | `/shows/{key}/episodes/latest` | Get latest released episode |
+| :material-arrow-down-bold-circle:{ .get } | `/health` | Health check |
+| :material-arrow-down-bold-circle:{ .get } | `/health/llm` | LLM status |
+| :material-arrow-up-bold-circle:{ .post } | `/mcp` | MCP JSON-RPC endpoint |
+
+---
+
+## :material-television: Shows
+
+### :material-format-list-bulleted: List Shows
 
 ```http
 GET /shows/
@@ -31,14 +34,11 @@ GET /shows/
 
 Returns a paginated list of all TV shows.
 
-**Query Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `page` | integer | 1 | Page number |
-| `page_size` | integer | 50 | Items per page (max 100) |
-
-**Example:**
+!!! example "Parameters"
+    | Parameter | Type | Default | Description |
+    |-----------|------|---------|-------------|
+    | `page` | integer | 1 | Page number |
+    | `page_size` | integer | 50 | Items per page (max 100) |
 
 ```bash
 curl "https://epguides.frecar.no/shows/?page=1&page_size=20"
@@ -46,7 +46,7 @@ curl "https://epguides.frecar.no/shows/?page=1&page_size=20"
 
 ---
 
-### Search Shows
+### :material-magnify: Search Shows
 
 ```http
 GET /shows/search
@@ -54,13 +54,10 @@ GET /shows/search
 
 Search for shows by title.
 
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | string | Yes | Search query (show title) |
-
-**Example:**
+!!! example "Parameters"
+    | Parameter | Type | Required | Description |
+    |-----------|------|:--------:|-------------|
+    | `query` | string | ✅ | Search query (show title) |
 
 ```bash
 curl "https://epguides.frecar.no/shows/search?query=breaking"
@@ -68,7 +65,7 @@ curl "https://epguides.frecar.no/shows/search?query=breaking"
 
 ---
 
-### Get Show
+### :material-information: Get Show
 
 ```http
 GET /shows/{epguides_key}
@@ -76,138 +73,127 @@ GET /shows/{epguides_key}
 
 Get detailed metadata for a specific show.
 
-**Path Parameters:**
+!!! example "Parameters"
+    | Parameter | Type | Description |
+    |-----------|------|-------------|
+    | `epguides_key` | path | Show identifier (e.g., `BreakingBad`) |
+    | `include` | query | Set to `episodes` to include episode list |
+    | `refresh` | query | Set to `true` to bypass cache |
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `epguides_key` | string | Show identifier (e.g., `BreakingBad`) |
+=== ":material-television: Show Only"
 
-**Query Parameters:**
+    ```bash
+    curl "https://epguides.frecar.no/shows/BreakingBad"
+    ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `include` | string | - | Set to `episodes` to include episode list |
-| `refresh` | boolean | false | Bypass cache and fetch fresh data |
+=== ":material-playlist-play: With Episodes"
 
-**Examples:**
+    ```bash
+    curl "https://epguides.frecar.no/shows/BreakingBad?include=episodes"
+    ```
 
-```bash
-# Get show metadata only
-curl "https://epguides.frecar.no/shows/BreakingBad"
+=== ":material-refresh: Force Refresh"
 
-# Get show with episodes
-curl "https://epguides.frecar.no/shows/BreakingBad?include=episodes"
+    ```bash
+    curl "https://epguides.frecar.no/shows/BreakingBad?refresh=true"
+    ```
 
-# Force fresh data
-curl "https://epguides.frecar.no/shows/BreakingBad?refresh=true"
-```
-
-**Response:**
-
-```json
-{
-  "epguides_key": "BreakingBad",
-  "title": "Breaking Bad",
-  "imdb_id": "tt0903747",
-  "network": "AMC",
-  "run_time_min": 60,
-  "start_date": "2008-01-20",
-  "end_date": "2013-09-29",
-  "country": "US",
-  "total_episodes": 63,
-  "external_epguides_url": "http://www.epguides.com/BreakingBad",
-  "external_imdb_url": "https://www.imdb.com/title/tt0903747",
-  "api_self_url": "https://epguides.frecar.no/shows/BreakingBad",
-  "api_episodes_url": "https://epguides.frecar.no/shows/BreakingBad/episodes"
-}
-```
+??? success "Response"
+    ```json
+    {
+      "epguides_key": "BreakingBad",
+      "title": "Breaking Bad",
+      "imdb_id": "tt0903747",
+      "network": "AMC",
+      "run_time_min": 60,
+      "start_date": "2008-01-20",
+      "end_date": "2013-09-29",
+      "country": "US",
+      "total_episodes": 63,
+      "external_epguides_url": "http://www.epguides.com/BreakingBad",
+      "external_imdb_url": "https://www.imdb.com/title/tt0903747",
+      "api_self_url": "https://epguides.frecar.no/shows/BreakingBad",
+      "api_episodes_url": "https://epguides.frecar.no/shows/BreakingBad/episodes"
+    }
+    ```
 
 ---
 
-## Episodes
+## :material-playlist-play: Episodes
 
-### Get Episodes
+### :material-format-list-numbered: Get Episodes
 
 ```http
 GET /shows/{epguides_key}/episodes
 ```
 
-Get all episodes for a show with optional filtering.
+Get all episodes with optional filtering.
 
-**Query Parameters:**
+!!! example "Filter Parameters"
+    | Parameter | Type | Description |
+    |-----------|------|-------------|
+    | `season` | integer | Filter by season number |
+    | `episode` | integer | Filter by episode (requires `season`) |
+    | `year` | integer | Filter by release year |
+    | `title_search` | string | Search in episode titles |
+    | `nlq` | string | Natural language query (requires LLM) |
+    | `refresh` | boolean | Bypass cache |
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `season` | integer | Filter by season number |
-| `episode` | integer | Filter by episode number (requires `season`) |
-| `year` | integer | Filter by release year |
-| `title_search` | string | Search in episode titles |
-| `nlq` | string | Natural language query (requires LLM) |
-| `refresh` | boolean | Bypass cache and fetch fresh data |
-
-**Examples:**
-
-=== "Basic"
+=== ":material-playlist-play: All Episodes"
 
     ```bash
-    # All episodes
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes"
     ```
 
-=== "By Season"
+=== ":material-filter: By Season"
 
     ```bash
-    # Season 2 only
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=2"
-    
-    # Specific episode
+    ```
+
+=== ":material-target: Specific Episode"
+
+    ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=2&episode=5"
     ```
 
-=== "By Year"
+=== ":material-calendar: By Year"
 
     ```bash
-    # Episodes from 2008
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?year=2008"
     ```
 
-=== "Title Search"
+=== ":material-text-search: Title Search"
 
     ```bash
-    # Search titles
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?title_search=pilot"
     ```
 
-=== "Natural Language"
+=== ":material-robot: Natural Language"
 
     ```bash
-    # Find finales (requires LLM)
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?nlq=finale+episodes"
-    
-    # Combine with structured filters
-    curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5&nlq=most+intense"
     ```
 
-**Response:**
-
-```json
-[
-  {
-    "number": 1,
-    "season": 1,
-    "title": "Pilot",
-    "release_date": "2008-01-20",
-    "is_released": true,
-    "run_time_min": 60,
-    "episode_number": 1,
-    "summary": "A high school chemistry teacher..."
-  }
-]
-```
+??? success "Response"
+    ```json
+    [
+      {
+        "number": 1,
+        "season": 1,
+        "title": "Pilot",
+        "release_date": "2008-01-20",
+        "is_released": true,
+        "run_time_min": 60,
+        "episode_number": 1,
+        "summary": "A high school chemistry teacher..."
+      }
+    ]
+    ```
 
 ---
 
-### Get Next Episode
+### :material-skip-next: Get Next Episode
 
 ```http
 GET /shows/{epguides_key}/episodes/next
@@ -218,29 +204,27 @@ Get the next unreleased episode for a show.
 !!! info "Smart Caching"
     This endpoint automatically refreshes if the cached "next" episode date has passed.
 
-**Example:**
-
 ```bash
 curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 ```
 
-**Response (200):**
+??? success "Response (200)"
+    ```json
+    {
+      "number": 11,
+      "season": 2,
+      "title": "TBA",
+      "release_date": "2025-02-15",
+      "is_released": false
+    }
+    ```
 
-```json
-{
-  "number": 11,
-  "season": 2,
-  "title": "TBA",
-  "release_date": "2025-02-15",
-  "is_released": false
-}
-```
-
-**Response (404):** Show has finished airing or no upcoming episodes.
+??? warning "Response (404)"
+    Show has finished airing or no upcoming episodes.
 
 ---
 
-### Get Latest Episode
+### :material-skip-previous: Get Latest Episode
 
 ```http
 GET /shows/{epguides_key}/episodes/latest
@@ -248,73 +232,71 @@ GET /shows/{epguides_key}/episodes/latest
 
 Get the most recently aired episode.
 
-**Example:**
-
 ```bash
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes/latest"
 ```
 
 ---
 
-## Natural Language Queries
+## :material-robot: Natural Language Queries
 
-When LLM is configured, use the `nlq` parameter for AI-powered filtering.
+!!! abstract "AI-Powered Filtering"
+    When LLM is configured, use the `nlq` parameter for intelligent episode filtering.
 
-### How It Works
+### :material-head-cog: How It Works
 
-1. Your query is sent to an OpenAI-compatible LLM
-2. The LLM analyzes episode titles, summaries, and metadata
-3. Matching episodes are returned based on semantic understanding
+1. :material-send: Your query is sent to an OpenAI-compatible LLM
+2. :material-brain: The LLM analyzes episode titles, summaries, and metadata
+3. :material-filter-check: Matching episodes are returned based on semantic understanding
 
-### Examples
+### :material-code-tags: Examples
 
 ```bash
-# Find finale episodes
+# 🏁 Find finale episodes
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes?nlq=finale+episodes"
 
-# Find episodes with major events
-curl "https://epguides.frecar.no/shows/GameOfThrones/episodes?nlq=episodes+where+main+characters+die"
+# ⚔️ Find episodes with major events
+curl "https://epguides.frecar.no/shows/GameOfThrones/episodes?nlq=battle+episodes"
 
-# Combine with structured filters (apply season filter first, then NLQ)
+# 🎯 Combine with structured filters
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5&nlq=most+intense"
 ```
 
-### Check LLM Status
+### :material-heart-pulse: Check LLM Status
 
 ```bash
 curl "https://epguides.frecar.no/health/llm"
 ```
 
-### Graceful Degradation
+### :material-shield-check: Graceful Degradation
 
-- **LLM not configured** → `nlq` parameter is silently ignored
-- **LLM fails** → Falls back to returning all episodes (no error)
-- Structured filters always work regardless of LLM status
-
----
-
-## Response Notes
-
-### `end_date` Field
-
-The `end_date` field may be `null` if not available in the master data. Use the individual show endpoint to get derived values from episode data.
-
-### `summary` Field
-
-Episode summaries are fetched from TVMaze and enable AI-powered search through episode content.
-
-### `imdb_id` Field
-
-When available, useful for cross-referencing with IMDB and other services.
+| Scenario | Behavior |
+|----------|----------|
+| LLM not configured | `nlq` parameter silently ignored |
+| LLM fails | Falls back to returning all episodes |
+| Structured filters | Always work regardless of LLM |
 
 ---
 
-## Health Endpoints
+## :material-note-text: Response Notes
 
-### Health Check
+!!! info "`end_date` Field"
+    May be `null` if not available. Use individual show endpoint for derived values.
 
-```http
-GET /health
+!!! info "`summary` Field"
+    Episode summaries from TVMaze enable AI-powered search.
+
+!!! info "`imdb_id` Field"
+    Useful for cross-referencing with IMDB and other services.
+
+---
+
+## :material-heart-pulse: Health Endpoints
+
+### :material-check-circle: Health Check
+
+```bash
+curl "https://epguides.frecar.no/health"
 ```
 
 ```json
@@ -325,10 +307,10 @@ GET /health
 }
 ```
 
-### LLM Health
+### :material-robot-outline: LLM Health
 
-```http
-GET /health/llm
+```bash
+curl "https://epguides.frecar.no/health/llm"
 ```
 
 ```json
