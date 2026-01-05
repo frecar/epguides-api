@@ -61,15 +61,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="""
-API for accessing TV show metadata and episode lists from epguides.com.
+REST API and MCP server for accessing TV show metadata and episode lists.
 
-**Features:**
+## Features
 - 📺 Browse and search thousands of TV shows
 - 📅 Get episode lists with air dates and summaries
 - 🔍 Natural language search with AI (optional LLM integration)
 - 🤖 MCP server for AI assistant integration
 
-📖 **[Full documentation on GitHub](https://github.com/frecar/epguides-api)**
+## Documentation
+- 📖 **[Full Documentation](https://epguides-api.readthedocs.io)** - Comprehensive guides and examples
+- 🔧 **[GitHub Repository](https://github.com/frecar/epguides-api)** - Source code and issues
 """,
     version=VERSION,
     docs_url="/docs",
