@@ -137,35 +137,52 @@ async def get_show_metadata(
 @router.get(
     "/{epguides_key}/episodes",
     response_model=list[EpisodeSchema],
-    summary="Get episodes",
+    summary="Get episodes with filtering",
+    description="Get episodes for a show with optional structured filters and AI-powered natural language queries.",
 )
 async def get_show_episodes(
     epguides_key: str,
-    season: int | None = Query(default=None, ge=1, description="Filter by season"),
-    episode: int | None = Query(default=None, ge=1, description="Filter by episode (requires season)"),
+    season: int | None = Query(default=None, ge=1, description="Filter by season number"),
+    episode: int | None = Query(default=None, ge=1, description="Filter by episode number (requires season)"),
     year: int | None = Query(default=None, ge=1900, le=2100, description="Filter by release year"),
-    title_search: str | None = Query(default=None, description="Search in episode titles"),
+    title_search: str | None = Query(default=None, description="Search in episode titles (case-insensitive)"),
     nlq: str | None = Query(
-        default=None, description="Natural language query (requires LLM, e.g., 'episodes with cliffhangers')"
+        default=None,
+        description="Natural language query - use AI to filter episodes. Requires LLM to be configured. "
+        "Examples: 'finale episodes', 'pilot', 'episodes with cliffhangers'",
+        examples=["finale episodes", "pilot", "episodes where characters die", "season premiere"],
     ),
 ) -> list[EpisodeSchema]:
     """
     Get episodes for a show with optional filtering.
 
-    **Structured Filters:**
-    - `season`: Filter by season number
-    - `episode`: Filter by episode number (requires season)
-    - `year`: Filter by release year
-    - `title_search`: Search in episode titles
+    ## Structured Filters (always available)
 
-    **Natural Language Query (requires LLM):**
-    - `nlq`: Use AI to filter episodes based on natural language
-    - Examples: "finale episodes", "episodes with major plot twists"
+    | Parameter | Description | Example |
+    |-----------|-------------|---------|
+    | `season` | Filter by season number | `?season=2` |
+    | `episode` | Filter by episode (requires season) | `?season=2&episode=5` |
+    | `year` | Filter by release year | `?year=2008` |
+    | `title_search` | Search in episode titles | `?title_search=pilot` |
+
+    ## Natural Language Query (requires LLM)
+
+    The `nlq` parameter uses AI to intelligently filter episodes based on your query.
+    Check `/health/llm` to verify LLM is configured.
 
     **Examples:**
-    - `/shows/BreakingBad/episodes?season=2`
-    - `/shows/BreakingBad/episodes?year=2008`
-    - `/shows/BreakingBad/episodes?nlq=episodes+where+someone+dies`
+    - `?nlq=finale episodes` - Find season/series finales
+    - `?nlq=pilot` - Find pilot episodes
+    - `?nlq=episodes with major plot twists` - AI interprets and filters
+
+    ## Combining Filters
+
+    Structured filters are applied **before** the NLQ. This lets you narrow down first:
+    - `?season=5&nlq=most intense` - Get season 5, then find most intense
+
+    ## Graceful Degradation
+
+    If LLM is not configured or fails, the `nlq` parameter is ignored and all matching episodes are returned.
     """
     episodes = await show_service.get_episodes(epguides_key)
 

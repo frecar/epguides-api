@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 from httpx import AsyncClient
 
+from app.core.config import settings
 from app.main import app
 from app.models.schemas import EpisodeSchema, create_show_schema
 
@@ -412,24 +413,46 @@ async def test_nlq_parameter_calls_llm_service(
 
     all_episodes = [
         EpisodeSchema(
-            season=1, number=1, title="Pilot", release_date=date(2008, 1, 20),
-            is_released=True, run_time_min=None, episode_number=1,
+            season=1,
+            number=1,
+            title="Pilot",
+            release_date=date(2008, 1, 20),
+            is_released=True,
+            run_time_min=None,
+            episode_number=1,
         ),
         EpisodeSchema(
-            season=1, number=2, title="Second", release_date=date(2008, 1, 27),
-            is_released=True, run_time_min=None, episode_number=2,
+            season=1,
+            number=2,
+            title="Second",
+            release_date=date(2008, 1, 27),
+            is_released=True,
+            run_time_min=None,
+            episode_number=2,
         ),
         EpisodeSchema(
-            season=1, number=3, title="Finale", release_date=date(2008, 2, 3),
-            is_released=True, run_time_min=None, episode_number=3,
+            season=1,
+            number=3,
+            title="Finale",
+            release_date=date(2008, 2, 3),
+            is_released=True,
+            run_time_min=None,
+            episode_number=3,
         ),
     ]
     mock_get_episodes.return_value = all_episodes
 
     # LLM returns only the "Finale" episode
     mock_llm_parse.return_value = [
-        {"season": 1, "number": 3, "title": "Finale", "release_date": "2008-02-03",
-         "is_released": True, "run_time_min": None, "episode_number": 3}
+        {
+            "season": 1,
+            "number": 3,
+            "title": "Finale",
+            "release_date": "2008-02-03",
+            "is_released": True,
+            "run_time_min": None,
+            "episode_number": 3,
+        }
     ]
 
     response = await async_client.get("/shows/test/episodes?nlq=finale+episode")
@@ -460,12 +483,22 @@ async def test_nlq_graceful_fallback_when_llm_fails(
 
     all_episodes = [
         EpisodeSchema(
-            season=1, number=1, title="Pilot", release_date=date(2008, 1, 20),
-            is_released=True, run_time_min=None, episode_number=1,
+            season=1,
+            number=1,
+            title="Pilot",
+            release_date=date(2008, 1, 20),
+            is_released=True,
+            run_time_min=None,
+            episode_number=1,
         ),
         EpisodeSchema(
-            season=1, number=2, title="Second", release_date=date(2008, 1, 27),
-            is_released=True, run_time_min=None, episode_number=2,
+            season=1,
+            number=2,
+            title="Second",
+            release_date=date(2008, 1, 27),
+            is_released=True,
+            run_time_min=None,
+            episode_number=2,
         ),
     ]
     mock_get_episodes.return_value = all_episodes
@@ -494,24 +527,46 @@ async def test_nlq_combined_with_structured_filters(
 
     all_episodes = [
         EpisodeSchema(
-            season=1, number=1, title="S1 Pilot", release_date=date(2008, 1, 20),
-            is_released=True, run_time_min=None, episode_number=1,
+            season=1,
+            number=1,
+            title="S1 Pilot",
+            release_date=date(2008, 1, 20),
+            is_released=True,
+            run_time_min=None,
+            episode_number=1,
         ),
         EpisodeSchema(
-            season=2, number=1, title="S2 Premiere", release_date=date(2009, 1, 20),
-            is_released=True, run_time_min=None, episode_number=2,
+            season=2,
+            number=1,
+            title="S2 Premiere",
+            release_date=date(2009, 1, 20),
+            is_released=True,
+            run_time_min=None,
+            episode_number=2,
         ),
         EpisodeSchema(
-            season=2, number=2, title="S2 Finale", release_date=date(2009, 1, 27),
-            is_released=True, run_time_min=None, episode_number=3,
+            season=2,
+            number=2,
+            title="S2 Finale",
+            release_date=date(2009, 1, 27),
+            is_released=True,
+            run_time_min=None,
+            episode_number=3,
         ),
     ]
     mock_get_episodes.return_value = all_episodes
 
     # LLM only gets season 2 episodes (after structured filter)
     mock_llm_parse.return_value = [
-        {"season": 2, "number": 2, "title": "S2 Finale", "release_date": "2009-01-27",
-         "is_released": True, "run_time_min": None, "episode_number": 3}
+        {
+            "season": 2,
+            "number": 2,
+            "title": "S2 Finale",
+            "release_date": "2009-01-27",
+            "is_released": True,
+            "run_time_min": None,
+            "episode_number": 3,
+        }
     ]
 
     response = await async_client.get("/shows/test/episodes?season=2&nlq=finale")
@@ -527,3 +582,82 @@ async def test_nlq_combined_with_structured_filters(
     data = response.json()
     assert len(data) == 1
     assert data[0]["title"] == "S2 Finale"
+
+
+# =============================================================================
+# Live LLM Integration Test (only runs if LLM is configured)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    not (settings.LLM_ENABLED and settings.LLM_API_URL),
+    reason="LLM not configured - set LLM_ENABLED=true and LLM_API_URL in .env to run this test",
+)
+async def test_llm_live_integration():
+    """
+    Live integration test that makes a real LLM API call.
+
+    This test only runs when LLM is properly configured.
+    It verifies the LLM endpoint is reachable and responds correctly.
+    """
+
+    from app.services import llm_service
+
+    # Test data - simple episodes
+    test_episodes = [
+        {"season": 1, "number": 1, "title": "Pilot", "release_date": "2020-01-01"},
+        {"season": 1, "number": 2, "title": "The Beginning", "release_date": "2020-01-08"},
+        {"season": 1, "number": 10, "title": "Season Finale", "release_date": "2020-03-15"},
+        {"season": 2, "number": 1, "title": "New Season", "release_date": "2021-01-01"},
+        {"season": 2, "number": 10, "title": "Series Finale", "release_date": "2021-03-15"},
+    ]
+
+    # Make a real LLM call
+    result = await llm_service.parse_natural_language_query("finale episodes", test_episodes)
+
+    # Verify LLM responded (not None = success)
+    assert result is not None, "LLM should return a result when properly configured"
+
+    # Verify result is a list
+    assert isinstance(result, list), "LLM should return a list of episodes"
+
+    # Verify result is a subset of input (LLM filtered something)
+    assert len(result) <= len(test_episodes), "LLM should return same or fewer episodes"
+
+    # Log for visibility
+    print(f"\n  LLM filtered {len(test_episodes)} episodes to {len(result)}")
+    if result:
+        print(f"  Returned: {[ep.get('title') for ep in result]}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    not (settings.LLM_ENABLED and settings.LLM_API_URL),
+    reason="LLM not configured - set LLM_ENABLED=true and LLM_API_URL in .env to run this test",
+)
+async def test_llm_live_api_health():
+    """
+    Live test that verifies the LLM API endpoint is reachable.
+
+    This test only runs when LLM is properly configured.
+    """
+    import httpx
+
+    # Try to reach the LLM API
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            # Most OpenAI-compatible APIs have a /models endpoint
+            response = await client.get(
+                f"{settings.LLM_API_URL}/models",
+                headers={"Authorization": f"Bearer {settings.LLM_API_KEY}"} if settings.LLM_API_KEY else {},
+            )
+            # Accept 200 (success) or 401/403 (auth issue but endpoint exists)
+            assert response.status_code in [
+                200,
+                401,
+                403,
+            ], f"LLM API should be reachable, got status {response.status_code}"
+            print(f"\n  LLM API responded with status {response.status_code}")
+        except httpx.ConnectError as e:
+            pytest.fail(f"Could not connect to LLM API at {settings.LLM_API_URL}: {e}")
