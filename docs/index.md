@@ -2,45 +2,120 @@
 
 A high-performance REST API and MCP server for accessing TV show metadata and episode lists.
 
-[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109-green.svg)](https://fastapi.tiangolo.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+## Quick Links
 
-**Public API**: [https://epguides.frecar.no](https://epguides.frecar.no)  
-**Interactive Docs**: [https://epguides.frecar.no/docs](https://epguides.frecar.no/docs)
+| Resource | Description |
+|----------|-------------|
+| [Public API](https://epguides.frecar.no) | Production API endpoint |
+| [Swagger UI](https://epguides.frecar.no/docs) | Interactive API explorer |
+| [MCP Endpoint](https://epguides.frecar.no/mcp) | MCP server for AI assistants |
+| [GitHub](https://github.com/frecar/epguides-api) | Source code |
 
 ## Features
 
-- 📺 **Complete TV Database** - Access metadata for thousands of TV shows
-- 🔍 **Smart Search** - Search by title with natural language queries (LLM-powered)
-- 📅 **Episode Tracking** - Get next/latest episodes, filter by season/year
-- 🤖 **MCP Support** - JSON-RPC interface for AI assistants
-- ⚡ **Intelligent Caching** - 7-day cache for ongoing shows, 1-year for finished shows
+- 📺 **Complete TV Database** - Access metadata for thousands of TV shows including air dates, networks, and episode counts
+- 🔍 **Smart Search** - Search by title with optional AI-powered natural language queries
+- 📅 **Episode Tracking** - Get next/latest episodes, filter by season, year, or title
+- 🤖 **MCP Server** - JSON-RPC interface for seamless AI assistant integration
+- ⚡ **Smart Caching** - 7-day cache for ongoing shows, 1-year for finished shows
 - 📝 **Episode Summaries** - Plot descriptions via TVMaze integration
+
+---
+
+## Quick Start
+
+=== "curl"
+
+    ```bash
+    # Get show details
+    curl "https://epguides.frecar.no/shows/BreakingBad"
+    
+    # Search shows
+    curl "https://epguides.frecar.no/shows/search?query=breaking"
+    
+    # Get episodes
+    curl "https://epguides.frecar.no/shows/BreakingBad/episodes"
+    ```
+
+=== "Python"
+
+    ```python
+    import httpx
+
+    async with httpx.AsyncClient() as client:
+        # Get show details
+        response = await client.get("https://epguides.frecar.no/shows/BreakingBad")
+        show = response.json()
+        
+        # Get episodes
+        response = await client.get(f"{show['api_episodes_url']}")
+        episodes = response.json()
+    ```
+
+=== "JavaScript"
+
+    ```javascript
+    // Get show details
+    const response = await fetch("https://epguides.frecar.no/shows/BreakingBad");
+    const show = await response.json();
+    
+    // Get episodes
+    const episodesResponse = await fetch(show.api_episodes_url);
+    const episodes = await episodesResponse.json();
+    ```
+
+---
 
 ## Data Sources
 
 This API aggregates data from multiple sources:
 
 | Source | Data Provided | Used For |
-|--------|--------------|----------|
+|--------|---------------|----------|
 | [epguides.com](http://epguides.com) | Show catalog, episode lists, air dates | Core show and episode data |
-| [TVMaze API](https://api.tvmaze.com) | Episode summaries, plot descriptions | AI-powered search (NLQ), enhanced episode info |
+| [TVMaze API](https://api.tvmaze.com) | Episode summaries, plot descriptions | AI-powered search, enhanced episode info |
 | [IMDB](https://imdb.com) | IMDB IDs | Cross-referencing with IMDB |
-| User-configured LLM (optional) | AI filtering | Natural language episode queries |
 
-## Quick Start
+---
 
-```bash
-# Using the public API
-curl "https://epguides.frecar.no/shows/BreakingBad"
+## Architecture
 
-# Search for shows
-curl "https://epguides.frecar.no/shows/search?query=breaking"
-
-# Get episodes
-curl "https://epguides.frecar.no/shows/BreakingBad/episodes"
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Epguides API                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐  │
+│   │  REST API   │     │ MCP Server  │     │   Health    │  │
+│   │  /shows/*   │     │    /mcp     │     │   /health   │  │
+│   └──────┬──────┘     └──────┬──────┘     └─────────────┘  │
+│          │                   │                              │
+│          └─────────┬─────────┘                              │
+│                    │                                        │
+│          ┌─────────▼─────────┐                              │
+│          │  Service Layer    │                              │
+│          │  (show_service)   │                              │
+│          └─────────┬─────────┘                              │
+│                    │                                        │
+│   ┌────────────────┼────────────────┐                       │
+│   │                │                │                       │
+│   ▼                ▼                ▼                       │
+│ ┌─────┐      ┌──────────┐    ┌───────────┐                 │
+│ │Redis│      │ epguides │    │  TVMaze   │                 │
+│ │Cache│      │   .com   │    │    API    │                 │
+│ └─────┘      └──────────┘    └───────────┘                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-See [Getting Started](getting-started.md) for local development setup.
+---
 
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Getting Started](getting-started.md) | Installation and setup |
+| [REST API](rest-api.md) | Complete endpoint reference |
+| [MCP Server](mcp-server.md) | AI assistant integration |
+| [Configuration](configuration.md) | Environment variables and caching |
+| [Development](development.md) | Contributing and testing |

@@ -2,10 +2,15 @@
 
 ## Using the Public API
 
-The easiest way to use the API is via the public endpoint:
+The fastest way to get started is using the public API:
 
-- **Base URL**: `https://epguides.frecar.no`
-- **Interactive Docs**: [https://epguides.frecar.no/docs](https://epguides.frecar.no/docs)
+| Resource | URL |
+|----------|-----|
+| Base URL | `https://epguides.frecar.no` |
+| Swagger UI | [https://epguides.frecar.no/docs](https://epguides.frecar.no/docs) |
+| ReDoc | [https://epguides.frecar.no/redoc](https://epguides.frecar.no/redoc) |
+
+### Quick Examples
 
 ```bash
 # Get show details
@@ -16,65 +21,76 @@ curl "https://epguides.frecar.no/shows/search?query=breaking"
 
 # Get episodes
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes"
+
+# Filter by season
+curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
 ```
+
+---
 
 ## Local Development
 
 ### Prerequisites
 
 - Docker and Docker Compose
-- Python 3.11+ (for running tests locally)
 - Git
+- Python 3.11+ (optional, for running tests locally)
 
 ### Quick Start
 
 ```bash
 # Clone repository
-gh repo clone frecar/epguides-api
+git clone https://github.com/frecar/epguides-api.git
 cd epguides-api
 
-# Start all services
+# Start all services (API + Redis)
 make up
 
-# Access local API docs
+# Open local API docs
 open http://localhost:3000/docs
 ```
 
-### First Time Setup
+That's it! The API is now running at `http://localhost:3000`.
 
-If you want to run tests or development tools locally:
+### What `make up` Does
+
+1. Builds the Docker image
+2. Starts the FastAPI server with hot-reload
+3. Starts Redis for caching
+4. Sets the version from git commit count
+
+---
+
+## First Time Setup (Optional)
+
+If you want to run tests or use development tools locally (outside Docker):
 
 ```bash
 # Create virtual environment
 python3 -m venv venv
 source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 
 # Install pre-commit hooks (recommended)
 pre-commit install
 ```
 
-### Development Commands
+---
 
-```bash
-# Start Docker services
-make up
+## Development Commands
 
-# Stop Docker services
-make down
+| Command | Description |
+|---------|-------------|
+| `make up` | Start Docker services |
+| `make down` | Stop Docker services |
+| `make test` | Run tests |
+| `make fix` | Format and lint code |
+| `make run` | Run API locally (without Docker) |
+| `make docs` | Serve documentation locally |
 
-# View logs
-make logs
-
-# Run tests
-make test
-
-# Format and lint code
-make fix
-
-# Run API locally (without Docker)
-make run
-```
+---
 
 ## Project Structure
 
@@ -87,10 +103,18 @@ epguides-api/
 │   ├── models/             # Pydantic schemas
 │   ├── services/           # Business logic
 │   └── tests/              # Test suite
-├── docs/                   # Documentation (you are here)
+├── docs/                   # Documentation (ReadTheDocs)
 ├── Dockerfile              # Production container
 ├── docker-compose.yml      # Development setup
 ├── Makefile                # Development commands
 └── requirements.txt        # Python dependencies
 ```
 
+---
+
+## Next Steps
+
+- [REST API Reference](rest-api.md) - Explore all endpoints
+- [MCP Server](mcp-server.md) - AI assistant integration
+- [Configuration](configuration.md) - Environment variables
+- [Development](development.md) - Contributing guide
