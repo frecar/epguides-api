@@ -175,14 +175,14 @@ async def test_llm_invalid_json_response(mock_client_class, mock_settings):
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_llm_limits_episodes_to_50(mock_client_class, mock_settings):
-    """Test that LLM limits context to 50 episodes."""
+async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings):
+    """Test that LLM limits context to 100 episodes."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.local.carlsen.io/v1"
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
 
-    # Create 60 episodes
-    episodes = [{"season": 1, "number": i, "title": f"Episode {i}", "release_date": "2008-01-20"} for i in range(60)]
+    # Create 120 episodes
+    episodes = [{"season": 1, "number": i, "title": f"Episode {i}", "release_date": "2008-01-20"} for i in range(120)]
 
     mock_response = AsyncMock()
     mock_response.status_code = 200
@@ -196,11 +196,11 @@ async def test_llm_limits_episodes_to_50(mock_client_class, mock_settings):
 
     await llm_service.parse_natural_language_query("test", episodes)
 
-    # Verify only 50 episodes were sent in the prompt
+    # Verify only 100 episodes were sent in the prompt
     call_args = mock_client.post.call_args
     prompt = call_args[1]["json"]["messages"][0]["content"]
     episode_data = json.loads(prompt.split("Episodes:\n")[1].split("\n\nReturn")[0])
-    assert len(episode_data) == 50
+    assert len(episode_data) == 100
 
 
 @pytest.mark.asyncio
