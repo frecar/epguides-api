@@ -1,4 +1,4 @@
-# :material-robot: MCP Server
+# 🤖 MCP Server
 
 The Epguides API includes a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for AI assistant integration.
 
@@ -8,48 +8,48 @@ The Epguides API includes a [Model Context Protocol](https://modelcontextprotoco
 
 ---
 
-## :material-information: Overview
+## Overview
 
 The MCP server exposes TV show data through a protocol designed for AI assistants like Claude, ChatGPT, or custom agents.
 
 | Feature | Description |
 |---------|-------------|
-| :material-protocol: **Protocol** | JSON-RPC 2.0 |
-| :material-web: **Transport** | HTTP POST |
-| :material-database: **Data** | Same as REST API |
-| :material-cached: **Caching** | Shared with REST API |
+| **Protocol** | JSON-RPC 2.0 |
+| **Transport** | HTTP POST |
+| **Data** | Same as REST API |
+| **Caching** | Shared with REST API |
 
 ---
 
-## :material-file-tree: Resources
+## Resources
 
 Resources provide read-only access to data:
 
 | URI | Description |
 |-----|-------------|
-| :material-database: `epguides://shows` | Complete list of TV shows (limited to 100) |
+| `epguides://shows` | Complete list of TV shows (limited to 100) |
 
 ---
 
-## :material-tools: Tools
+## Tools
 
 Tools provide interactive operations:
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| :material-magnify: `search_shows` | Search for shows | `query` (required) |
-| :material-television: `get_show` | Get show details | `epguides_key` (required) |
-| :material-playlist-play: `get_episodes` | Get all episodes | `epguides_key` (required) |
-| :material-skip-next: `get_next_episode` | Next unreleased episode | `epguides_key` (required) |
-| :material-skip-previous: `get_latest_episode` | Latest aired episode | `epguides_key` (required) |
+| `search_shows` | Search for shows | `query` (required) |
+| `get_show` | Get show details | `epguides_key` (required) |
+| `get_episodes` | Get all episodes | `epguides_key` (required) |
+| `get_next_episode` | Next unreleased episode | `epguides_key` (required) |
+| `get_latest_episode` | Latest aired episode | `epguides_key` (required) |
 
 ---
 
-## :material-connection: HTTP Endpoint
+## HTTP Endpoint
 
 Send JSON-RPC 2.0 requests via HTTP POST:
 
-=== ":material-cloud: Public API"
+=== "Public API"
 
     ```bash
     curl -X POST https://epguides.frecar.no/mcp \
@@ -65,7 +65,7 @@ Send JSON-RPC 2.0 requests via HTTP POST:
       }'
     ```
 
-=== ":material-laptop: Local Development"
+=== "Local"
 
     ```bash
     curl -X POST http://localhost:3000/mcp \
@@ -83,9 +83,9 @@ Send JSON-RPC 2.0 requests via HTTP POST:
 
 ---
 
-## :material-code-json: Examples
+## Examples
 
-### :material-handshake: Initialize Connection
+### Initialize Connection
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -119,7 +119,7 @@ curl -X POST https://epguides.frecar.no/mcp \
 
 ---
 
-### :material-format-list-bulleted: List Available Tools
+### List Tools
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -134,7 +134,7 @@ curl -X POST https://epguides.frecar.no/mcp \
 
 ---
 
-### :material-magnify: Search Shows
+### Search Shows
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -168,7 +168,7 @@ curl -X POST https://epguides.frecar.no/mcp \
 
 ---
 
-### :material-television: Get Show Details
+### Get Show Details
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -186,7 +186,7 @@ curl -X POST https://epguides.frecar.no/mcp \
 
 ---
 
-### :material-playlist-play: Get Episodes
+### Get Episodes
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -204,7 +204,7 @@ curl -X POST https://epguides.frecar.no/mcp \
 
 ---
 
-### :material-skip-next: Get Next Episode
+### Get Next Episode
 
 ```bash
 curl -X POST https://epguides.frecar.no/mcp \
@@ -222,7 +222,7 @@ curl -X POST https://epguides.frecar.no/mcp \
 
 ---
 
-## :material-heart-pulse: Health Check
+## 💚 Health Check
 
 ```bash
 curl https://epguides.frecar.no/mcp/health
@@ -237,18 +237,18 @@ curl https://epguides.frecar.no/mcp/health
 
 ---
 
-## :material-head-cog: AI Assistant Integration
+## AI Assistant Integration
 
-### :material-lightbulb: Use Cases
+### Use Cases
 
 | Use Case | Example Query |
 |----------|---------------|
-| :material-help-circle: Episode Lookup | "What episode of Breaking Bad has the fly?" |
-| :material-calendar-clock: Next Episode | "When does Severance season 2 continue?" |
-| :material-magnify: Show Discovery | "Find shows similar to The Office" |
-| :material-trophy: Season Planning | "List all Game of Thrones finales" |
+| Episode Lookup | "What episode of Breaking Bad has the fly?" |
+| Next Episode | "When does Severance season 2 continue?" |
+| Show Discovery | "Find shows similar to The Office" |
+| Season Planning | "List all Game of Thrones finales" |
 
-### :material-code-json: Response Format
+### Response Format
 
 All MCP responses follow JSON-RPC 2.0:
 
@@ -267,7 +267,7 @@ All MCP responses follow JSON-RPC 2.0:
 }
 ```
 
-### :material-alert-circle: Error Handling
+### Error Handling
 
 ```json
 {
@@ -283,8 +283,8 @@ All MCP responses follow JSON-RPC 2.0:
 
 | Code | Meaning |
 |------|---------|
-| `-32700` | :material-close-circle: Parse error |
-| `-32600` | :material-close-circle: Invalid request |
-| `-32601` | :material-close-circle: Method not found |
-| `-32602` | :material-close-circle: Invalid params |
-| `-32603` | :material-close-circle: Internal error |
+| `-32700` | Parse error |
+| `-32600` | Invalid request |
+| `-32601` | Method not found |
+| `-32602` | Invalid params |
+| `-32603` | Internal error |
