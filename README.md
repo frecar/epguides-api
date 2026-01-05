@@ -46,7 +46,7 @@ curl "https://epguides.frecar.no/shows/BreakingBad/episodes?nlq=finale+episodes"
 
 ## 📖 Documentation
 
-For comprehensive documentation, visit **[epguides-api.readthedocs.io](https://epguides-api.readthedocs.io)**:
+For comprehensive documentation: **[epguides-api.readthedocs.io](https://epguides-api.readthedocs.io)**:
 
 - [Getting Started](https://epguides-api.readthedocs.io/en/latest/getting-started/) - Installation & setup
 - [REST API Reference](https://epguides-api.readthedocs.io/en/latest/rest-api/) - All endpoints & examples
