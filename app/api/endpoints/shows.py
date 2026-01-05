@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.models.responses import PaginatedResponse
 from app.models.schemas import EpisodeSchema, ShowDetailsSchema, ShowListSchema, ShowSchema
-from app.services import show_service
+from app.services import llm_service, show_service
 
 router = APIRouter()
 
@@ -145,23 +145,31 @@ async def get_show_episodes(
     episode: int | None = Query(default=None, ge=1, description="Filter by episode (requires season)"),
     year: int | None = Query(default=None, ge=1900, le=2100, description="Filter by release year"),
     title_search: str | None = Query(default=None, description="Search in episode titles"),
+    nlq: str | None = Query(
+        default=None, description="Natural language query (requires LLM, e.g., 'episodes with cliffhangers')"
+    ),
 ) -> list[EpisodeSchema]:
     """
     Get episodes for a show with optional filtering.
 
-    Filter options:
+    **Structured Filters:**
     - `season`: Filter by season number
     - `episode`: Filter by episode number (requires season)
     - `year`: Filter by release year
     - `title_search`: Search in episode titles
 
-    Examples:
+    **Natural Language Query (requires LLM):**
+    - `nlq`: Use AI to filter episodes based on natural language
+    - Examples: "finale episodes", "episodes with major plot twists"
+
+    **Examples:**
     - `/shows/BreakingBad/episodes?season=2`
     - `/shows/BreakingBad/episodes?year=2008`
+    - `/shows/BreakingBad/episodes?nlq=episodes+where+someone+dies`
     """
     episodes = await show_service.get_episodes(epguides_key)
 
-    # Apply filters
+    # Apply structured filters first
     if season is not None:
         episodes = [ep for ep in episodes if ep.season == season]
         if episode is not None:
@@ -173,6 +181,14 @@ async def get_show_episodes(
     if title_search:
         search_lower = title_search.lower()
         episodes = [ep for ep in episodes if search_lower in ep.title.lower()]
+
+    # Apply natural language query if provided (requires LLM)
+    if nlq and episodes:
+        episodes_as_dicts = [ep.model_dump() for ep in episodes]
+        llm_result = await llm_service.parse_natural_language_query(nlq, episodes_as_dicts)
+        if llm_result is not None:
+            # LLM returned filtered results - convert back to schemas
+            episodes = [EpisodeSchema(**ep) for ep in llm_result]
 
     # Validate show exists if no results
     if not episodes:

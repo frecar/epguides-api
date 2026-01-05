@@ -157,3 +157,18 @@ def health_check() -> dict[str, str]:
     Use for load balancer health checks and monitoring.
     """
     return {"status": "healthy", "service": "epguides-api", "version": VERSION}
+
+
+@app.get("/health/llm", tags=["Health"])
+def llm_health_check() -> dict[str, str | bool]:
+    """
+    LLM service health check.
+
+    Returns the LLM configuration status. The LLM is used for
+    natural language episode queries via the `nlq` parameter.
+    """
+    return {
+        "enabled": settings.LLM_ENABLED,
+        "configured": bool(settings.LLM_API_URL),
+        "api_url": settings.LLM_API_URL or "not configured",
+    }
