@@ -1,6 +1,6 @@
 # Epguides API
 
-A high-performance REST API and MCP server for accessing TV shows and episodes metadata.
+Free REST API for TV show data, episode lists, air dates, and plot summaries. Also includes an MCP server for AI assistant integration.
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.128-green.svg)](https://fastapi.tiangolo.com/)
@@ -12,70 +12,69 @@ A high-performance REST API and MCP server for accessing TV shows and episodes m
 | Resource | URL |
 |----------|-----|
 | **Public API** | https://epguides.frecar.no |
-| **Interactive Docs (Swagger)** | https://epguides.frecar.no/docs |
+| **Swagger UI** | https://epguides.frecar.no/docs |
 | **Full Documentation** | https://epguides-api.readthedocs.io |
 | **MCP Endpoint** | https://epguides.frecar.no/mcp |
 
 ## ✨ Features
 
-- 📺 **Complete TV Database** - Metadata for thousands of TV shows
-- 🔍 **Smart Search** - Natural language queries powered by LLM
-- 📅 **Episode Tracking** - Next/latest episodes, filter by season/year
-- 🤖 **MCP Server** - JSON-RPC interface for AI assistants
-- ⚡ **Smart Caching** - 7-day cache for ongoing, 1-year for finished shows
-- 📝 **Episode Summaries** - Plot descriptions via TVMaze
+- 📺 **TV Show Database** — Metadata for thousands of TV series
+- 🔍 **Search** — Find shows by title
+- 📅 **Episode Data** — Full episode lists with air dates
+- 📝 **Plot Summaries** — Episode descriptions via TVMaze
+- ⏭️ **Episode Tracking** — Get next/latest episodes
+- 🤖 **AI Search** — Natural language queries (LLM-powered)
+- 🔌 **MCP Server** — JSON-RPC for AI assistants
 
 ## 🚀 Quick Start
 
+No API key needed. Just start making requests:
+
 ```bash
+# Search for shows
+curl "https://epguides.frecar.no/shows/search?query=breaking+bad"
+
 # Get show details
 curl "https://epguides.frecar.no/shows/BreakingBad"
-
-# Search shows
-curl "https://epguides.frecar.no/shows/search?query=breaking"
 
 # Get episodes
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes"
 
-# Filter episodes
+# Filter by season
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
 
-# Natural language query (when LLM enabled)
-curl "https://epguides.frecar.no/shows/BreakingBad/episodes?nlq=finale+episodes"
+# Get next episode
+curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 ```
 
 ## 📖 Documentation
 
-For comprehensive documentation: **[epguides-api.readthedocs.io](https://epguides-api.readthedocs.io)**:
+Full documentation at **[epguides-api.readthedocs.io](https://epguides-api.readthedocs.io)**:
 
-- [Getting Started](https://epguides-api.readthedocs.io/en/latest/getting-started/) - Installation & setup
-- [REST API Reference](https://epguides-api.readthedocs.io/en/latest/rest-api/) - All endpoints & examples
-- [MCP Server](https://epguides-api.readthedocs.io/en/latest/mcp-server/) - AI assistant integration
-- [Configuration](https://epguides-api.readthedocs.io/en/latest/configuration/) - Environment variables & caching
-- [Development](https://epguides-api.readthedocs.io/en/latest/development/) - Contributing & testing
+- [Getting Started](https://epguides-api.readthedocs.io/en/latest/getting-started/)
+- [REST API Reference](https://epguides-api.readthedocs.io/en/latest/rest-api/)
+- [MCP Server](https://epguides-api.readthedocs.io/en/latest/mcp-server/)
+- [Configuration](https://epguides-api.readthedocs.io/en/latest/configuration/)
+- [Development](https://epguides-api.readthedocs.io/en/latest/development/)
 
-## 🛠️ Local Development
+## 🛠️ Self-Hosting
 
 ```bash
-# Clone and start
 git clone https://github.com/frecar/epguides-api.git
 cd epguides-api
 make up
 
-# Open local docs
-open http://localhost:3000/docs
+# API running at http://localhost:3000
 ```
 
 ## 📊 Data Sources
 
-| Source | Data Provided |
-|--------|---------------|
+| Source | Data |
+|--------|------|
 | [epguides.com](http://epguides.com) | Show catalog, episode lists, air dates |
-| [TVMaze API](https://api.tvmaze.com) | Episode summaries, plot descriptions |
-| [IMDB](https://imdb.com) | IMDB IDs for cross-referencing |
+| [TVMaze](https://api.tvmaze.com) | Episode summaries |
+| [IMDB](https://imdb.com) | IMDB IDs |
 
-## 🙏 Acknowledgments
+## 📄 License
 
-- [epguides.com](http://epguides.com) for TV show and episode data
-- [TVMaze](https://www.tvmaze.com/api) for episode summaries
-- [FastAPI](https://fastapi.tiangolo.com/) for the excellent framework
+MIT — see [LICENSE](https://opensource.org/licenses/MIT)
