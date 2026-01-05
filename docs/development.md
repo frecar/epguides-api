@@ -1,10 +1,10 @@
-# :material-code-braces: Development Guide
+# 💻 Development Guide
 
 Everything you need to contribute to the Epguides API.
 
 ---
 
-## :material-rocket-launch: Quick Start
+## 🚀 Quick Start
 
 ```bash
 # Clone and start
@@ -17,38 +17,38 @@ make up
 
 ---
 
-## :material-console: Commands
+## 🔧 Commands
 
 | Command | Description |
 |---------|-------------|
-| `make up` | :material-play: Start Docker services |
-| `make down` | :material-stop: Stop Docker services |
-| `make test` | :material-test-tube: Run all tests |
-| `make fix` | :material-auto-fix: Format and lint |
-| `make run` | :material-play-outline: Run locally |
-| `make docs` | :material-book: Serve docs |
-| `make docs-build` | :material-package: Build static docs |
+| `make up` | ▶️ Start Docker services |
+| `make down` | ⏹️ Stop Docker services |
+| `make test` | 🧪 Run all tests |
+| `make fix` | 🔧 Format and lint |
+| `make run` | ▶️ Run locally |
+| `make docs` | 📖 Serve docs |
+| `make docs-build` | 📦 Build static docs |
 
 ---
 
-## :material-git: Pre-commit Hooks
+## 🪝 Pre-commit Hooks
 
 !!! success "Automatic Quality Checks"
     Pre-commit hooks ensure code quality on every commit.
 
-### :material-check-all: What They Do
+### What They Do
 
-1. :material-numeric-plus: **Update version** - Increments build number
-2. :material-auto-fix: **Format & lint** - Runs `make fix`
+1. 🔢 **Update version** - Increments build number
+2. 🔧 **Format & lint** - Runs `make fix`
 
-### :material-download: Setup
+### Setup
 
 ```bash
 # Install hooks (one-time)
 pre-commit install
 ```
 
-### :material-skip-forward: Skip (Not Recommended)
+### Skip (Not Recommended)
 
 ```bash
 git commit --no-verify
@@ -56,7 +56,7 @@ git commit --no-verify
 
 ---
 
-## :material-tag: Versioning
+## 🏷️ Versioning
 
 !!! info "Automatic Versioning"
     Version is a simple incrementing number based on git commits.
@@ -77,9 +77,9 @@ curl http://localhost:3000/health
 
 ---
 
-## :material-test-tube: Testing
+## 🧪 Testing
 
-### :material-play: Run Tests
+### Run Tests
 
 ```bash
 # All tests
@@ -98,33 +98,33 @@ pytest app/tests/test_endpoints.py::test_get_show
 pytest app/tests/test_e2e.py -k "llm"
 ```
 
-### :material-folder-outline: Test Structure
+### Test Structure
 
 ```
 app/tests/
-├── 📄 test_endpoints.py      # REST API unit tests
-├── 📄 test_e2e.py            # End-to-end tests
-├── 📄 test_llm_service.py    # LLM service tests
-├── 📄 test_mcp.py            # MCP server tests
-├── 📄 test_mcp_endpoints.py  # MCP HTTP tests
-└── 📄 test_services.py       # Service layer tests
+├── test_endpoints.py      # REST API unit tests
+├── test_e2e.py            # End-to-end tests
+├── test_llm_service.py    # LLM service tests
+├── test_mcp.py            # MCP server tests
+├── test_mcp_endpoints.py  # MCP HTTP tests
+└── test_services.py       # Service layer tests
 ```
 
 ---
 
-## :material-check-decagram: Code Quality
+## ✨ Code Quality
 
 !!! abstract "Tooling"
     The project enforces consistent code quality.
 
 | Tool | Purpose |
 |------|---------|
-| :material-format-paint: **Black** | Code formatting (120 chars) |
-| :material-sort-alphabetical-ascending: **isort** | Import sorting |
-| :material-lightning-bolt: **Ruff** | Fast linting |
-| :material-test-tube: **pytest** | Testing |
+| 🎨 **Black** | Code formatting (120 chars) |
+| 📦 **isort** | Import sorting |
+| ⚡ **Ruff** | Fast linting |
+| 🧪 **pytest** | Testing |
 
-### :material-console: Manual Checks
+### Manual Checks
 
 ```bash
 # Format only
@@ -139,48 +139,45 @@ make fix
 
 ---
 
-## :material-chart-box: Architecture
+## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────────┐
-│               🏗️ Architecture                    │
-├──────────────────────────────────────────────────┤
-│                                                  │
-│   ┌──────────────┐      ┌──────────────┐         │
-│   │ REST Router  │      │  MCP Router  │         │
-│   │  /shows/*    │      │    /mcp      │         │
-│   └──────┬───────┘      └───────┬──────┘         │
-│          │                      │                │
-│          └──────────┬───────────┘                │
-│                     │                            │
-│                     ▼                            │
-│          ┌───────────────────┐                   │
-│          │   Service Layer   │                   │
-│          │  (show_service)   │                   │
-│          └─────────┬─────────┘                   │
-│                    │                             │
-│        ┌───────────┼───────────┐                 │
-│        │           │           │                 │
-│        ▼           ▼           ▼                 │
-│   ┌────────┐  ┌─────────┐  ┌─────────┐           │
-│   │ Redis  │  │epguides │  │ TVMaze  │           │
-│   │ Cache  │  │ scraper │  │ client  │           │
-│   └────────┘  └─────────┘  └─────────┘           │
-│                                                  │
-└──────────────────────────────────────────────────┘
+                    Architecture
+┌─────────────────────────────────────────────┐
+│                                             │
+│  ┌────────────┐      ┌────────────┐         │
+│  │REST Router │      │ MCP Router │         │
+│  │  /shows/*  │      │    /mcp    │         │
+│  └─────┬──────┘      └──────┬─────┘         │
+│        │                    │               │
+│        └─────────┬──────────┘               │
+│                  ▼                          │
+│        ┌─────────────────┐                  │
+│        │  Service Layer  │                  │
+│        │ (show_service)  │                  │
+│        └────────┬────────┘                  │
+│                 │                           │
+│       ┌─────────┼─────────┐                 │
+│       ▼         ▼         ▼                 │
+│   ┌───────┐ ┌───────┐ ┌───────┐             │
+│   │ Redis │ │  EPG  │ │TVMaze │             │
+│   │ Cache │ │scraper│ │client │             │
+│   └───────┘ └───────┘ └───────┘             │
+│                                             │
+└─────────────────────────────────────────────┘
 ```
 
 ---
 
-## :material-docker: Production Deployment
+## 🐳 Production Deployment
 
-### :material-package: Build Image
+### Build Image
 
 ```bash
 docker build -t epguides-api .
 ```
 
-### :material-play: Run Container
+### Run Container
 
 ```bash
 docker run -d -p 3000:3000 \
@@ -190,45 +187,45 @@ docker run -d -p 3000:3000 \
   epguides-api
 ```
 
-### :material-shield-check: Docker Features
+### Docker Features
 
 | Feature | Description |
 |---------|-------------|
-| :material-account: Non-root user | Security best practice |
-| :material-heart-pulse: Health check | For orchestration |
-| :material-layers: Layer caching | Fast rebuilds |
-| :material-size-s: Alpine base | Smaller image |
+| 👤 Non-root user | Security best practice |
+| 💚 Health check | For orchestration |
+| 📦 Layer caching | Fast rebuilds |
+| 🏔️ Alpine base | Smaller image |
 
 ---
 
-## :material-source-pull: Contributing
+## 🤝 Contributing
 
-### :material-numeric-1-circle: Fork & Clone
+### 1️⃣ Fork & Clone
 
 ```bash
 gh repo fork frecar/epguides-api --clone
 cd epguides-api
 ```
 
-### :material-numeric-2-circle: Create Branch
+### 2️⃣ Create Branch
 
 ```bash
 git checkout -b feature/amazing-feature
 ```
 
-### :material-numeric-3-circle: Make Changes
+### 3️⃣ Make Changes
 
 - Write code
 - Add tests
 - Update docs
 
-### :material-numeric-4-circle: Test
+### 4️⃣ Test
 
 ```bash
 make test
 ```
 
-### :material-numeric-5-circle: Commit
+### 5️⃣ Commit
 
 ```bash
 git commit -m "feat: add amazing feature"
@@ -236,7 +233,7 @@ git commit -m "feat: add amazing feature"
 
 !!! tip "Pre-commit hooks will auto-format"
 
-### :material-numeric-6-circle: Push & PR
+### 6️⃣ Push & PR
 
 ```bash
 git push origin feature/amazing-feature
@@ -246,11 +243,11 @@ Then open a Pull Request on GitHub.
 
 ---
 
-## :material-file-document-edit: Code Style
+## 📝 Code Style
 
 | Rule | Standard |
 |------|----------|
-| :material-ruler: Line length | 120 characters |
-| :material-tag-text: Type hints | Required for all functions |
-| :material-sync: Async | Use for all I/O operations |
-| :material-text-box: Docstrings | Required for public functions |
+| 📏 Line length | 120 characters |
+| 🏷️ Type hints | Required for all functions |
+| ⚡ Async | Use for all I/O operations |
+| 📖 Docstrings | Required for public functions |
