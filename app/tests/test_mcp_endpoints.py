@@ -7,7 +7,7 @@ Tests the HTTP interface for the MCP server.
 from unittest.mock import patch
 
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.models.schemas import create_show_schema
@@ -16,7 +16,8 @@ from app.models.schemas import create_show_schema
 @pytest.fixture
 async def async_client():
     """Async HTTP client for testing."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
 
