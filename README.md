@@ -1,9 +1,49 @@
 # Epguides API
 
-A REST API and MCP server for accessing TV show metadata and episode lists from [epguides.com](http://epguides.com).
+A high-performance REST API and MCP server for accessing TV show metadata and episode lists.
+
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109-green.svg)](https://fastapi.tiangolo.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Public API**: https://epguides.frecar.no  
-**REST & MCP API Documentation**: https://epguides.frecar.no/docs  
+**Interactive Docs**: https://epguides.frecar.no/docs  
+
+## Features
+
+- 📺 **Complete TV Database** - Access metadata for thousands of TV shows
+- 🔍 **Smart Search** - Search by title with natural language queries (LLM-powered)
+- 📅 **Episode Tracking** - Get next/latest episodes, filter by season/year
+- 🤖 **MCP Support** - JSON-RPC interface for AI assistants
+- ⚡ **Intelligent Caching** - 7-day cache for ongoing shows, 1-year for finished shows
+- 📝 **Episode Summaries** - Plot descriptions via TVMaze integration
+
+## Data Sources
+
+This API aggregates data from multiple sources:
+
+| Source | Data Provided | Used For |
+|--------|--------------|----------|
+| [epguides.com](http://epguides.com) | Show catalog, episode lists, air dates | Core show and episode data |
+| [TVMaze API](https://api.tvmaze.com) | Episode summaries, plot descriptions | AI-powered search (NLQ), enhanced episode info |
+| [IMDB](https://imdb.com) | IMDB IDs | Cross-referencing with IMDB |
+| User-configured LLM (optional) | AI filtering | Natural language episode queries |
+
+### Caching Strategy
+
+Smart caching minimizes external API calls while keeping data fresh:
+
+| Data Type | Cache Duration | Notes |
+|-----------|----------------|-------|
+| **Finished shows** | 1 year | Data won't change |
+| Ongoing show episodes | 7 days | Episodes air weekly at most |
+| Shows master list | 7 days | Rarely changes |
+
+**Finished Show Detection**: When a show has an `end_date`, caches are automatically extended to 1 year since the data is stable.
+
+**Cache Refresh**: Use `?refresh=true` on endpoints to bypass cache when you need the latest data.
+
+**Smart `/next` Endpoint**: Automatically refreshes if the cached "next" episode date has passed.
 
 ## Quick Start
 
@@ -40,10 +80,10 @@ docker compose up epguides-api redis  # API only (includes MCP HTTP endpoint)
 |--------|----------|-------------|
 | `GET` | `/shows/` | List all shows (paginated) |
 | `GET` | `/shows/search?query={query}` | Search shows by title |
-| `GET` | `/shows/{epguides_key}` | Get show metadata |
+| `GET` | `/shows/{epguides_key}` | Get show metadata (`?refresh=true` to bypass cache) |
 | `GET` | `/shows/{epguides_key}?include=episodes` | Get show + episodes |
-| `GET` | `/shows/{epguides_key}/episodes` | Get episodes (with optional filters + NLQ) |
-| `GET` | `/shows/{epguides_key}/episodes/next` | Get next unreleased episode (404 if show finished) |
+| `GET` | `/shows/{epguides_key}/episodes` | Get episodes (`?refresh=true` to bypass cache) |
+| `GET` | `/shows/{epguides_key}/episodes/next` | Get next unreleased episode (auto-refreshes if stale) |
 | `GET` | `/shows/{epguides_key}/episodes/latest` | Get latest released episode |
 | `GET` | `/health` | Health check |
 | `GET` | `/health/llm` | LLM configuration status |
@@ -53,6 +93,10 @@ docker compose up epguides-api redis  # API only (includes MCP HTTP endpoint)
 ### Response Format Notes
 
 - **`end_date` field**: The `end_date` field in list/search responses may be `null` if the show's end date is not available in the master CSV (approximately 10.8% of shows). For shows without `end_date` in the master list, you can use the individual show endpoint (`GET /shows/{epguides_key}`) which will derive it from episode data if available.
+
+- **`summary` field**: Episode responses include a `summary` field with plot descriptions fetched from TVMaze. This enables AI-powered search through episode content.
+
+- **`imdb_id` field**: Shows include an IMDB ID when available, useful for cross-referencing with other services.
 
 ### Examples
 
@@ -79,6 +123,9 @@ curl "https://epguides.frecar.no/shows/TheOffice/episodes?nlq=jim+and+pam+moment
 
 # Check LLM status
 curl "https://epguides.frecar.no/health/llm"
+
+# Force cache refresh (for checking new episodes)
+curl "https://epguides.frecar.no/shows/BreakingBad/episodes?refresh=true"
 ```
 
 ### Filtering Episodes
@@ -111,8 +158,14 @@ When LLM is enabled, you can use natural language to filter episodes using the `
 ### How It Works
 
 1. Your query is sent to an OpenAI-compatible LLM API
-2. The LLM analyzes episode titles and metadata to find matches
-3. Filtered episodes are returned
+2. The LLM analyzes episode titles, summaries (from TVMaze), and metadata
+3. Matching episodes are returned based on semantic understanding
+
+The LLM has access to:
+- Episode titles and numbers
+- Air dates
+- Plot summaries (when available from TVMaze)
+- Season structure
 
 ### Examples
 
@@ -260,8 +313,8 @@ REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_PASSWORD=
 
-# Cache
-CACHE_TTL_SECONDS=3600
+# Cache (7 days for ongoing shows, auto-extended to 1 year for finished shows)
+CACHE_TTL_SECONDS=604800
 
 # API
 API_BASE_URL=http://localhost:3000/
@@ -353,5 +406,7 @@ docker run -d -p 3000:3000 \
 
 ## Acknowledgments
 
-*   [epguides.com](http://epguides.com) for providing TV show data
+*   [epguides.com](http://epguides.com) for providing TV show and episode data
+*   [TVMaze](https://www.tvmaze.com/api) for episode summaries and plot descriptions
 *   [FastAPI](https://fastapi.tiangolo.com/) for the excellent framework
+*   [Redis](https://redis.io/) for caching

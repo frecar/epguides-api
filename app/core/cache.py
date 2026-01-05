@@ -18,6 +18,18 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # =============================================================================
+# Cache TTL Constants
+# =============================================================================
+
+# Default TTL for ongoing shows (episodes air weekly at most)
+CACHE_TTL_ONGOING = 604800  # 7 days
+
+# Extended TTL for finished shows (data won't change)
+CACHE_TTL_FINISHED = 31536000  # 1 year (365 days)
+
+# Note: Master show list TTL is in app.core.constants.CACHE_TTL_SHOWS_METADATA_SECONDS
+
+# =============================================================================
 # Type Variables
 # =============================================================================
 
@@ -70,6 +82,69 @@ async def close_redis_pool() -> None:
     if _redis_pool:
         await _redis_pool.disconnect()
         _redis_pool = None
+
+
+async def invalidate_cache(key_prefix: str, key_suffix: str) -> bool:
+    """
+    Invalidate a specific cache entry.
+
+    Args:
+        key_prefix: Cache key prefix (e.g., "episodes")
+        key_suffix: Cache key suffix (e.g., "breakingbad")
+
+    Returns:
+        True if key was deleted, False otherwise.
+    """
+    try:
+        redis = await get_redis()
+        cache_key = f"{key_prefix}:{key_suffix}"
+        deleted = await redis.delete(cache_key)
+        if deleted:
+            logger.info("Invalidated cache: %s", cache_key)
+        return deleted > 0
+    except Exception as e:
+        logger.error("Failed to invalidate cache %s:%s: %s", key_prefix, key_suffix, e)
+        return False
+
+
+async def get_cache_ttl(key_prefix: str, key_suffix: str) -> int | None:
+    """
+    Get remaining TTL for a cache key.
+
+    Returns:
+        TTL in seconds, or None if key doesn't exist.
+    """
+    try:
+        redis = await get_redis()
+        cache_key = f"{key_prefix}:{key_suffix}"
+        ttl = await redis.ttl(cache_key)
+        return ttl if ttl > 0 else None
+    except Exception:
+        return None
+
+
+async def extend_cache_ttl(key_prefix: str, key_suffix: str, new_ttl: int) -> bool:
+    """
+    Extend the TTL of a cache key (e.g., for finished shows).
+
+    Args:
+        key_prefix: Cache key prefix (e.g., "episodes")
+        key_suffix: Cache key suffix (e.g., "breakingbad")
+        new_ttl: New TTL in seconds
+
+    Returns:
+        True if TTL was extended, False otherwise.
+    """
+    try:
+        redis = await get_redis()
+        cache_key = f"{key_prefix}:{key_suffix}"
+        result = await redis.expire(cache_key, new_ttl)
+        if result:
+            logger.info("Extended cache TTL for %s to %d seconds", cache_key, new_ttl)
+        return result
+    except Exception as e:
+        logger.error("Failed to extend cache TTL for %s:%s: %s", key_prefix, key_suffix, e)
+        return False
 
 
 # =============================================================================

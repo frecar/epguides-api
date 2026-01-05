@@ -55,7 +55,7 @@ async def get_all_shows() -> list[ShowSchema]:
     Get all shows from master list.
 
     Fetches the complete list of shows from epguides master CSV.
-    Results are cached for 24 hours via the epguides module.
+    Results are cached for 7 days via the epguides module.
 
     Returns:
         List of all available shows.
@@ -118,12 +118,16 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     Episodes are sorted by season and episode number, and enriched
     with show metadata like runtime.
 
+    For finished shows (all episodes released), extends cache TTL to 1 year.
+
     Args:
         show_id: The epguides key or show identifier.
 
     Returns:
         List of episodes sorted by season and episode number.
     """
+    from app.core.cache import CACHE_TTL_FINISHED, extend_cache_ttl
+
     normalized_id = normalize_show_id(show_id)
     raw_data = await epguides.get_episodes_data(normalized_id)
     run_time_min = await _get_show_runtime(normalized_id)
@@ -132,7 +136,16 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
 
     # Sort and assign episode numbers
     episodes.sort(key=lambda ep: (ep.season, ep.number))
-    return [ep.model_copy(update={"episode_number": idx}) for idx, ep in enumerate(episodes, start=1)]
+    episodes = [ep.model_copy(update={"episode_number": idx}) for idx, ep in enumerate(episodes, start=1)]
+
+    # Extend cache for finished shows (all episodes released, none upcoming)
+    if episodes:
+        has_unreleased = any(not ep.is_released for ep in episodes)
+        if not has_unreleased:
+            await extend_cache_ttl("episodes", normalized_id, CACHE_TTL_FINISHED)
+            logger.debug("Extended episode cache to 1 year for finished show: %s", normalized_id)
+
+    return episodes
 
 
 async def enrich_shows_with_imdb_ids(shows: list[ShowSchema]) -> list[ShowSchema]:
@@ -189,7 +202,12 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
 
     Fetches IMDB ID if missing and derives end_date/total_episodes
     from actual episode data for accuracy.
+
+    For finished shows (with end_date), extends cache TTL to 1 year
+    since the data won't change.
     """
+    from app.core.cache import CACHE_TTL_FINISHED, extend_cache_ttl
+
     # Enrich with IMDB ID if missing
     if not show.imdb_id:
         enriched_list = await enrich_shows_with_imdb_ids([show])
@@ -200,7 +218,13 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
     if episode_stats:
         updates = _build_show_updates(show, episode_stats)
         if updates:
-            return show.model_copy(update=updates)
+            show = show.model_copy(update=updates)
+
+    # Extend cache TTL for finished shows (data won't change)
+    if show.end_date:
+        await extend_cache_ttl("episodes", normalized_id, CACHE_TTL_FINISHED)
+        await extend_cache_ttl("show_metadata", normalized_id, CACHE_TTL_FINISHED)
+        logger.debug("Extended cache to 1 year for finished show: %s", normalized_id)
 
     return show
 
@@ -323,6 +347,9 @@ def _parse_episode(item: dict[str, Any], run_time_min: int | None) -> EpisodeSch
 
         is_released = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS) > release_date
 
+        # Get summary if available (from TVMaze)
+        summary = item.get("summary", "") or ""
+
         return EpisodeSchema(
             season=int(season_raw),
             number=int(number_raw),
@@ -331,6 +358,7 @@ def _parse_episode(item: dict[str, Any], run_time_min: int | None) -> EpisodeSch
             is_released=is_released,
             run_time_min=run_time_min,
             episode_number=None,
+            summary=summary if summary else None,
         )
     except (ValueError, KeyError, TypeError):
         return None

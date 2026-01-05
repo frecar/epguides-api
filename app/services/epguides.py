@@ -135,7 +135,7 @@ async def get_all_shows_metadata() -> list[dict[str, str]]:
     Fetch master list of all shows from epguides.
 
     Returns list of dictionaries with show metadata.
-    Cached for 24 hours.
+    Cached for 7 days.
     """
     url = f"{EPGUIDES_BASE_URL}/common/allshows.txt"
     response = await _fetch_url(url)
@@ -155,6 +155,9 @@ async def get_all_shows_metadata() -> list[dict[str, str]]:
 _TVRAGE_COLUMNS = {"season": 1, "number": 2, "release_date": 4, "title": 5}
 _TVMAZE_COLUMNS = {"season": 1, "number": 2, "release_date": 3, "title": 4}
 
+# TVMaze API base URL
+_TVMAZE_API_URL = "https://api.tvmaze.com"
+
 
 @cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="episodes")
 async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
@@ -162,13 +165,14 @@ async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
     Fetch episode data for a show.
 
     Scrapes the epguides show page to find CSV export URL,
-    then fetches and parses the episode data.
+    then fetches and parses the episode data. Also fetches
+    episode summaries from TVMaze when available.
 
     Args:
         show_id: Epguides show identifier.
 
     Returns:
-        List of episode dictionaries with season, number, title, release_date.
+        List of episode dictionaries with season, number, title, release_date, summary.
         Returns empty list on error.
     """
     url = f"{EPGUIDES_BASE_URL}/{show_id}"
@@ -178,38 +182,91 @@ async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
         return []
 
     text = response.text
-    csv_url, column_map = _extract_csv_url(text)
+    csv_url, column_map, maze_id = _extract_csv_url_and_maze_id(text)
 
     if not csv_url:
         logger.warning("No CSV URL found for %s", show_id)
         return []
 
     rows = await fetch_csv(csv_url)
-    return _parse_episode_rows(rows, column_map)
+    episodes = _parse_episode_rows(rows, column_map)
+
+    # Fetch and merge TVMaze summaries if we have a maze ID
+    if maze_id and episodes:
+        episodes = await _merge_tvmaze_summaries(episodes, maze_id)
+
+    return episodes
 
 
-def _extract_csv_url(page_html: str) -> tuple[str | None, dict[str, int]]:
+def _extract_csv_url_and_maze_id(page_html: str) -> tuple[str | None, dict[str, int], str | None]:
     """
-    Extract CSV export URL and column mapping from show page HTML.
+    Extract CSV export URL, column mapping, and TVMaze ID from show page HTML.
 
     Returns:
-        Tuple of (csv_url, column_map) or (None, {}) if not found.
+        Tuple of (csv_url, column_map, maze_id) or (None, {}, None) if not found.
     """
     # Try TVRage format
     if "exportToCSV.asp" in page_html:
         match = re.search(r"exportToCSV\.asp\?rage=([\d+]+)", page_html)
         if match:
             url = f"{EPGUIDES_BASE_URL}/common/exportToCSV.asp?rage={match.group(1)}"
-            return url, _TVRAGE_COLUMNS
+            return url, _TVRAGE_COLUMNS, None
 
     # Try TVMaze format
     if "exportToCSVmaze" in page_html:
         match = re.search(r"exportToCSVmaze\.asp\?maze=([\d]+)", page_html)
         if match:
-            url = f"{EPGUIDES_BASE_URL}/common/exportToCSVmaze.asp?maze={match.group(1)}"
-            return url, _TVMAZE_COLUMNS
+            maze_id = match.group(1)
+            url = f"{EPGUIDES_BASE_URL}/common/exportToCSVmaze.asp?maze={maze_id}"
+            return url, _TVMAZE_COLUMNS, maze_id
 
-    return None, {}
+    return None, {}, None
+
+
+async def _merge_tvmaze_summaries(episodes: list[dict[str, Any]], maze_id: str) -> list[dict[str, Any]]:
+    """
+    Fetch episode summaries from TVMaze and merge into episode data.
+
+    Args:
+        episodes: List of episode dicts from epguides CSV.
+        maze_id: TVMaze show ID.
+
+    Returns:
+        Episodes with 'summary' field added where available.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+            response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}/episodes")
+            if response.status_code != 200:
+                return episodes
+
+            tvmaze_episodes = response.json()
+
+            # Build lookup by season/episode
+            summary_map: dict[tuple[int, int], str] = {}
+            for ep in tvmaze_episodes:
+                season = ep.get("season")
+                number = ep.get("number")
+                summary = ep.get("summary") or ""
+                # Strip HTML tags from summary
+                if summary:
+                    summary = re.sub(r"<[^>]+>", "", summary).strip()
+                if season and number and summary:
+                    summary_map[(season, number)] = summary
+
+            # Merge summaries into episodes
+            for episode in episodes:
+                try:
+                    key = (int(episode.get("season", 0)), int(episode.get("number", 0)))
+                    episode["summary"] = summary_map.get(key, "")
+                except (ValueError, TypeError):
+                    episode["summary"] = ""
+
+            return episodes
+
+    except Exception as e:
+        logger.warning("Failed to fetch TVMaze summaries for maze=%s: %s", maze_id, e)
+        return episodes
 
 
 def _parse_episode_rows(rows: list[list[str]], column_map: dict[str, int]) -> list[dict[str, Any]]:

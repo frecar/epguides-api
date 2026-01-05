@@ -31,8 +31,9 @@ class Settings(BaseSettings):
 
     # -------------------------------------------------------------------------
     # Cache Configuration
+    # Episode data changes at most weekly, cache aggressively
     # -------------------------------------------------------------------------
-    CACHE_TTL_SECONDS: int = 3600  # 1 hour default
+    CACHE_TTL_SECONDS: int = 604800  # 7 days - episodes air weekly at most
 
     # -------------------------------------------------------------------------
     # API Configuration

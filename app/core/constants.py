@@ -60,5 +60,5 @@ HTTP_TIMEOUT_SECONDS = 5.0
 # Caching Defaults
 # =============================================================================
 
-CACHE_TTL_SHOWS_METADATA_SECONDS = 86400  # 24 hours
+CACHE_TTL_SHOWS_METADATA_SECONDS = 604800  # 7 days
 """Cache TTL for the master show list (rarely changes)."""

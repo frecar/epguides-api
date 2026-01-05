@@ -18,8 +18,8 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # LLM configuration
-_LLM_TIMEOUT_SECONDS = 5.0
-_MAX_EPISODES_FOR_CONTEXT = 50
+_LLM_TIMEOUT_SECONDS = 30.0  # Longer timeout for processing episode summaries
+_MAX_EPISODES_FOR_CONTEXT = 100  # Include more episodes since we have summaries
 
 
 async def parse_natural_language_query(
@@ -78,16 +78,22 @@ async def _query_llm(
     Returns:
         Filtered episodes or None on error.
     """
-    # Prepare episode summaries for context (limit to avoid token limits)
-    episode_summaries = [
-        {
-            "season": ep.get("season"),
-            "number": ep.get("number"),
+    # Prepare episode context for LLM (limit size to avoid token limits)
+    episode_context = []
+    for ep in episodes[:_MAX_EPISODES_FOR_CONTEXT]:
+        ep_data: dict[str, Any] = {
+            "idx": len(episode_context),  # Pre-calculate index for LLM
+            "s": ep.get("season"),
+            "e": ep.get("number"),
             "title": ep.get("title"),
-            "release_date": str(ep.get("release_date")),
+            "date": str(ep.get("release_date")),
         }
-        for ep in episodes[:_MAX_EPISODES_FOR_CONTEXT]
-    ]
+        # Include truncated summary to save tokens
+        summary = ep.get("summary")
+        if summary:
+            ep_data["plot"] = summary[:150] + "..." if len(summary) > 150 else summary
+        episode_context.append(ep_data)
+    episode_summaries = episode_context
 
     prompt = _build_prompt(query, episode_summaries)
 
@@ -111,16 +117,35 @@ async def _query_llm(
 
 def _build_prompt(query: str, episode_summaries: list[dict[str, Any]]) -> str:
     """Build the LLM prompt for episode filtering."""
-    return f"""You are a TV episode search assistant. Given a user query and a list of episodes,
-return a JSON array of episode indices (0-based) that match the query.
+    # Calculate season info for the prompt
+    seasons: dict[int, list[int]] = {}
+    for ep in episode_summaries:
+        s = ep.get("s", 0)
+        if s not in seasons:
+            seasons[s] = []
+        seasons[s].append(ep.get("idx", 0))
 
-User query: "{query}"
+    season_info = ", ".join([f"S{s}: eps {min(eps)}-{max(eps)}" for s, eps in sorted(seasons.items())])
+
+    return f"""Find episodes matching the query. Return their idx values as a JSON array.
+
+DATA FIELDS: idx (use this for output), s (season), e (episode number), title, date, plot
+
+SEASON STRUCTURE: {season_info}
+
+RULES:
+- "season finale" = highest episode number in each season
+- "season premiere" = episode 1 of each season
+- "pilot" = first episode ever (idx 0)
+- For plot searches, check the "plot" field
+- BE STRICT: Return [] if no clear match
+
+Query: "{query}"
 
 Episodes:
-{json.dumps(episode_summaries, indent=2)}
+{json.dumps(episode_summaries)}
 
-Return ONLY a JSON array of matching indices, e.g., [0, 5, 12]. If no matches, return [].
-Do not include any explanation or text outside the JSON array."""
+Return ONLY a JSON array of idx values, e.g. [0,5,12] or []. No text."""
 
 
 def _build_headers() -> dict[str, str]:

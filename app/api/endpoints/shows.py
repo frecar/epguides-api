@@ -4,8 +4,11 @@ REST API endpoints for TV show operations.
 All endpoints are async and return Pydantic models for automatic validation.
 """
 
+from datetime import date
+
 from fastapi import APIRouter, HTTPException, Query, status
 
+from app.core.cache import invalidate_cache
 from app.models.responses import PaginatedResponse
 from app.models.schemas import EpisodeSchema, ShowDetailsSchema, ShowListSchema, ShowSchema
 from app.services import llm_service, show_service
@@ -106,6 +109,7 @@ async def search_shows(
 async def get_show_metadata(
     epguides_key: str,
     include: str | None = Query(default=None, description="Include 'episodes' for full episode list"),
+    refresh: bool = Query(default=False, description="Bypass cache and fetch fresh data"),
 ) -> ShowSchema | ShowDetailsSchema:
     """
     Get complete metadata for a show.
@@ -114,7 +118,14 @@ async def get_show_metadata(
     The epguides_key is case-insensitive.
 
     Use `?include=episodes` to embed the full episode list in the response.
+    Use `?refresh=true` to bypass cache and get fresh data from source.
     """
+    # Invalidate cache if refresh requested
+    if refresh:
+        normalized_key = show_service.normalize_show_id(epguides_key)
+        await invalidate_cache("episodes", normalized_key)
+        await invalidate_cache("show_metadata", normalized_key)
+
     show = await show_service.get_show(epguides_key)
     if not show:
         raise HTTPException(
@@ -152,6 +163,7 @@ async def get_show_episodes(
         "Examples: 'finale episodes', 'pilot', 'episodes with cliffhangers'",
         examples=["finale episodes", "pilot", "episodes where characters die", "season premiere"],
     ),
+    refresh: bool = Query(default=False, description="Bypass cache and fetch fresh data from source"),
 ) -> list[EpisodeSchema]:
     """
     Get episodes for a show with optional filtering.
@@ -183,7 +195,16 @@ async def get_show_episodes(
     ## Graceful Degradation
 
     If LLM is not configured or fails, the `nlq` parameter is ignored and all matching episodes are returned.
+
+    ## Cache Refresh
+
+    Use `?refresh=true` to bypass cache and fetch fresh data. Useful when checking for new episodes.
     """
+    # Invalidate cache if refresh requested
+    if refresh:
+        normalized_key = show_service.normalize_show_id(epguides_key)
+        await invalidate_cache("episodes", normalized_key)
+
     episodes = await show_service.get_episodes(epguides_key)
 
     # Apply structured filters first
@@ -229,6 +250,9 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
     Get the next unreleased episode.
 
     Returns 404 if the show has finished airing or has no upcoming episodes.
+
+    **Smart Cache:** If the cached "next episode" date has passed, the cache is
+    automatically refreshed to ensure up-to-date information.
     """
     show = await show_service.get_show(epguides_key)
     if not show:
@@ -252,14 +276,36 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
         )
 
     # Find first unreleased episode with a title
+    next_ep = None
     for ep in episodes:
         if not ep.is_released and ep.title:
-            return ep
+            next_ep = ep
+            break
 
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="No unreleased episodes found",
-    )
+    if not next_ep:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No unreleased episodes found",
+        )
+
+    # Smart cache: if the "next" episode date has passed, cache might be stale
+    # Invalidate and refetch to get updated episode list
+    if next_ep.release_date < date.today():
+        normalized_key = show_service.normalize_show_id(epguides_key)
+        await invalidate_cache("episodes", normalized_key)
+        episodes = await show_service.get_episodes(epguides_key)
+
+        # Find next episode again with fresh data
+        for ep in episodes:
+            if not ep.is_released and ep.title:
+                return ep
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No unreleased episodes found",
+        )
+
+    return next_ep
 
 
 @router.get(

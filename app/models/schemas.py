@@ -31,6 +31,7 @@ class EpisodeSchema(BaseModel):
     is_released: bool = Field(..., description="Whether the episode has aired")
     run_time_min: int | None = Field(None, ge=1, description="Runtime in minutes")
     episode_number: int | None = Field(None, ge=1, description="Absolute episode number (1-indexed)")
+    summary: str | None = Field(None, description="Episode summary/description")
 
 
 # =============================================================================
