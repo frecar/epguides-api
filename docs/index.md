@@ -16,9 +16,9 @@
 </p>
 
 <p align="center">
-  <a href="https://epguides.frecar.no">:material-rocket-launch: Live API</a> · 
-  <a href="https://epguides.frecar.no/docs">:material-file-document: Swagger</a> · 
-  <a href="https://github.com/frecar/epguides-api">:material-github: GitHub</a>
+  <a href="https://epguides.frecar.no">🚀 Live API</a> · 
+  <a href="https://epguides.frecar.no/docs">📖 Swagger</a> · 
+  <a href="https://github.com/frecar/epguides-api">💻 GitHub</a>
 </p>
 
 ---
@@ -29,35 +29,35 @@
 
 ---
 
-## :material-link-variant: Quick Links
+## 🔗 Quick Links
 
-| | Resource | Description |
-|---|----------|-------------|
-| :material-api: | [**Public API**](https://epguides.frecar.no) | Production endpoint |
-| :material-file-document-outline: | [**Swagger UI**](https://epguides.frecar.no/docs) | Interactive API explorer |
-| :material-robot: | [**MCP Endpoint**](https://epguides.frecar.no/mcp) | For AI assistants |
-| :material-github: | [**GitHub**](https://github.com/frecar/epguides-api) | Source code & issues |
-
----
-
-## :material-star-shooting: Features
-
-| | Feature | Description |
-|---|---------|-------------|
-| :material-television: | **Complete TV Database** | Metadata for thousands of TV shows |
-| :material-magnify: | **Smart Search** | AI-powered natural language queries |
-| :material-calendar-clock: | **Episode Tracking** | Next/latest episodes, season filters |
-| :material-robot-outline: | **MCP Server** | JSON-RPC for AI assistants |
-| :material-lightning-bolt: | **Smart Caching** | 7 days ongoing, 1 year finished |
-| :material-text-box-outline: | **Episode Summaries** | Plot descriptions via TVMaze |
+| Resource | Description |
+|----------|-------------|
+| 🌐 [**Public API**](https://epguides.frecar.no) | Production endpoint |
+| 📖 [**Swagger UI**](https://epguides.frecar.no/docs) | Interactive API explorer |
+| 🤖 [**MCP Endpoint**](https://epguides.frecar.no/mcp) | For AI assistants |
+| 💻 [**GitHub**](https://github.com/frecar/epguides-api) | Source code & issues |
 
 ---
 
-## :material-rocket-launch: Quick Start
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 📺 **Complete TV Database** | Metadata for thousands of TV shows |
+| 🔍 **Smart Search** | AI-powered natural language queries |
+| 📅 **Episode Tracking** | Next/latest episodes, season filters |
+| 🤖 **MCP Server** | JSON-RPC for AI assistants |
+| ⚡ **Smart Caching** | 7 days ongoing, 1 year finished |
+| 📝 **Episode Summaries** | Plot descriptions via TVMaze |
+
+---
+
+## 🚀 Quick Start
 
 Try the API right now - no setup required!
 
-=== ":material-console: curl"
+=== "curl"
 
     ```bash
     # 🔍 Search for shows
@@ -71,113 +71,97 @@ Try the API right now - no setup required!
     
     # 🎯 Filter by season
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
-    
-    # 🤖 Natural language query (when LLM enabled)
-    curl "https://epguides.frecar.no/shows/BreakingBad/episodes?nlq=finale+episodes"
     ```
 
-=== ":material-language-python: Python"
+=== "Python"
 
     ```python
     import httpx
 
     async with httpx.AsyncClient() as client:
-        # 🔍 Search for shows
+        # Search for shows
         response = await client.get(
             "https://epguides.frecar.no/shows/search",
             params={"query": "breaking"}
         )
         shows = response.json()
         
-        # 📺 Get show details
+        # Get show details
         response = await client.get(
             "https://epguides.frecar.no/shows/BreakingBad"
         )
         show = response.json()
-        print(f"Found: {show['title']} ({show['total_episodes']} episodes)")
-        
-        # 📋 Get episodes
-        response = await client.get(show['api_episodes_url'])
-        episodes = response.json()
     ```
 
-=== ":material-language-javascript: JavaScript"
+=== "JavaScript"
 
     ```javascript
-    // 🔍 Search for shows
-    const searchResponse = await fetch(
+    // Search for shows
+    const response = await fetch(
       "https://epguides.frecar.no/shows/search?query=breaking"
     );
-    const shows = await searchResponse.json();
+    const shows = await response.json();
     
-    // 📺 Get show details
+    // Get show details
     const showResponse = await fetch(
       "https://epguides.frecar.no/shows/BreakingBad"
     );
     const show = await showResponse.json();
-    console.log(`Found: ${show.title} (${show.total_episodes} episodes)`);
-    
-    // 📋 Get episodes
-    const episodesResponse = await fetch(show.api_episodes_url);
-    const episodes = await episodesResponse.json();
     ```
 
 ---
 
-## :material-database: Data Sources
+## 📊 Data Sources
 
 !!! info "Aggregated from trusted sources"
     This API combines data from multiple sources to provide comprehensive TV show information.
 
 | Source | Data Provided | 
 |--------|---------------|
-| :material-web: [epguides.com](http://epguides.com) | Show catalog, episode lists, air dates |
-| :material-api: [TVMaze API](https://api.tvmaze.com) | Episode summaries, plot descriptions |
-| :material-movie-open: [IMDB](https://imdb.com) | IMDB IDs for cross-referencing |
+| 🌐 [epguides.com](http://epguides.com) | Show catalog, episode lists, air dates |
+| 📡 [TVMaze API](https://api.tvmaze.com) | Episode summaries, plot descriptions |
+| 🎬 [IMDB](https://imdb.com) | IMDB IDs for cross-referencing |
 
 ---
 
-## :material-chart-box: Architecture
+## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────────┐
-│                 🎬 Epguides API                  │
-├──────────────────────────────────────────────────┤
-│                                                  │
-│   ┌──────────┐  ┌──────────┐  ┌──────────┐      │
-│   │ REST API │  │   MCP    │  │  Health  │      │
-│   │ /shows/* │  │   /mcp   │  │ /health  │      │
-│   └────┬─────┘  └────┬─────┘  └──────────┘      │
-│        │             │                          │
-│        └──────┬──────┘                          │
-│               │                                 │
-│               ▼                                 │
-│        ┌─────────────┐                          │
-│        │Service Layer│                          │
-│        └──────┬──────┘                          │
-│               │                                 │
-│      ┌────────┼────────┐                        │
-│      │        │        │                        │
-│      ▼        ▼        ▼                        │
-│   ┌─────┐ ┌────────┐ ┌───────┐                  │
-│   │Redis│ │epguides│ │TVMaze │                  │
-│   │Cache│ │  .com  │ │  API  │                  │
-│   └─────┘ └────────┘ └───────┘                  │
-│                                                  │
-└──────────────────────────────────────────────────┘
+                        Epguides API
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│  ┌───────────┐   ┌───────────┐   ┌───────────┐     │
+│  │ REST API  │   │    MCP    │   │  Health   │     │
+│  │ /shows/*  │   │   /mcp    │   │  /health  │     │
+│  └─────┬─────┘   └─────┬─────┘   └───────────┘     │
+│        │               │                           │
+│        └───────┬───────┘                           │
+│                ▼                                   │
+│        ┌──────────────┐                            │
+│        │Service Layer │                            │
+│        └──────┬───────┘                            │
+│               │                                    │
+│       ┌───────┼───────┐                            │
+│       ▼       ▼       ▼                            │
+│   ┌───────┐ ┌─────┐ ┌───────┐                      │
+│   │ Redis │ │ EPG │ │TVMaze │                      │
+│   │ Cache │ │.com │ │  API  │                      │
+│   └───────┘ └─────┘ └───────┘                      │
+│                                                     │
+└─────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## :material-book-open-variant: Documentation
+## 📚 Documentation
 
-| | Guide | Description |
-|---|-------|-------------|
-| :material-rocket-launch: | [**Getting Started**](getting-started.md) | Installation and local setup |
-| :material-api: | [**REST API**](rest-api.md) | Complete endpoint reference |
-| :material-robot: | [**MCP Server**](mcp-server.md) | AI assistant integration |
-| :material-cog: | [**Configuration**](configuration.md) | Environment variables & caching |
-| :material-code-braces: | [**Development**](development.md) | Contributing & testing |
+| Guide | Description |
+|-------|-------------|
+| 🚀 [**Getting Started**](getting-started.md) | Installation and local setup |
+| 📖 [**REST API**](rest-api.md) | Complete endpoint reference |
+| 🤖 [**MCP Server**](mcp-server.md) | AI assistant integration |
+| ⚙️ [**Configuration**](configuration.md) | Environment variables & caching |
+| 💻 [**Development**](development.md) | Contributing & testing |
 
 ---
 
@@ -186,6 +170,6 @@ Try the API right now - no setup required!
 </p>
 
 <p align="center">
-  <a href="getting-started.md" class="md-button md-button--primary">:material-rocket-launch: Get Started</a>
-  <a href="https://epguides.frecar.no/docs" class="md-button">:material-api: Try the API</a>
+  <a href="getting-started.md">🚀 Get Started</a> · 
+  <a href="https://epguides.frecar.no/docs">📖 Try the API</a>
 </p>
