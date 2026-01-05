@@ -60,12 +60,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="API for accessing TV show metadata and episode lists from epguides.com",
+    description="""
+API for accessing TV show metadata and episode lists from epguides.com.
+
+**Features:**
+- 📺 Browse and search thousands of TV shows
+- 📅 Get episode lists with air dates and summaries
+- 🔍 Natural language search with AI (optional LLM integration)
+- 🤖 MCP server for AI assistant integration
+
+📖 **[Full documentation on GitHub](https://github.com/frecar/epguides-api)**
+""",
     version=VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    license_info={"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
+    contact={"name": "GitHub", "url": "https://github.com/frecar/epguides-api"},
 )
 
 
