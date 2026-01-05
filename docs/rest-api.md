@@ -1,4 +1,4 @@
-# :material-api: REST API Reference
+# 📖 REST API Reference
 
 Complete reference for all REST API endpoints.
 
@@ -8,25 +8,25 @@ Complete reference for all REST API endpoints.
 
 ---
 
-## :material-format-list-bulleted: Endpoints Overview
+## 📋 Endpoints
 
 | Method | Endpoint | Description |
-|:------:|----------|-------------|
-| :material-arrow-down-bold-circle:{ .get } | `/shows/` | List all shows (paginated) |
-| :material-arrow-down-bold-circle:{ .get } | `/shows/search` | Search shows by title |
-| :material-arrow-down-bold-circle:{ .get } | `/shows/{key}` | Get show metadata |
-| :material-arrow-down-bold-circle:{ .get } | `/shows/{key}/episodes` | Get episodes with filtering |
-| :material-arrow-down-bold-circle:{ .get } | `/shows/{key}/episodes/next` | Get next unreleased episode |
-| :material-arrow-down-bold-circle:{ .get } | `/shows/{key}/episodes/latest` | Get latest released episode |
-| :material-arrow-down-bold-circle:{ .get } | `/health` | Health check |
-| :material-arrow-down-bold-circle:{ .get } | `/health/llm` | LLM status |
-| :material-arrow-up-bold-circle:{ .post } | `/mcp` | MCP JSON-RPC endpoint |
+|--------|----------|-------------|
+| `GET` | `/shows/` | List all shows (paginated) |
+| `GET` | `/shows/search` | Search shows by title |
+| `GET` | `/shows/{key}` | Get show metadata |
+| `GET` | `/shows/{key}/episodes` | Get episodes with filtering |
+| `GET` | `/shows/{key}/episodes/next` | Get next unreleased episode |
+| `GET` | `/shows/{key}/episodes/latest` | Get latest released episode |
+| `GET` | `/health` | Health check |
+| `GET` | `/health/llm` | LLM status |
+| `POST` | `/mcp` | MCP JSON-RPC endpoint |
 
 ---
 
-## :material-television: Shows
+## 📺 Shows
 
-### :material-format-list-bulleted: List Shows
+### List Shows
 
 ```http
 GET /shows/
@@ -46,7 +46,7 @@ curl "https://epguides.frecar.no/shows/?page=1&page_size=20"
 
 ---
 
-### :material-magnify: Search Shows
+### Search Shows
 
 ```http
 GET /shows/search
@@ -65,7 +65,7 @@ curl "https://epguides.frecar.no/shows/search?query=breaking"
 
 ---
 
-### :material-information: Get Show
+### Get Show
 
 ```http
 GET /shows/{epguides_key}
@@ -80,19 +80,19 @@ Get detailed metadata for a specific show.
     | `include` | query | Set to `episodes` to include episode list |
     | `refresh` | query | Set to `true` to bypass cache |
 
-=== ":material-television: Show Only"
+=== "Show Only"
 
     ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad"
     ```
 
-=== ":material-playlist-play: With Episodes"
+=== "With Episodes"
 
     ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad?include=episodes"
     ```
 
-=== ":material-refresh: Force Refresh"
+=== "Force Refresh"
 
     ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad?refresh=true"
@@ -119,9 +119,9 @@ Get detailed metadata for a specific show.
 
 ---
 
-## :material-playlist-play: Episodes
+## 📅 Episodes
 
-### :material-format-list-numbered: Get Episodes
+### Get Episodes
 
 ```http
 GET /shows/{epguides_key}/episodes
@@ -139,37 +139,37 @@ Get all episodes with optional filtering.
     | `nlq` | string | Natural language query (requires LLM) |
     | `refresh` | boolean | Bypass cache |
 
-=== ":material-playlist-play: All Episodes"
+=== "All Episodes"
 
     ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes"
     ```
 
-=== ":material-filter: By Season"
+=== "By Season"
 
     ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=2"
     ```
 
-=== ":material-target: Specific Episode"
+=== "Specific Episode"
 
     ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=2&episode=5"
     ```
 
-=== ":material-calendar: By Year"
+=== "By Year"
 
     ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?year=2008"
     ```
 
-=== ":material-text-search: Title Search"
+=== "Title Search"
 
     ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?title_search=pilot"
     ```
 
-=== ":material-robot: Natural Language"
+=== "Natural Language"
 
     ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?nlq=finale+episodes"
@@ -193,7 +193,7 @@ Get all episodes with optional filtering.
 
 ---
 
-### :material-skip-next: Get Next Episode
+### Get Next Episode
 
 ```http
 GET /shows/{epguides_key}/episodes/next
@@ -224,7 +224,7 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 
 ---
 
-### :material-skip-previous: Get Latest Episode
+### Get Latest Episode
 
 ```http
 GET /shows/{epguides_key}/episodes/latest
@@ -238,18 +238,18 @@ curl "https://epguides.frecar.no/shows/BreakingBad/episodes/latest"
 
 ---
 
-## :material-robot: Natural Language Queries
+## 🤖 Natural Language Queries
 
 !!! abstract "AI-Powered Filtering"
     When LLM is configured, use the `nlq` parameter for intelligent episode filtering.
 
-### :material-head-cog: How It Works
+### How It Works
 
-1. :material-send: Your query is sent to an OpenAI-compatible LLM
-2. :material-brain: The LLM analyzes episode titles, summaries, and metadata
-3. :material-filter-check: Matching episodes are returned based on semantic understanding
+1. Your query is sent to an OpenAI-compatible LLM
+2. The LLM analyzes episode titles, summaries, and metadata
+3. Matching episodes are returned based on semantic understanding
 
-### :material-code-tags: Examples
+### Examples
 
 ```bash
 # 🏁 Find finale episodes
@@ -262,13 +262,13 @@ curl "https://epguides.frecar.no/shows/GameOfThrones/episodes?nlq=battle+episode
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5&nlq=most+intense"
 ```
 
-### :material-heart-pulse: Check LLM Status
+### Check LLM Status
 
 ```bash
 curl "https://epguides.frecar.no/health/llm"
 ```
 
-### :material-shield-check: Graceful Degradation
+### Graceful Degradation
 
 | Scenario | Behavior |
 |----------|----------|
@@ -278,7 +278,7 @@ curl "https://epguides.frecar.no/health/llm"
 
 ---
 
-## :material-note-text: Response Notes
+## 📝 Response Notes
 
 !!! info "`end_date` Field"
     May be `null` if not available. Use individual show endpoint for derived values.
@@ -291,9 +291,9 @@ curl "https://epguides.frecar.no/health/llm"
 
 ---
 
-## :material-heart-pulse: Health Endpoints
+## 💚 Health Endpoints
 
-### :material-check-circle: Health Check
+### Health Check
 
 ```bash
 curl "https://epguides.frecar.no/health"
@@ -307,7 +307,7 @@ curl "https://epguides.frecar.no/health"
 }
 ```
 
-### :material-robot-outline: LLM Health
+### LLM Health
 
 ```bash
 curl "https://epguides.frecar.no/health/llm"
