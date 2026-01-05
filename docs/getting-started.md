@@ -1,64 +1,67 @@
-# :material-rocket-launch: Getting Started
+# 🚀 Getting Started
 
 Get up and running with the Epguides API in minutes.
 
 ---
 
-## :material-cloud: Using the Public API
+## 🌐 Using the Public API
 
-!!! success "Fastest way to start"
-    The public API requires **no setup** - just start making requests!
+!!! success "No setup required"
+    The public API is free and requires no authentication. Just start making requests!
 
-| | Resource | URL |
-|---|----------|-----|
-| :material-api: | **Base URL** | `https://epguides.frecar.no` |
-| :material-file-document: | **Swagger UI** | [epguides.frecar.no/docs](https://epguides.frecar.no/docs) |
-| :material-book-open: | **ReDoc** | [epguides.frecar.no/redoc](https://epguides.frecar.no/redoc) |
+| Resource | URL |
+|----------|-----|
+| **Base URL** | `https://epguides.frecar.no` |
+| **Swagger UI** | [epguides.frecar.no/docs](https://epguides.frecar.no/docs) |
+| **ReDoc** | [epguides.frecar.no/redoc](https://epguides.frecar.no/redoc) |
 
-### :material-console: Quick Examples
+### Try It Now
 
 ```bash
-# 📺 Get show details
+# Get show details
 curl "https://epguides.frecar.no/shows/BreakingBad"
 
-# 🔍 Search shows
+# Search shows
 curl "https://epguides.frecar.no/shows/search?query=breaking"
 
-# 📋 Get episodes
+# Get episodes
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes"
 
-# 🎯 Filter by season
+# Filter by season
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
+
+# Get next episode for ongoing shows
+curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 ```
 
 ---
 
-## :material-docker: Local Development
+## 🐳 Self-Hosting (Local Development)
 
-### :material-clipboard-check: Prerequisites
+### Prerequisites
 
 | Requirement | Version | Required |
-|-------------|---------|----------|
-| :material-docker: Docker | Latest | ✅ Yes |
-| :material-git: Git | Latest | ✅ Yes |
-| :material-language-python: Python | 3.11+ | ⚪ Optional (for tests) |
+|-------------|---------|:--------:|
+| Docker | Latest | ✅ |
+| Git | Latest | ✅ |
+| Python | 3.11+ | ⚪ Optional |
 
-### :material-play-circle: Quick Start
+### Quick Start
 
-=== ":material-numeric-1-circle: Clone"
+=== "1. Clone"
 
     ```bash
     git clone https://github.com/frecar/epguides-api.git
     cd epguides-api
     ```
 
-=== ":material-numeric-2-circle: Start"
+=== "2. Start"
 
     ```bash
     make up
     ```
 
-=== ":material-numeric-3-circle: Open"
+=== "3. Open"
 
     ```bash
     open http://localhost:3000/docs
@@ -67,16 +70,16 @@ curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
 !!! tip "That's it!"
     The API is now running at `http://localhost:3000` with hot-reload enabled.
 
-### :material-information: What `make up` Does
+### What `make up` Does
 
-1. :material-docker: Builds the Docker image
-2. :material-play: Starts FastAPI with hot-reload
-3. :material-database: Starts Redis for caching
-4. :material-tag: Sets version from git commit count
+1. 🐳 Builds the Docker image
+2. ▶️ Starts FastAPI with hot-reload
+3. 🗄️ Starts Redis for caching
+4. 🏷️ Sets version from git commit count
 
 ---
 
-## :material-cog-outline: First Time Setup (Optional)
+## ⚙️ First Time Setup (Optional)
 
 !!! note "Only needed for running tests locally"
     If you just want to run the API, `make up` is all you need!
@@ -89,79 +92,48 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Install pre-commit hooks (recommended)
+# Install pre-commit hooks
 pre-commit install
 ```
 
 ---
 
-## :material-console: Development Commands
+## 🔧 Commands
 
 | Command | Description |
 |---------|-------------|
-| `make up` | :material-play: Start Docker services |
-| `make down` | :material-stop: Stop Docker services |
-| `make test` | :material-test-tube: Run tests |
-| `make fix` | :material-auto-fix: Format and lint code |
-| `make run` | :material-play-outline: Run locally (without Docker) |
-| `make docs` | :material-book: Serve documentation |
+| `make up` | Start Docker services |
+| `make down` | Stop Docker services |
+| `make test` | Run tests |
+| `make fix` | Format and lint code |
+| `make run` | Run locally (without Docker) |
+| `make docs` | Serve documentation |
 
 ---
 
-## :material-folder-outline: Project Structure
+## 📁 Project Structure
 
 ```
 epguides-api/
-├── 📂 app/
-│   ├── 📂 api/endpoints/      # REST endpoints
-│   ├── 📂 core/               # Config, cache, middleware
-│   ├── 📂 mcp/                # MCP server
-│   ├── 📂 models/             # Pydantic schemas
-│   ├── 📂 services/           # Business logic
-│   └── 📂 tests/              # Test suite
-├── 📂 docs/                   # Documentation
-├── 🐳 Dockerfile              # Production container
-├── 🐳 docker-compose.yml      # Development setup
-├── 📄 Makefile                # Dev commands
-└── 📄 requirements.txt        # Dependencies
+├── app/
+│   ├── api/endpoints/      # REST API routes
+│   ├── core/               # Config, cache, middleware
+│   ├── mcp/                # MCP server for AI
+│   ├── models/             # Pydantic schemas
+│   ├── services/           # Business logic
+│   └── tests/              # Test suite
+├── docs/                   # This documentation
+├── Dockerfile              # Production container
+├── docker-compose.yml      # Development setup
+├── Makefile                # Dev commands
+└── requirements.txt        # Dependencies
 ```
 
 ---
 
-## :material-arrow-right-circle: Next Steps
+## ➡️ Next Steps
 
-<div class="grid cards" markdown>
-
--   :material-api:{ .lg .middle } **REST API Reference**
-
-    ---
-
-    Explore all endpoints and response formats
-
-    [:octicons-arrow-right-24: REST API](rest-api.md)
-
--   :material-robot:{ .lg .middle } **MCP Server**
-
-    ---
-
-    Integrate with AI assistants
-
-    [:octicons-arrow-right-24: MCP Server](mcp-server.md)
-
--   :material-cog:{ .lg .middle } **Configuration**
-
-    ---
-
-    Environment variables and caching
-
-    [:octicons-arrow-right-24: Configuration](configuration.md)
-
--   :material-code-braces:{ .lg .middle } **Development**
-
-    ---
-
-    Contributing and testing
-
-    [:octicons-arrow-right-24: Development](development.md)
-
-</div>
+- **[REST API Reference](rest-api.md)** — All endpoints with examples
+- **[MCP Server](mcp-server.md)** — Integrate with AI assistants
+- **[Configuration](configuration.md)** — Environment variables & caching
+- **[Development](development.md)** — Contributing & testing

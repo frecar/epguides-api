@@ -77,26 +77,13 @@ OPENAPI_TAGS = [
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="""
-# 🎬 Epguides API
+**Free REST API for TV show data, episode lists, air dates, and plot summaries.**
 
-**High-performance REST API and MCP server for TV show metadata and episode lists.**
-
----
-
-## ✨ Features
-
-| Feature | Description |
-|---------|-------------|
-| 📺 **Complete TV Database** | Metadata for thousands of TV shows |
-| 🔍 **Smart Search** | Search by title + AI-powered natural language queries |
-| 📅 **Episode Tracking** | Next/latest episodes, filter by season/year |
-| 🤖 **MCP Server** | JSON-RPC interface for AI assistants |
-| ⚡ **Smart Caching** | 7-day cache for ongoing, 1-year for finished shows |
-| 📝 **Episode Summaries** | Plot descriptions via TVMaze |
+No API key required. Just start making requests!
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Search for shows
@@ -105,30 +92,33 @@ curl "https://epguides.frecar.no/shows/search?query=breaking"
 # Get show details
 curl "https://epguides.frecar.no/shows/BreakingBad"
 
-# Get episodes with filters
+# Get episodes
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
 
-# AI-powered search (when LLM enabled)
-curl "https://epguides.frecar.no/shows/BreakingBad/episodes?nlq=finale+episodes"
+# Get next episode
+curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 ```
 
 ---
 
-## 📚 Resources
+## Features
 
-| Resource | Link |
-|----------|------|
-| 📖 **Full Documentation** | [epguides-api.readthedocs.io](https://epguides-api.readthedocs.io) |
-| 🔧 **GitHub Repository** | [github.com/frecar/epguides-api](https://github.com/frecar/epguides-api) |
-| 🤖 **MCP Endpoint** | `POST /mcp` (JSON-RPC 2.0) |
+- 📺 **TV Database** — Thousands of shows with metadata
+- 🔍 **Search** — Find shows by title
+- 📅 **Episodes** — Full lists with air dates and summaries
+- ⏭️ **Tracking** — Get next/latest episodes
+- 🤖 **MCP Server** — JSON-RPC for AI assistants
+- ⚡ **Smart Cache** — 7 days ongoing, 1 year finished
 
 ---
 
-## 📊 Data Sources
+## Resources
 
-- [epguides.com](http://epguides.com) - Show catalog, episode lists, air dates
-- [TVMaze API](https://api.tvmaze.com) - Episode summaries
-- [IMDB](https://imdb.com) - IMDB IDs for cross-referencing
+| | |
+|---|---|
+| 📖 **Documentation** | [epguides-api.readthedocs.io](https://epguides-api.readthedocs.io) |
+| 💻 **GitHub** | [github.com/frecar/epguides-api](https://github.com/frecar/epguides-api) |
+| 🤖 **MCP** | `POST /mcp` (JSON-RPC 2.0) |
 """,
     version=VERSION,
     docs_url="/docs",
