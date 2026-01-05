@@ -1,11 +1,7 @@
 # Epguides API
 
 <p align="center">
-  <img src="https://img.shields.io/badge/📺-TV_Show_API-purple?style=for-the-badge" alt="TV Show API">
-</p>
-
-<p align="center">
-  <strong>A high-performance REST API and MCP server for accessing TV show metadata and episode lists.</strong>
+  <strong>REST API and MCP server for accessing TV show and episodes metadata.</strong>
 </p>
 
 <p align="center">
