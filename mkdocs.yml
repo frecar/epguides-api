@@ -1,0 +1,54 @@
+# MkDocs configuration
+# https://www.mkdocs.org/user-guide/configuration/
+
+site_name: Epguides API
+site_description: REST API and MCP server for TV show metadata
+site_url: https://epguides-api.readthedocs.io/
+repo_url: https://github.com/frecar/epguides-api
+repo_name: frecar/epguides-api
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - content.tabs.link
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - REST API: rest-api.md
+  - MCP Server: mcp-server.md
+  - Configuration: configuration.md
+  - Development: development.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/frecar/epguides-api
+
