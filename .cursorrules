@@ -40,8 +40,54 @@
 - Avoid blocking operations in async code
 
 ## Documentation
+When making changes, ALWAYS update ALL relevant documentation:
+
+### Docstrings
 - Add docstrings to all public functions and classes
+- Include Args, Returns, and Raises sections
+- Update docstrings when function behavior changes
+
+### README.md
+- Update when adding/removing features or endpoints
+- Keep examples current and working
+- Update caching strategy if TTLs change
+
+### ReadTheDocs (docs/ folder)
+- `docs/index.md` - Update features list
+- `docs/rest-api.md` - Update when endpoints change
+- `docs/mcp-server.md` - Update when MCP tools change
+- `docs/configuration.md` - Update when env vars change
+- `docs/development.md` - Update when dev workflow changes
+- `docs/getting-started.md` - Keep quick start current
+
+### Swagger/OpenAPI
+- Use descriptive `summary` and `description` in endpoints
+- Add `examples` to Query parameters
+- Keep response models accurate
+
+### Code Comments
 - Use type hints for better IDE support
-- Keep README.md up to date
+- Add inline comments for complex logic
+- Keep constants documented with docstrings
+
+## Versioning
+- Version is auto-incremented via pre-commit hook (VERSION file)
+- No manual version management needed
+- MCP protocol version is in `app/core/constants.py`
+
+## Project Structure
+- `app/api/endpoints/` - REST API endpoints
+- `app/core/` - Config, cache, middleware, constants
+- `app/mcp/` - MCP server implementation
+- `app/models/` - Pydantic schemas
+- `app/services/` - Business logic
+- `app/tests/` - Test suite
+- `docs/` - ReadTheDocs documentation
+
+## Caching
+- Finished shows: 1 year (CACHE_TTL_FINISHED)
+- Ongoing shows: 7 days (settings.CACHE_TTL_SECONDS)
+- Shows master list: 30 days (CACHE_TTL_SHOWS_METADATA_SECONDS)
+- Update these in `app/core/constants.py` and `app/core/cache.py`
 
 
