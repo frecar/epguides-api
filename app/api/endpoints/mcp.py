@@ -22,35 +22,78 @@ _mcp_server = MCPServer()
 
 @router.post(
     "/mcp",
-    summary="MCP JSON-RPC endpoint",
+    summary="🤖 MCP JSON-RPC endpoint",
     response_model_exclude_none=True,
     response_description="JSON-RPC 2.0 response",
 )
 async def mcp_endpoint(request: JSONRPCRequest) -> JSONResponse:
     """
-    Handle MCP JSON-RPC 2.0 requests over HTTP.
+    **Model Context Protocol** endpoint for AI assistant integration.
 
-    **Available Methods:**
-    - `initialize` - Initialize the MCP connection
-    - `tools/list` - List available tools
-    - `tools/call` - Call a tool (search_shows, get_show, get_episodes, etc.)
-    - `resources/list` - List available resources
-    - `resources/read` - Read a resource
+    Send JSON-RPC 2.0 requests to interact with TV show data programmatically.
 
-    **Example: List Tools**
+    ---
+
+    ### 📚 Available Methods
+
+    | Method | Description |
+    |--------|-------------|
+    | `initialize` | Initialize connection, get server info |
+    | `tools/list` | List all available tools |
+    | `tools/call` | Execute a tool |
+    | `resources/list` | List available resources |
+    | `resources/read` | Read a resource |
+
+    ---
+
+    ### 🔧 Available Tools
+
+    | Tool | Description |
+    |------|-------------|
+    | `search_shows` | Search TV shows by title |
+    | `get_show` | Get show metadata |
+    | `get_episodes` | Get episode list |
+    | `get_next_episode` | Get next unreleased episode |
+    | `get_latest_episode` | Get latest aired episode |
+
+    ---
+
+    ### 📝 Examples
+
+    **Initialize:**
+    ```json
+    {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+    ```
+
+    **List Tools:**
     ```json
     {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
     ```
 
-    **Example: Search Shows**
+    **Search Shows:**
     ```json
     {
       "jsonrpc": "2.0",
-      "id": 2,
+      "id": 1,
       "method": "tools/call",
       "params": {"name": "search_shows", "arguments": {"query": "breaking"}}
     }
     ```
+
+    **Get Episodes:**
+    ```json
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {"name": "get_episodes", "arguments": {"epguides_key": "BreakingBad"}}
+    }
+    ```
+
+    ---
+
+    ### 📖 Documentation
+    See [MCP Server docs](https://epguides-api.readthedocs.io/en/latest/mcp-server/) for full reference.
     """
     try:
         body = request.model_dump(exclude_none=True)
@@ -66,8 +109,14 @@ async def mcp_endpoint(request: JSONRPCRequest) -> JSONResponse:
 
 @router.get(
     "/mcp/health",
-    summary="MCP server health check",
+    summary="💚 MCP health check",
 )
 async def mcp_health() -> dict[str, str]:
-    """Check if MCP server is available."""
+    """
+    **Check MCP server health.**
+
+    Use for monitoring and load balancer health checks.
+
+    Returns `{"status": "healthy"}` when operational.
+    """
     return {"status": "healthy", "service": "mcp-server"}

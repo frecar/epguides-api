@@ -58,20 +58,77 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # Application Instance
 # =============================================================================
 
+# Tag metadata for Swagger UI grouping
+OPENAPI_TAGS = [
+    {
+        "name": "Shows",
+        "description": "📺 **Browse and search TV shows** - List, search, and get detailed metadata for thousands of TV shows.",
+    },
+    {
+        "name": "MCP",
+        "description": "🤖 **Model Context Protocol** - JSON-RPC 2.0 endpoint for AI assistant integration (Claude, ChatGPT, etc.).",
+    },
+    {
+        "name": "Health",
+        "description": "💚 **Health checks** - Monitor API and LLM service status.",
+    },
+]
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="""
-REST API and MCP server for accessing TV show metadata and episode lists.
+# 🎬 Epguides API
 
-## Features
-- 📺 Browse and search thousands of TV shows
-- 📅 Get episode lists with air dates and summaries
-- 🔍 Natural language search with AI (optional LLM integration)
-- 🤖 MCP server for AI assistant integration
+**High-performance REST API and MCP server for TV show metadata and episode lists.**
 
-## Documentation
-- 📖 **[Full Documentation](https://epguides-api.readthedocs.io)** - Comprehensive guides and examples
-- 🔧 **[GitHub Repository](https://github.com/frecar/epguides-api)** - Source code and issues
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 📺 **Complete TV Database** | Metadata for thousands of TV shows |
+| 🔍 **Smart Search** | Search by title + AI-powered natural language queries |
+| 📅 **Episode Tracking** | Next/latest episodes, filter by season/year |
+| 🤖 **MCP Server** | JSON-RPC interface for AI assistants |
+| ⚡ **Smart Caching** | 7-day cache for ongoing, 1-year for finished shows |
+| 📝 **Episode Summaries** | Plot descriptions via TVMaze |
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# Search for shows
+curl "https://epguides.frecar.no/shows/search?query=breaking"
+
+# Get show details
+curl "https://epguides.frecar.no/shows/BreakingBad"
+
+# Get episodes with filters
+curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
+
+# AI-powered search (when LLM enabled)
+curl "https://epguides.frecar.no/shows/BreakingBad/episodes?nlq=finale+episodes"
+```
+
+---
+
+## 📚 Resources
+
+| Resource | Link |
+|----------|------|
+| 📖 **Full Documentation** | [epguides-api.readthedocs.io](https://epguides-api.readthedocs.io) |
+| 🔧 **GitHub Repository** | [github.com/frecar/epguides-api](https://github.com/frecar/epguides-api) |
+| 🤖 **MCP Endpoint** | `POST /mcp` (JSON-RPC 2.0) |
+
+---
+
+## 📊 Data Sources
+
+- [epguides.com](http://epguides.com) - Show catalog, episode lists, air dates
+- [TVMaze API](https://api.tvmaze.com) - Episode summaries
+- [IMDB](https://imdb.com) - IMDB IDs for cross-referencing
 """,
     version=VERSION,
     docs_url="/docs",
@@ -80,6 +137,7 @@ REST API and MCP server for accessing TV show metadata and episode lists.
     lifespan=lifespan,
     license_info={"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
     contact={"name": "GitHub", "url": "https://github.com/frecar/epguides-api"},
+    openapi_tags=OPENAPI_TAGS,
 )
 
 
@@ -163,23 +221,51 @@ def root_redirect() -> RedirectResponse:
     return RedirectResponse(url="/docs")
 
 
-@app.get("/health", tags=["Health"])
+@app.get("/health", tags=["Health"], summary="💚 API health check")
 def health_check() -> dict[str, str]:
     """
-    Health check endpoint.
+    **Check API health status.**
 
-    Use for load balancer health checks and monitoring.
+    Use for load balancer health checks, monitoring, and verifying the API is operational.
+
+    ### Response
+    ```json
+    {
+      "status": "healthy",
+      "service": "epguides-api",
+      "version": "123"
+    }
+    ```
     """
     return {"status": "healthy", "service": "epguides-api", "version": VERSION}
 
 
-@app.get("/health/llm", tags=["Health"])
+@app.get("/health/llm", tags=["Health"], summary="🤖 LLM health check")
 def llm_health_check() -> dict[str, str | bool]:
     """
-    LLM service health check.
+    **Check LLM configuration status.**
 
-    Returns the LLM configuration status. The LLM is used for
-    natural language episode queries via the `nlq` parameter.
+    The LLM powers the `nlq` (natural language query) parameter for AI-powered episode filtering.
+
+    ### Response when configured
+    ```json
+    {
+      "enabled": true,
+      "configured": true,
+      "api_url": "https://api.openai.com/v1"
+    }
+    ```
+
+    ### Response when not configured
+    ```json
+    {
+      "enabled": false,
+      "configured": false,
+      "api_url": "not configured"
+    }
+    ```
+
+    **Note:** When LLM is not configured, the `nlq` parameter is silently ignored and all episodes are returned.
     """
     return {
         "enabled": settings.LLM_ENABLED,
