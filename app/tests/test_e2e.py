@@ -42,8 +42,8 @@ async def test_root_redirects_to_docs(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-@patch("app.services.show_service.get_all_shows")
-async def test_list_shows_end_to_end(mock_get_all_shows, async_client: AsyncClient):
+@patch("app.services.show_service.get_shows_page")
+async def test_list_shows_end_to_end(mock_get_shows_page, async_client: AsyncClient):
     """Test listing shows with pagination."""
     mock_shows = [
         create_show_schema(
@@ -57,19 +57,8 @@ async def test_list_shows_end_to_end(mock_get_all_shows, async_client: AsyncClie
             country="USA",
             total_episodes=10,
         ),
-        create_show_schema(
-            epguides_key="test2",
-            title="Test Show 2",
-            network="Network 2",
-            imdb_id=None,
-            run_time_min=None,
-            start_date=None,
-            end_date=None,
-            country=None,
-            total_episodes=None,
-        ),
     ]
-    mock_get_all_shows.return_value = mock_shows
+    mock_get_shows_page.return_value = (mock_shows, 2)  # Returns (page_items, total)
 
     response = await async_client.get("/shows/?page=1&limit=1")
     assert response.status_code == 200
@@ -82,8 +71,8 @@ async def test_list_shows_end_to_end(mock_get_all_shows, async_client: AsyncClie
 
 
 @pytest.mark.asyncio
-@patch("app.services.show_service.search_shows")
-async def test_search_shows_end_to_end(mock_search_shows, async_client: AsyncClient):
+@patch("app.services.show_service.search_shows_fast")
+async def test_search_shows_end_to_end(mock_search_shows_fast, async_client: AsyncClient):
     """Test searching shows."""
     mock_shows = [
         create_show_schema(
@@ -98,7 +87,7 @@ async def test_search_shows_end_to_end(mock_search_shows, async_client: AsyncCli
             total_episodes=None,
         )
     ]
-    mock_search_shows.return_value = mock_shows
+    mock_search_shows_fast.return_value = mock_shows
 
     response = await async_client.get("/shows/search?query=breaking")
     assert response.status_code == 200

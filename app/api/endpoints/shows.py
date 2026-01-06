@@ -41,12 +41,7 @@ async def list_shows(
     GET /shows/?page=1&limit=20
     ```
     """
-    all_shows = await show_service.get_all_shows()
-
-    total = len(all_shows)
-    start = (page - 1) * limit
-    end = start + limit
-    page_items = all_shows[start:end]
+    page_items, total = await show_service.get_shows_page(page, limit)
 
     # Convert to simplified list schema
     items = [
@@ -66,7 +61,7 @@ async def list_shows(
         total=total,
         page=page,
         limit=limit,
-        has_next=end < total,
+        has_next=(page * limit) < total,
         has_previous=page > 1,
     )
 
@@ -93,7 +88,7 @@ async def search_shows(
     GET /shows/search?query=office       → The Office (US), The Office (UK), ...
     ```
     """
-    shows = await show_service.search_shows(query)
+    shows = await show_service.search_shows_fast(query)
 
     return [
         ShowListSchema(
