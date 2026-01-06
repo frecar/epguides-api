@@ -17,3 +17,11 @@ repos:
         always_run: true
         stages: [pre-commit]
 
+      - id: tests-coverage
+        name: Run tests with 100% coverage (blocks commit if fails)
+        entry: bash -c 'source venv/bin/activate && PYTHONPATH=. pytest --cov=app --cov-fail-under=100 -q'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+

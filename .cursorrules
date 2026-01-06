@@ -1,105 +1,89 @@
-# Cursor AI Rules for Epguides API
+# Epguides API - Cursor Rules
 
-## Terminal Commands
-**ALWAYS source the virtual environment before running Python commands:**
+## ⚠️ CRITICAL: Always Use Virtual Environment
 ```bash
 cd /Users/frecar/code/epguides-api && source venv/bin/activate && <command>
 ```
 
-Common commands:
-- `make test` - Run tests
-- `make fix` - Format and lint code
-- `make up` - Start Docker services
-- `make down` - Stop Docker services
-- `make docs` - Serve documentation locally
-
-## Code Style
-- Follow PEP 8 with line length of 120 characters
-- Use type hints for all function parameters and return types
-- Use async/await for all I/O operations
-- Prefer composition over inheritance
-- Use dependency injection via FastAPI Depends()
-
-## Python Standards
-- Maximum line length: 120 characters
-- Use double quotes for strings (black default)
-- Use f-strings for string formatting
-- Use pathlib for file paths
-- Use dataclasses or Pydantic models for data structures
-
-## FastAPI Best Practices
-- Use Pydantic models for request/response validation
-- Use async endpoints for all routes
-- Use dependency injection for services
-- Return proper HTTP status codes
-- Use descriptive endpoint summaries and descriptions
-
-## Error Handling
-- Use specific exception types
-- Log errors with appropriate levels
-- Return meaningful error messages to clients
-- Use HTTPException for API errors
+## Quick Reference
+| Command | Purpose |
+|---------|---------|
+| `make test` | Run tests (100% coverage required) |
+| `make fix` | Format (black) + lint (ruff) |
+| `make up` | Start dev Docker (Redis + API with reload) |
+| `make up-prod` | Start prod Docker (optimized uvicorn) |
+| `make down` | Stop all Docker services |
+| `make cache-clear` | Flush Redis cache |
 
 ## Testing
-- Write tests for all service methods
-- Use pytest and pytest-asyncio
-- Mock external dependencies
-- Test error cases
+- **100% test coverage** enforced by pre-commit (blocks commit if < 100%)
+- **Performance tests** in `test_performance.py`: < 50ms hard limit, < 20ms target
+- Mock patterns:
+  ```python
+  @patch("app.core.cache.cache_get", return_value=None)  # Cache miss
+  @patch("app.services.show_service.get_show")           # Service layer
+  ```
+- If code can't be tested, **remove it** - no `# pragma: no cover`
 
-## Performance
-- Use async/await for all I/O
-- Cache expensive operations with Redis
-- Use connection pooling for databases/Redis
-- Avoid blocking operations in async code
+## Code Patterns
 
-## Documentation
-When making changes, ALWAYS update ALL relevant documentation:
+### Caching (app/core/cache.py)
+```python
+# Use the @cached decorator for Pydantic models
+@cached("show:{show_id}", ttl=TTL_7_DAYS, model=ShowSchema, key_transform=normalize_show_id)
+async def get_show(show_id: str) -> ShowSchema | None:
+    ...
 
-### Docstrings
-- Add docstrings to all public functions and classes
-- Include Args, Returns, and Raises sections
-- Update docstrings when function behavior changes
+# TTL constants
+TTL_7_DAYS   # Ongoing shows, episodes, seasons
+TTL_30_DAYS  # Show list, indexes
+TTL_1_YEAR   # Finished shows (won't change)
+```
 
-### README.md
-- Update when adding/removing features or endpoints
-- Keep examples current and working
-- Update caching strategy if TTLs change
+### Schemas
+```python
+# Always use factory function (handles defaults)
+show = create_show_schema(epguides_key="test", title="Test")
 
-### ReadTheDocs (docs/ folder)
-- `docs/index.md` - Update features list
-- `docs/rest-api.md` - Update when endpoints change
-- `docs/mcp-server.md` - Update when MCP tools change
-- `docs/configuration.md` - Update when env vars change
-- `docs/development.md` - Update when dev workflow changes
-- `docs/getting-started.md` - Keep quick start current
+# NOT direct instantiation (requires all fields)
+show = ShowSchema(...)  # Don't do this
+```
 
-### Swagger/OpenAPI
-- Use descriptive `summary` and `description` in endpoints
-- Add `examples` to Query parameters
-- Keep response models accurate
-
-### Code Comments
-- Use type hints for better IDE support
-- Add inline comments for complex logic
-- Keep constants documented with docstrings
-
-## Versioning
-- Version is auto-incremented via pre-commit hook (VERSION file)
-- No manual version management needed
-- MCP protocol version is in `app/core/constants.py`
+### Async Services
+```python
+# Parallel fetches for performance
+results = await asyncio.gather(
+    epguides.get_episodes_data(show_id),
+    epguides.get_maze_id_for_show(show_id),
+)
+```
 
 ## Project Structure
-- `app/api/endpoints/` - REST API endpoints
-- `app/core/` - Config, cache, middleware, constants
-- `app/mcp/` - MCP server implementation
-- `app/models/` - Pydantic schemas
-- `app/services/` - Business logic
-- `app/tests/` - Test suite
-- `docs/` - ReadTheDocs documentation
+```
+app/
+├── api/endpoints/     # REST routes (FastAPI routers)
+│   ├── shows.py       # /shows/* endpoints
+│   └── mcp.py         # /mcp endpoint (JSON-RPC wrapper)
+├── core/
+│   ├── cache.py       # Redis caching, @cached decorator
+│   ├── config.py      # Settings from env vars
+│   ├── constants.py   # TTLs, version, URLs
+│   └── middleware.py  # Request logging
+├── mcp/server.py      # MCP protocol implementation
+├── models/
+│   ├── schemas.py     # ShowSchema, EpisodeSchema, etc.
+│   └── responses.py   # PaginatedResponse
+├── services/
+│   ├── show_service.py  # Business logic
+│   ├── epguides.py      # External API calls
+│   └── llm_service.py   # Natural language queries
+└── tests/             # pytest suite (100% coverage)
+docs/                  # ReadTheDocs (mkdocs)
+```
 
-## Caching
-- Finished shows: 1 year (CACHE_TTL_FINISHED)
-- Ongoing shows: 7 days (settings.CACHE_TTL_SECONDS)
-- Shows master list: 30 days (CACHE_TTL_SHOWS_METADATA_SECONDS)
-- Update these in `app/core/constants.py` and `app/core/cache.py`
-
+## When Making Changes
+1. Run `make fix` then `make test` before committing
+2. Update docstrings if function behavior changes
+3. Update `docs/*.md` if adding features/endpoints
+4. Keep Swagger `summary` and `description` current
+5. Version auto-increments via pre-commit hook

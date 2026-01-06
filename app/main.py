@@ -25,13 +25,19 @@ from app.exceptions import EpguidesAPIException, ExternalServiceError
 # Logging Setup
 # =============================================================================
 
-try:
-    from app.core.logging_config import setup_logging
 
-    setup_logging()
-except Exception:
-    # Fallback to basic config if custom setup fails
-    logging.basicConfig(level=logging.INFO)
+def _initialize_logging() -> None:
+    """Initialize logging with fallback to basic config."""
+    try:
+        from app.core.logging_config import setup_logging
+
+        setup_logging()
+    except Exception:
+        # Fallback to basic config if custom setup fails
+        logging.basicConfig(level=logging.INFO)
+
+
+_initialize_logging()
 
 logger = logging.getLogger(__name__)
 
