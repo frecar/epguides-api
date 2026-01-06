@@ -268,7 +268,8 @@ def cached(
     Clean caching decorator for Pydantic models.
 
     Args:
-        key_template: Cache key template, e.g. "show:{0}" where {0} is first arg.
+        key_template: Cache key template using named parameter, e.g. "show:{show_id}".
+                      The parameter name must match the first function argument.
         ttl: Default TTL in seconds.
         model: Pydantic model class for deserialization (optional).
         is_list: If True, deserialize as list of models.
@@ -276,12 +277,12 @@ def cached(
         ttl_if: Function to override TTL based on result. Return new TTL or None to use default.
 
     Example:
-        @cached("show:{0}", ttl=SEVEN_DAYS, model=ShowSchema, key_transform=normalize_id)
+        @cached("show:{show_id}", ttl=TTL_7_DAYS, model=ShowSchema, key_transform=normalize_id)
         async def get_show(show_id: str) -> ShowSchema | None:
             # Just business logic, no cache boilerplate
             ...
 
-        @cached("episodes:{0}", ttl=SEVEN_DAYS, model=EpisodeSchema, is_list=True)
+        @cached("episodes:{show_id}", ttl=TTL_7_DAYS, model=EpisodeSchema, is_list=True)
         async def get_episodes(show_id: str) -> list[EpisodeSchema]:
             ...
     """
@@ -291,11 +292,15 @@ def cached(
     ) -> Callable[P, Awaitable[R]]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            # Build cache key
+            # Build cache key using first argument (or "global" for no-arg functions)
             key_arg = str(args[0]) if args else "global"
             if key_transform:
                 key_arg = key_transform(key_arg)
-            cache_key = key_template.format(key_arg)
+
+            # Replace any {placeholder} with the key_arg value
+            import re
+
+            cache_key = re.sub(r"\{[^}]+\}", key_arg, key_template)
 
             # Check cache
             cached_data = await cache_get(cache_key)
