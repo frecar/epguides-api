@@ -374,28 +374,19 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
     since the data won't change.
     """
     import asyncio
+    from collections.abc import Coroutine
 
     from app.core.cache import CACHE_TTL_FINISHED, extend_cache_ttl
 
-    # Parallel fetch: IMDB ID (if needed), episode stats, and poster
-    tasks = []
-
-    # Task 1: IMDB ID
     needs_imdb = not show.imdb_id
-    if needs_imdb:
-        tasks.append(_fetch_imdb_id_for_show(show))
-    else:
-        tasks.append(asyncio.sleep(0))  # Placeholder
-
-    # Task 2: Episode stats
-    tasks.append(_calculate_episode_stats(normalized_id))
-
-    # Task 3: Poster
     needs_poster = not show.poster_url
-    if needs_poster:
-        tasks.append(_get_poster_url(normalized_id))
-    else:
-        tasks.append(asyncio.sleep(0))  # Placeholder
+
+    # Parallel fetch: IMDB ID (if needed), episode stats, and poster
+    tasks: list[Coroutine[Any, Any, Any]] = [
+        _fetch_imdb_id_for_show(show) if needs_imdb else asyncio.sleep(0),
+        _calculate_episode_stats(normalized_id),
+        _get_poster_url(normalized_id) if needs_poster else asyncio.sleep(0),
+    ]
 
     results = await asyncio.gather(*tasks)
 
