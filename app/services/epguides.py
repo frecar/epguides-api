@@ -308,7 +308,8 @@ async def get_tvmaze_show_data(maze_id: str) -> dict[str, Any] | None:
             response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}")
             if response.status_code != 200:
                 return None
-            return response.json()
+            data: dict[str, Any] = response.json()
+            return data
     except Exception as e:
         logger.warning("Failed to fetch TVMaze show data for maze=%s: %s", maze_id, e)
         return None
@@ -330,7 +331,8 @@ async def get_tvmaze_seasons(maze_id: str) -> list[dict[str, Any]]:
             response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}/seasons")
             if response.status_code != 200:
                 return []
-            return response.json()
+            data: list[dict[str, Any]] = response.json()
+            return data
     except Exception as e:
         logger.warning("Failed to fetch TVMaze seasons for maze=%s: %s", maze_id, e)
         return []
