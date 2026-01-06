@@ -2,24 +2,24 @@
 # Production Configuration
 # Usage: make up-prod  (or: docker compose -f docker-compose.prod.yml up)
 # =============================================================================
-# Optimized for 16-core server with 5GB Redis cache
+# Optimized for 4-core server with 1GB Redis cache
 
 services:
   epguides-api:
     build:
       context: .
-    # 12 workers = 16 cores - 4 (reserved for Redis + OS)
+    # 3 workers = 4 cores - 1 (reserved for Redis + OS)
     # uvloop + httptools: ~2x faster than default asyncio
     command: >
       uvicorn app.main:app
       --host 0.0.0.0
       --port 3000
-      --workers 12
+      --workers 3
       --loop uvloop
       --http httptools
       --timeout-keep-alive 30
-      --limit-concurrency 1000
-      --backlog 2048
+      --limit-concurrency 500
+      --backlog 1024
       --log-level warning
     ports:
       - "3000:3000"
@@ -35,11 +35,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "12"
-          memory: 4G
-        reservations:
-          cpus: "4"
+          cpus: "3"
           memory: 1G
+        reservations:
+          cpus: "1"
+          memory: 256M
     healthcheck:
       test:
         [
@@ -65,13 +65,13 @@ services:
     image: redis:7
     command: >
       redis-server
-      --maxmemory 5120mb
+      --maxmemory 1024mb
       --maxmemory-policy allkeys-lru
       --save ""
       --appendonly no
-      --io-threads 8
+      --io-threads 2
       --io-threads-do-reads yes
-      --tcp-backlog 65535
+      --tcp-backlog 511
       --tcp-keepalive 300
       --timeout 0
     ports:
@@ -83,15 +83,15 @@ services:
         soft: 65536
         hard: 65536
     sysctls:
-      - net.core.somaxconn=65535
+      - net.core.somaxconn=511
     deploy:
       resources:
         limits:
-          cpus: "4"
-          memory: 6G
+          cpus: "1"
+          memory: 1280M
         reservations:
-          cpus: "2"
-          memory: 5G
+          cpus: "0.5"
+          memory: 1G
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
