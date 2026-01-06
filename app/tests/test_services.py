@@ -104,8 +104,10 @@ def test_get_version_git_fails_returns_dev(monkeypatch):
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.services.epguides.get_all_shows_metadata")
-async def test_get_all_shows(mock_get_metadata):
+async def test_get_all_shows(mock_get_metadata, mock_cache_get, mock_cache_set):
     """Test retrieving all shows."""
     mock_data = [
         {
@@ -236,12 +238,21 @@ async def test_get_show_does_not_set_end_date_with_unreleased_episodes(
 
 
 @pytest.mark.asyncio
+@patch("app.core.cache.extend_cache_ttl")
 @patch("app.core.cache.cache_set")
+@patch("app.core.cache.cache_exists", return_value=False)
+@patch("app.core.cache.cache_hget", return_value=None)
 @patch("app.core.cache.cache_get", return_value=None)
 @patch("app.services.epguides.get_episodes_data")
 @patch("app.services.epguides.get_all_shows_metadata")
 async def test_get_show_sets_end_date_when_all_episodes_released(
-    mock_get_metadata, mock_get_episodes_data, mock_cache_get, mock_cache_set
+    mock_get_metadata,
+    mock_get_episodes_data,
+    mock_cache_get,
+    mock_cache_hget,
+    mock_cache_exists,
+    mock_cache_set,
+    mock_extend_ttl,
 ):
     """Test that get_show DOES set end_date when all episodes are released."""
     from datetime import datetime, timedelta
@@ -251,7 +262,7 @@ async def test_get_show_sets_end_date_when_all_episodes_released(
     # Mock show data from epguides
     mock_get_metadata.return_value = [
         {
-            "directory": "finishedshow",
+            "directory": "finishedshow2",
             "title": "Finished Show",
             "network": "Netflix",
             "run time": "60 min",
@@ -279,7 +290,7 @@ async def test_get_show_sets_end_date_when_all_episodes_released(
     ]
     mock_get_episodes_data.return_value = mock_episodes_data
 
-    result = await show_service.get_show("finishedshow")
+    result = await show_service.get_show("finishedshow2")
 
     # Should have end_date set to the last episode's release date
     assert result is not None
@@ -1208,8 +1219,10 @@ async def test_get_episodes_data_returns_empty_on_error(mock_fetch):
 
 
 @pytest.mark.asyncio
+@patch("app.core.cache.cache_set")
+@patch("app.core.cache.cache_get", return_value=None)
 @patch("app.services.epguides._fetch_url")
-async def test_get_episodes_data_no_csv_url(mock_fetch):
+async def test_get_episodes_data_no_csv_url(mock_fetch, mock_cache_get, mock_cache_set):
     """Test get_episodes_data returns empty when no CSV URL found."""
     from unittest.mock import MagicMock
 
@@ -1218,7 +1231,7 @@ async def test_get_episodes_data_no_csv_url(mock_fetch):
     mock_response.text = "<html><body>No CSV link</body></html>"
     mock_fetch.return_value = mock_response
 
-    result = await epguides.get_episodes_data("test")
+    result = await epguides.get_episodes_data("test_no_csv")
 
     assert result == []
 
@@ -1289,8 +1302,10 @@ async def test_get_tvmaze_show_data_error(mock_client_class):
 
 
 @pytest.mark.asyncio
+@patch("app.core.cache.cache_set")
+@patch("app.core.cache.cache_get", return_value=None)
 @patch("httpx.AsyncClient")
-async def test_get_tvmaze_show_data_not_found(mock_client_class):
+async def test_get_tvmaze_show_data_not_found(mock_client_class, mock_cache_get, mock_cache_set):
     """Test get_tvmaze_show_data returns None on 404."""
     mock_response = MagicMock()
     mock_response.status_code = 404
@@ -1300,7 +1315,7 @@ async def test_get_tvmaze_show_data_not_found(mock_client_class):
     mock_client.__aenter__.return_value = mock_client
     mock_client_class.return_value = mock_client
 
-    result = await epguides.get_tvmaze_show_data("12345")
+    result = await epguides.get_tvmaze_show_data("99999")
 
     assert result is None
 
@@ -1398,15 +1413,15 @@ async def test_fetch_tvmaze_season_data_no_maze_id():
 
 
 @pytest.mark.asyncio
-@patch("app.services.show_service.get_episodes")
-@patch("app.services.show_service.epguides.get_maze_id_for_show")
-@patch("app.services.show_service.cache_get")
 @patch("app.services.show_service._fetch_tvmaze_season_data")
-async def test_get_seasons_with_episodes(mock_tvmaze, mock_cache, mock_maze, mock_episodes):
+@patch("app.services.show_service.epguides.get_maze_id_for_show")
+@patch("app.services.show_service.get_episodes")
+@patch("app.core.cache.cache_set")
+@patch("app.core.cache.cache_get", return_value=None)
+async def test_get_seasons_with_episodes(mock_cache_get, mock_cache_set, mock_episodes, mock_maze, mock_tvmaze):
     """Test get_seasons returns seasons when episodes exist."""
     from datetime import date
 
-    mock_cache.return_value = None
     mock_episodes.return_value = [
         show_service.EpisodeSchema(season=1, number=1, title="S1E1", release_date=date(2020, 1, 1), is_released=True),
         show_service.EpisodeSchema(season=1, number=2, title="S1E2", release_date=date(2020, 1, 15), is_released=True),
@@ -1414,7 +1429,7 @@ async def test_get_seasons_with_episodes(mock_tvmaze, mock_cache, mock_maze, moc
     mock_maze.return_value = "12345"
     mock_tvmaze.return_value = ({1: {"poster_url": "http://poster.jpg", "summary": "S1 summary"}}, "http://show.jpg")
 
-    result = await show_service.get_seasons("test")
+    result = await show_service.get_seasons("test_seasons")
 
     assert len(result) == 1
     assert result[0].number == 1
@@ -1932,8 +1947,10 @@ async def test_merge_tvmaze_episode_data_handles_exception(mock_client_class):
 
 
 @pytest.mark.asyncio
+@patch("app.core.cache.cache_set")
+@patch("app.core.cache.cache_get", return_value=None)
 @patch("httpx.AsyncClient")
-async def test_get_tvmaze_seasons_non_200(mock_client_class):
+async def test_get_tvmaze_seasons_non_200(mock_client_class, mock_cache_get, mock_cache_set):
     """Test get_tvmaze_seasons returns empty on non-200."""
     mock_response = MagicMock()
     mock_response.status_code = 404
@@ -1943,7 +1960,7 @@ async def test_get_tvmaze_seasons_non_200(mock_client_class):
     mock_client.__aenter__.return_value = mock_client
     mock_client_class.return_value = mock_client
 
-    result = await epguides.get_tvmaze_seasons("12345")
+    result = await epguides.get_tvmaze_seasons("99999")
 
     assert result == []
 
