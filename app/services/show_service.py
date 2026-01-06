@@ -30,6 +30,31 @@ _DATE_PLACEHOLDER_PATTERNS = [r"^_+", r"^TBA", r"^TBD", r"^\?+", r"^N/A"]
 _MONTH_YEAR_FORMATS = ["%b %Y", "%B %Y", "%b %y", "%B %y"]
 
 
+def clear_memory_caches() -> None:
+    """
+    Clear all in-memory caches.
+
+    Used primarily for testing to ensure clean state between tests.
+    """
+    global _show_list_cache, _show_index_cache, _show_cache_key, _enriched_show_cache, _seasons_cache
+    _show_list_cache = None
+    _show_index_cache = None
+    _show_cache_key = None
+    _enriched_show_cache = {}
+    _seasons_cache = {}
+
+
+def invalidate_show_memory_cache(normalized_id: str) -> None:
+    """
+    Invalidate in-memory cache for a specific show.
+
+    Used when refresh=true to ensure fresh data is fetched.
+    """
+    global _enriched_show_cache, _seasons_cache
+    _enriched_show_cache.pop(normalized_id, None)
+    _seasons_cache.pop(normalized_id, None)
+
+
 # =============================================================================
 # Public API Functions
 # =============================================================================
@@ -51,18 +76,51 @@ def normalize_show_id(show_id: str) -> str:
     return normalized[3:] if normalized.startswith("the") else normalized
 
 
+# In-memory cache for shows (rebuilt when master list changes)
+_show_list_cache: list[ShowSchema] | None = None
+_show_index_cache: dict[str, ShowSchema] | None = None
+_show_cache_key: str | None = None
+
+
+async def _ensure_show_cache() -> None:
+    """
+    Ensure show caches are populated.
+
+    Lazily builds both the list and index caches from raw data.
+    Only rebuilds when underlying data changes.
+    """
+    global _show_list_cache, _show_index_cache, _show_cache_key
+
+    raw_data = await epguides.get_all_shows_metadata()
+    cache_key = str(len(raw_data))
+
+    if _show_cache_key != cache_key:
+        shows = [_map_csv_row_to_show(row) for row in raw_data]
+        _show_list_cache = shows
+        _show_index_cache = {normalize_show_id(s.epguides_key): s for s in shows}
+        _show_cache_key = cache_key
+
+
 async def get_all_shows() -> list[ShowSchema]:
     """
-    Get all shows from master list.
-
-    Fetches the complete list of shows from epguides master CSV.
-    Results are cached for 30 days via the epguides module.
+    Get all shows from master list (cached in memory).
 
     Returns:
         List of all available shows.
     """
-    raw_data = await epguides.get_all_shows_metadata()
-    return [_map_csv_row_to_show(row) for row in raw_data]
+    await _ensure_show_cache()
+    return _show_list_cache or []
+
+
+async def _get_show_index() -> dict[str, ShowSchema]:
+    """
+    Get show lookup index for O(1) access by normalized key.
+
+    Returns:
+        Dict mapping normalized_key -> ShowSchema.
+    """
+    await _ensure_show_cache()
+    return _show_index_cache or {}
 
 
 async def search_shows(query: str) -> list[ShowSchema]:
@@ -77,20 +135,20 @@ async def search_shows(query: str) -> list[ShowSchema]:
     Returns:
         List of shows matching the query.
     """
-    shows = await get_all_shows()
+    index = await _get_show_index()
     query_lower = query.lower()
-    return [s for s in shows if query_lower in s.title.lower()]
+    return [s for s in index.values() if query_lower in s.title.lower()]
+
+
+# Cache for enriched show data
+_enriched_show_cache: dict[str, ShowSchema] = {}
 
 
 async def get_show(show_id: str) -> ShowSchema | None:
     """
     Get show details with enriched metadata.
 
-    Strategy:
-    1. Try to find show in master list (has rich metadata)
-    2. Enrich with IMDB ID if missing
-    3. Derive end_date and total_episodes from actual episode data
-    4. Fallback to scraped data if not in master list
+    Uses in-memory caching for fast repeated lookups.
 
     Args:
         show_id: The epguides key or show identifier.
@@ -100,16 +158,24 @@ async def get_show(show_id: str) -> ShowSchema | None:
     """
     normalized_id = normalize_show_id(show_id)
 
-    # Try master list first (has rich metadata)
-    all_shows = await get_all_shows()
-    show = _find_show_by_id(all_shows, normalized_id)
+    # Check enriched cache first
+    if normalized_id in _enriched_show_cache:
+        return _enriched_show_cache[normalized_id]
+
+    # O(1) lookup from show index
+    index = await _get_show_index()
+    show = index.get(normalized_id)
 
     if show:
         show = await _enrich_show_metadata(show, normalized_id)
+        _enriched_show_cache[normalized_id] = show
         return show
 
     # Fallback: create from scraped data
-    return await _create_show_from_scrape(normalized_id)
+    scraped = await _create_show_from_scrape(normalized_id)
+    if scraped:
+        _enriched_show_cache[normalized_id] = scraped
+    return scraped
 
 
 async def get_episodes(show_id: str) -> list[EpisodeSchema]:
@@ -149,9 +215,15 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     return episodes
 
 
+# Cache for seasons data
+_seasons_cache: dict[str, list[SeasonSchema]] = {}
+
+
 async def get_seasons(show_id: str) -> list[SeasonSchema]:
     """
     Get seasons for a show with poster and summary from TVMaze.
+
+    Uses caching and parallel TVMaze calls for performance.
 
     Args:
         show_id: The epguides key or show identifier.
@@ -159,11 +231,22 @@ async def get_seasons(show_id: str) -> list[SeasonSchema]:
     Returns:
         List of seasons with metadata, posters, and episode counts.
     """
+    import asyncio
+
     normalized_id = normalize_show_id(show_id)
+
+    # Check cache first
+    if normalized_id in _seasons_cache:
+        return _seasons_cache[normalized_id]
+
     base_url = settings.API_BASE_URL.rstrip("/")
 
-    # Get episodes to derive season info
-    episodes = await get_episodes(show_id)
+    # Get episodes and maze_id in parallel
+    episodes_task = get_episodes(show_id)
+    maze_id_task = epguides.get_maze_id_for_show(normalized_id)
+
+    episodes, maze_id = await asyncio.gather(episodes_task, maze_id_task)
+
     if not episodes:
         return []
 
@@ -182,22 +265,22 @@ async def get_seasons(show_id: str) -> list[SeasonSchema]:
         if ep.release_date > season_stats[ep.season]["end_date"]:
             season_stats[ep.season]["end_date"] = ep.release_date
 
-    # Get TVMaze season data for posters and summaries
-    maze_id = await epguides.get_maze_id_for_show(normalized_id)
+    # Get TVMaze data in parallel
     tvmaze_seasons: dict[int, dict[str, Any]] = {}
     show_poster = None
 
     if maze_id:
-        show_poster = await epguides.get_show_poster(maze_id)
-        tvmaze_season_list = await epguides.get_tvmaze_seasons(maze_id)
+        # Parallel fetch of show poster and seasons
+        poster_task = epguides.get_show_poster(maze_id)
+        seasons_task = epguides.get_tvmaze_seasons(maze_id)
+        show_poster, tvmaze_season_list = await asyncio.gather(poster_task, seasons_task)
+
         for season_data in tvmaze_season_list:
             season_num = season_data.get("number")
             if season_num is not None:
                 # Extract summary (strip HTML)
                 summary = season_data.get("summary") or ""
                 if summary:
-                    import re
-
                     summary = re.sub(r"<[^>]+>", "", summary).strip()
 
                 # Extract poster
@@ -228,6 +311,8 @@ async def get_seasons(show_id: str) -> list[SeasonSchema]:
             )
         )
 
+    # Cache the result
+    _seasons_cache[normalized_id] = seasons
     return seasons
 
 
@@ -283,29 +368,51 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
     """
     Enrich show with IMDB ID, poster, and derived episode data.
 
-    Fetches IMDB ID if missing, poster from TVMaze, and derives
-    end_date/total_episodes from actual episode data for accuracy.
+    Uses parallel fetching for performance.
 
     For finished shows (with end_date), extends cache TTL to 1 year
     since the data won't change.
     """
+    import asyncio
+
     from app.core.cache import CACHE_TTL_FINISHED, extend_cache_ttl
 
-    # Enrich with IMDB ID if missing
-    if not show.imdb_id:
-        enriched_list = await enrich_shows_with_imdb_ids([show])
-        show = enriched_list[0]
+    # Parallel fetch: IMDB ID (if needed), episode stats, and poster
+    tasks = []
 
-    # Derive metadata from episode data
-    episode_stats = await _calculate_episode_stats(normalized_id)
-    if episode_stats:
+    # Task 1: IMDB ID
+    needs_imdb = not show.imdb_id
+    if needs_imdb:
+        tasks.append(_fetch_imdb_id_for_show(show))
+    else:
+        tasks.append(asyncio.sleep(0))  # Placeholder
+
+    # Task 2: Episode stats
+    tasks.append(_calculate_episode_stats(normalized_id))
+
+    # Task 3: Poster
+    needs_poster = not show.poster_url
+    if needs_poster:
+        tasks.append(_get_poster_url(normalized_id))
+    else:
+        tasks.append(asyncio.sleep(0))  # Placeholder
+
+    results = await asyncio.gather(*tasks)
+
+    # Apply IMDB enrichment
+    if needs_imdb and results[0] and isinstance(results[0], ShowSchema):
+        show = results[0]
+
+    # Apply episode stats
+    episode_stats = results[1]
+    if episode_stats and isinstance(episode_stats, _EpisodeStats):
         updates = _build_show_updates(show, episode_stats)
         if updates:
             show = show.model_copy(update=updates)
 
-    # Fetch poster from TVMaze
-    if not show.poster_url:
-        show = await _enrich_show_with_poster(show, normalized_id)
+    # Apply poster
+    if needs_poster and results[2] and isinstance(results[2], str):
+        show = show.model_copy(update={"poster_url": results[2]})
 
     # Extend cache TTL for finished shows (data won't change)
     if show.end_date:
@@ -316,13 +423,12 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
     return show
 
 
-async def _enrich_show_with_poster(show: ShowSchema, normalized_id: str) -> ShowSchema:
-    """Fetch and attach poster URL from TVMaze."""
+async def _get_poster_url(normalized_id: str) -> str | None:
+    """Fetch poster URL from TVMaze."""
     maze_id = await epguides.get_maze_id_for_show(normalized_id)
     if maze_id:
-        poster_url = await epguides.get_show_poster(maze_id)
-        return show.model_copy(update={"poster_url": poster_url})
-    return show
+        return await epguides.get_show_poster(maze_id)
+    return None
 
 
 async def _create_show_from_scrape(normalized_id: str) -> ShowSchema | None:
@@ -349,9 +455,9 @@ async def _fetch_imdb_id_for_show(show: ShowSchema) -> ShowSchema:
 
 
 async def _get_show_runtime(normalized_id: str) -> int | None:
-    """Get runtime for a show from the master list."""
-    all_shows = await get_all_shows()
-    show = _find_show_by_id(all_shows, normalized_id)
+    """Get runtime for a show from the index (O(1) lookup)."""
+    index = await _get_show_index()
+    show = index.get(normalized_id)
     return show.run_time_min if show else None
 
 

@@ -407,9 +407,12 @@ async def get_season_posters(maze_id: str, show_poster_url: str | None = None) -
     return season_posters
 
 
+@cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="maze_id")
 async def get_maze_id_for_show(show_id: str) -> str | None:
     """
     Get TVMaze ID for a show by scraping its epguides page.
+
+    Cached to avoid repeated HTTP calls.
 
     Args:
         show_id: Epguides show identifier.
