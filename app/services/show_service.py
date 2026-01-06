@@ -40,11 +40,6 @@ CACHE_TTL_7_DAYS = 86400 * 7  # Enriched shows, seasons, episodes
 CACHE_TTL_1_YEAR = 86400 * 365  # Finished shows
 
 
-def clear_memory_caches() -> None:
-    """No-op. Kept for test compatibility - Redis manages all caching."""
-    pass
-
-
 async def invalidate_show_cache(normalized_id: str) -> None:
     """Invalidate all caches for a show."""
     from app.core.cache import get_redis
