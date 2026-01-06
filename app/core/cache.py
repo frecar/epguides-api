@@ -18,16 +18,16 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# Cache TTL Constants
+# Cache TTL Constants (Single Source of Truth)
 # =============================================================================
 
-# Default TTL for ongoing shows (episodes air weekly at most)
-CACHE_TTL_ONGOING = 604800  # 7 days
+TTL_7_DAYS = 86400 * 7  # Ongoing shows, seasons, episodes
+TTL_30_DAYS = 86400 * 30  # Show list, indexes
+TTL_1_YEAR = 86400 * 365  # Finished shows (data won't change)
 
-# Extended TTL for finished shows (data won't change)
-CACHE_TTL_FINISHED = 31536000  # 1 year (365 days)
-
-# Note: Master show list TTL is in app.core.constants.CACHE_TTL_SHOWS_METADATA_SECONDS
+# Legacy aliases (for backwards compatibility)
+CACHE_TTL_ONGOING = TTL_7_DAYS
+CACHE_TTL_FINISHED = TTL_1_YEAR
 
 # =============================================================================
 # Type Variables
@@ -48,7 +48,10 @@ async def get_redis() -> Redis:
     """
     Get or create Redis client with connection pooling.
 
-    Pool is sized for typical API workloads (20 concurrent connections).
+    Pool is sized for production workloads:
+    - 12 uvicorn workers × 10 connections each = 120 max connections
+    - Socket timeouts prevent hanging on network issues
+    - Health check interval ensures dead connections are recycled
     """
     global _redis_client, _redis_pool
 
@@ -59,9 +62,11 @@ async def get_redis() -> Redis:
             db=settings.REDIS_DB,
             password=settings.REDIS_PASSWORD,
             decode_responses=True,
-            max_connections=20,
+            max_connections=settings.REDIS_MAX_CONNECTIONS,
             socket_timeout=5.0,
             socket_connect_timeout=5.0,
+            health_check_interval=30,
+            retry_on_timeout=True,
         )
         _redis_client = Redis(connection_pool=_redis_pool)
 

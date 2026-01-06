@@ -14,7 +14,17 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from app.core.cache import cache_delete, cache_exists, cache_hget, cached, extend_cache_ttl, get_redis
+from app.core.cache import (
+    TTL_1_YEAR,
+    TTL_7_DAYS,
+    TTL_30_DAYS,
+    cache_delete,
+    cache_exists,
+    cache_hget,
+    cached,
+    extend_cache_ttl,
+    get_redis,
+)
 from app.core.config import settings
 from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
 from app.models.schemas import EpisodeSchema, SeasonSchema, ShowSchema, create_show_schema
@@ -30,11 +40,6 @@ _BATCH_SIZE = 5
 _BATCH_DELAY_SECONDS = 0.5
 _DATE_PLACEHOLDER_PATTERNS = [r"^_+", r"^TBA", r"^TBD", r"^\?+", r"^N/A"]
 _MONTH_YEAR_FORMATS = ["%b %Y", "%B %Y", "%b %y", "%B %y"]
-
-# Cache TTLs (centralized)
-TTL_30_DAYS = 86400 * 30  # Show list/index
-TTL_7_DAYS = 86400 * 7  # Enriched shows, seasons, episodes
-TTL_1_YEAR = 86400 * 365  # Finished shows
 
 
 async def invalidate_show_cache(normalized_id: str) -> None:

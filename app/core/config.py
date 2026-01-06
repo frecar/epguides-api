@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_PASSWORD: str | None = None
+    REDIS_MAX_CONNECTIONS: int = 100  # ~10 per uvicorn worker
 
     # -------------------------------------------------------------------------
     # Cache Configuration
