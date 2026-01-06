@@ -62,7 +62,7 @@ def normalize_show_id(show_id: str) -> str:
     return normalized[3:] if normalized.startswith("the") else normalized
 
 
-@cached("shows:all", ttl=TTL_30_DAYS, model=ShowSchema, is_list=True)
+@cached("shows:all", ttl=TTL_30_DAYS, model=ShowSchema, is_list=True)  # No param - static key
 async def get_all_shows() -> list[ShowSchema]:
     """Get all shows. Cache TTL: 30 days."""
     raw_data = await epguides.get_all_shows_metadata()
@@ -128,7 +128,7 @@ def _show_ttl(show: ShowSchema | None) -> int | None:
 
 
 @cached(
-    "show:{0}",
+    "show:{show_id}",
     ttl=TTL_7_DAYS,
     model=ShowSchema,
     key_transform=normalize_show_id,
@@ -155,7 +155,7 @@ def _episodes_ttl(episodes: list[EpisodeSchema]) -> int | None:
 
 
 @cached(
-    "episodes:{0}",
+    "episodes:{show_id}",
     ttl=TTL_7_DAYS,
     model=EpisodeSchema,
     is_list=True,
@@ -178,7 +178,7 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     return [ep.model_copy(update={"episode_number": idx}) for idx, ep in enumerate(episodes, start=1)]
 
 
-@cached("seasons:{0}", ttl=TTL_7_DAYS, model=SeasonSchema, is_list=True, key_transform=normalize_show_id)
+@cached("seasons:{show_id}", ttl=TTL_7_DAYS, model=SeasonSchema, is_list=True, key_transform=normalize_show_id)
 async def get_seasons(show_id: str) -> list[SeasonSchema]:
     """Get seasons with posters and summaries. TTL: 7 days."""
     import asyncio
