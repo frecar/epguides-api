@@ -25,27 +25,3 @@ class ExternalServiceError(EpguidesAPIException):
 
     Maps to HTTP 503 Service Unavailable.
     """
-
-
-class ShowNotFoundError(EpguidesAPIException):
-    """
-    Raised when a requested show does not exist.
-
-    Maps to HTTP 404 Not Found.
-    """
-
-    def __init__(self, show_id: str) -> None:
-        self.show_id = show_id
-        super().__init__(f"Show not found: {show_id}")
-
-
-class EpisodeNotFoundError(EpguidesAPIException):
-    """
-    Raised when a requested episode does not exist.
-
-    Maps to HTTP 404 Not Found.
-    """
-
-    def __init__(self, show_id: str, message: str = "Episode not found") -> None:
-        self.show_id = show_id
-        super().__init__(f"{message} for show: {show_id}")

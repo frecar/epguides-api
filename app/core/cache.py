@@ -7,6 +7,7 @@ and falls back gracefully on errors.
 
 import json
 import logging
+import re
 from collections.abc import Awaitable, Callable, Coroutine
 from functools import wraps
 from typing import Any, ParamSpec, TypeVar, cast
@@ -24,10 +25,6 @@ logger = logging.getLogger(__name__)
 TTL_7_DAYS = 86400 * 7  # Ongoing shows, seasons, episodes
 TTL_30_DAYS = 86400 * 30  # Show list, indexes
 TTL_1_YEAR = 86400 * 365  # Finished shows (data won't change)
-
-# Legacy aliases (for backwards compatibility)
-CACHE_TTL_ONGOING = TTL_7_DAYS
-CACHE_TTL_FINISHED = TTL_1_YEAR
 
 # =============================================================================
 # Type Variables
@@ -111,22 +108,6 @@ async def invalidate_cache(key_prefix: str, key_suffix: str) -> bool:
     except Exception as e:
         logger.error("Failed to invalidate cache %s:%s: %s", key_prefix, key_suffix, e)
         return False
-
-
-async def get_cache_ttl(key_prefix: str, key_suffix: str) -> int | None:
-    """
-    Get remaining TTL for a cache key.
-
-    Returns:
-        TTL in seconds, or None if key doesn't exist.
-    """
-    try:
-        redis = await get_redis()
-        cache_key = f"{key_prefix}:{key_suffix}"
-        ttl = await redis.ttl(cache_key)
-        return ttl if ttl > 0 else None
-    except Exception:
-        return None
 
 
 async def extend_cache_ttl(key_prefix: str, key_suffix: str, new_ttl: int) -> bool:
@@ -301,8 +282,6 @@ def cached(
                 key_arg = key_transform(key_arg)
 
             # Replace any {placeholder} with the key_arg value
-            import re
-
             cache_key = re.sub(r"\{[^}]+\}", key_arg, key_template)
 
             # Check cache

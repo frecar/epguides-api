@@ -7,6 +7,7 @@ This module provides pure functional interfaces for:
 - Merging metadata from multiple sources
 """
 
+import asyncio
 import html
 import json
 import logging
@@ -162,8 +163,6 @@ def _episodes_ttl(episodes: list[EpisodeSchema]) -> int | None:
 )
 async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     """Get all episodes for a show. TTL: 7 days (ongoing) or 1 year (finished)."""
-    import asyncio
-
     normalized_id = normalize_show_id(show_id)
 
     raw_data, run_time_min = await asyncio.gather(
@@ -179,8 +178,6 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
 @cached("seasons:{show_id}", ttl=TTL_7_DAYS, model=SeasonSchema, is_list=True, key_transform=normalize_show_id)
 async def get_seasons(show_id: str) -> list[SeasonSchema]:
     """Get seasons with posters and summaries. TTL: 7 days."""
-    import asyncio
-
     normalized_id = normalize_show_id(show_id)
     base_url = settings.API_BASE_URL.rstrip("/")
 
@@ -229,8 +226,6 @@ def _build_season_stats(episodes: list[EpisodeSchema]) -> dict[int, dict[str, An
 
 async def _fetch_tvmaze_season_data(maze_id: str | None) -> tuple[dict[int, dict[str, Any]], str | None]:
     """Fetch season posters and summaries from TVMaze."""
-    import asyncio
-
     if not maze_id:
         return {}, None
 
@@ -259,8 +254,6 @@ async def _fetch_tvmaze_season_data(maze_id: str | None) -> tuple[dict[int, dict
 
 async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSchema:
     """Enrich show with IMDB ID, poster, and episode stats."""
-    import asyncio
-
     updates: dict[str, Any] = {}
 
     # Parallel fetch only what's needed
@@ -487,10 +480,6 @@ def _parse_imdb_id(imdb_id_raw: str) -> str:
         return f"{prefix}{number:07d}"
     except (ValueError, IndexError):
         return imdb_id_raw
-
-
-# Keep public alias for backwards compatibility
-parse_imdb_id = _parse_imdb_id
 
 
 def _parse_run_time(run_time_str: str | None) -> int | None:

@@ -375,40 +375,6 @@ async def get_show_poster(maze_id: str) -> str:
     return extract_poster_url(show_data)
 
 
-async def get_season_posters(maze_id: str, show_poster_url: str | None = None) -> dict[int, str]:
-    """
-    Get poster URLs for all seasons of a show.
-
-    Falls back to show poster if season poster not available.
-
-    Args:
-        maze_id: TVMaze show ID.
-        show_poster_url: Show poster URL to use as fallback.
-
-    Returns:
-        Dict mapping season number to poster URL.
-    """
-    if not show_poster_url:
-        show_poster_url = await get_show_poster(maze_id)
-
-    seasons = await get_tvmaze_seasons(maze_id)
-    season_posters: dict[int, str] = {}
-
-    for season in seasons:
-        season_num = season.get("number")
-        if season_num is None:
-            continue
-
-        # Use season poster if available, otherwise show poster
-        season_poster = extract_poster_url(season)
-        if season_poster == _DEFAULT_POSTER_URL:
-            season_poster = show_poster_url
-
-        season_posters[season_num] = season_poster
-
-    return season_posters
-
-
 @cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="maze_id")
 async def get_maze_id_for_show(show_id: str) -> str | None:
     """
