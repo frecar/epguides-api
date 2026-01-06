@@ -1,0 +1,55 @@
+# =============================================================================
+# Production Configuration
+# Usage: docker compose -f docker-compose.prod.yml up  (or: make up-prod)
+# =============================================================================
+# Optimized for 16-core server with 5GB Redis cache
+
+services:
+  epguides-api:
+    build:
+      context: .
+    # 12 workers = 16 cores - 4 (reserved for Redis + OS)
+    # Uvicorn is async, so 1 worker per available core is ideal
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 3000
+      --workers 12
+      --loop uvloop
+      --http httptools
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    command: >
+      redis-server
+      --maxmemory 5120mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+      --io-threads 8
+      --io-threads-do-reads yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - ~/docker_volumes/redis-data:/data
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    sysctls:
+      - net.core.somaxconn=65535
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
