@@ -5,13 +5,13 @@ Provides a simple async caching decorator that handles cache hits/misses
 and falls back gracefully on errors.
 """
 
-import json
 import logging
 import re
 from collections.abc import Awaitable, Callable, Coroutine
 from functools import wraps
 from typing import Any, ParamSpec, TypeVar, cast
 
+import orjson
 from redis.asyncio import ConnectionPool, Redis
 
 from app.core.config import settings
@@ -226,11 +226,11 @@ def cache(
             try:
                 cached = await cache_get(cache_key)
                 if cached:
-                    return json.loads(cached)  # type: ignore
+                    return orjson.loads(cached)  # type: ignore
 
                 result = await func(*args, **kwargs)
                 if result:
-                    await cache_set(cache_key, json.dumps(result, default=str), ttl_seconds)
+                    await cache_set(cache_key, orjson.dumps(result).decode(), ttl_seconds)
                 return result
             except Exception as e:
                 logger.error("Cache error for %s: %s", cache_key, e)
@@ -285,10 +285,10 @@ def cached(
             # Replace any {placeholder} with the key_arg value
             cache_key = re.sub(r"\{[^}]+\}", key_arg, key_template)
 
-            # Check cache
+            # Check cache (use orjson for faster parsing)
             cached_data = await cache_get(cache_key)
             if cached_data:
-                data = json.loads(cached_data)
+                data = orjson.loads(cached_data)
                 if model:
                     if is_list:
                         return [model(**item) for item in data]  # type: ignore
@@ -307,15 +307,15 @@ def cached(
                     if override is not None:
                         final_ttl = override
 
-                # Serialize (type: ignore needed as R is generic)
+                # Serialize (use orjson for speed, type: ignore needed as R is generic)
                 if model:
                     if is_list:
                         items = list(result)  # type: ignore
-                        serialized = json.dumps([i.model_dump(mode="json") for i in items], default=str)
+                        serialized = orjson.dumps([i.model_dump(mode="json") for i in items]).decode()
                     else:
                         serialized = result.model_dump_json()  # type: ignore
                 else:
-                    serialized = json.dumps(result, default=str)
+                    serialized = orjson.dumps(result).decode()
 
                 await cache_set(cache_key, serialized, final_ttl)
 

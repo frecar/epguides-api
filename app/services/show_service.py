@@ -15,6 +15,8 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
+import orjson
+
 from app.core.cache import (
     TTL_1_YEAR,
     TTL_7_DAYS,
@@ -91,16 +93,16 @@ async def _get_all_shows_raw() -> list[dict[str, Any]]:
     """Get raw show data (cached as dicts, not Pydantic models)."""
     cache_key = "shows:all:raw"
 
-    # Check cache
+    # Check cache (use orjson for faster parsing)
     cached_data = await cache_get(cache_key)
     if cached_data:
-        result: list[dict[str, Any]] = json.loads(cached_data)
+        result: list[dict[str, Any]] = orjson.loads(cached_data)
         return result
 
-    # Fetch and cache
+    # Fetch and cache (use orjson for faster serialization)
     raw_data = await epguides.get_all_shows_metadata()
     shows: list[dict[str, Any]] = [_map_csv_row_to_dict(row) for row in raw_data]
-    await cache_set(cache_key, json.dumps(shows, default=str), TTL_30_DAYS)
+    await cache_set(cache_key, orjson.dumps(shows).decode(), TTL_30_DAYS)
     return shows
 
 
