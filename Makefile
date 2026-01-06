@@ -12,12 +12,24 @@ run:
 up:
 	docker compose up -d
 
-# Production (12 workers, 5GB Redis, optimized for 16 cores)
+# Production (5 workers, 3GB Redis, optimized for 6 cores)
 up-prod:
 	docker compose -f docker-compose.prod.yml up -d
 
 down:
 	docker compose down 2>/dev/null; docker compose -f docker-compose.prod.yml down 2>/dev/null
+
+# Clear Redis cache (run after deployment to ensure clean state)
+cache-clear:
+	docker exec $$(docker ps -qf "name=redis") redis-cli FLUSHALL 2>/dev/null || echo "Redis not running"
+
+# Deploy: rebuild, restart, and clear cache
+deploy-prod:
+	docker compose -f docker-compose.prod.yml build --no-cache
+	docker compose -f docker-compose.prod.yml up -d
+	@sleep 3
+	@make cache-clear
+	@echo "✅ Deployment complete, cache cleared"
 
 logs:
 	docker compose logs -f
