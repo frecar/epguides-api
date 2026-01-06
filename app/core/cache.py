@@ -226,7 +226,12 @@ def cache(
             try:
                 cached = await cache_get(cache_key)
                 if cached:
-                    return orjson.loads(cached)  # type: ignore
+                    try:
+                        return orjson.loads(cached)  # type: ignore
+                    except (orjson.JSONDecodeError, TypeError) as e:
+                        # Corrupted cache - clear and continue
+                        logger.warning("Corrupted cache for %s, clearing: %s", cache_key, e)
+                        await cache_delete(cache_key)
 
                 result = await func(*args, **kwargs)
                 if result:
@@ -288,14 +293,23 @@ def cached(
             # Check cache (use orjson for faster parsing)
             cached_data = await cache_get(cache_key)
             if cached_data:
-                data = orjson.loads(cached_data)
-                if model:
-                    if is_list:
-                        return [model(**item) for item in data]  # type: ignore
-                    return model(**data) if data else None  # type: ignore
-                return data  # type: ignore
+                try:
+                    data = orjson.loads(cached_data)
+                    if model:
+                        if is_list:
+                            return [model(**item) for item in data]  # type: ignore
+                        return model(**data) if data else None  # type: ignore
+                    return data  # type: ignore
+                except (orjson.JSONDecodeError, TypeError, KeyError) as e:
+                    # Corrupted cache data - log and delete, then continue to fetch fresh
+                    logger.warning("Corrupted cache data for %s, clearing: %s", cache_key, e)
+                    await cache_delete(cache_key)
+                except Exception as e:
+                    # Pydantic validation or other errors - also clear cache
+                    logger.warning("Invalid cache data for %s, clearing: %s", cache_key, e)
+                    await cache_delete(cache_key)
 
-            # Cache miss - execute function
+            # Cache miss (or corrupted cache) - execute function
             result = await func(*args, **kwargs)
 
             # Cache the result
