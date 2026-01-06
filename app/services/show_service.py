@@ -281,7 +281,9 @@ def _build_season_stats(episodes: list[EpisodeSchema]) -> dict[int, dict[str, An
     return stats
 
 
-async def _fetch_tvmaze_season_data(maze_id: str | None) -> tuple[dict[int, dict[str, Any]], str | None]:
+async def _fetch_tvmaze_season_data(
+    maze_id: str | None,
+) -> tuple[dict[int, dict[str, Any]], str | None]:
     """Fetch season posters and summaries from TVMaze."""
     if not maze_id:
         return {}, None
@@ -552,12 +554,7 @@ def _parse_total_episodes(episodes_str: str | None) -> int | None:
     if not episodes_str:
         return None
     match = re.search(r"(\d+)", str(episodes_str))
-    if match:
-        try:
-            return int(match.group(1))
-        except ValueError:
-            return None
-    return None
+    return int(match.group(1)) if match else None
 
 
 def _parse_date(date_str: str | None) -> date | None:

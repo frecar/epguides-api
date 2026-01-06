@@ -98,3 +98,21 @@ async def test_mcp_endpoint_missing_body(async_client: AsyncClient):
     """Test MCP endpoint with missing body."""
     response = await async_client.post("/mcp")
     assert response.status_code == 422  # FastAPI validation error for missing required body
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.mcp._mcp_server")
+async def test_mcp_endpoint_internal_error(mock_mcp_server, async_client: AsyncClient):
+    """Test MCP endpoint handles internal errors."""
+    mock_mcp_server.handle_request.side_effect = Exception("Internal error")
+
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {},
+    }
+    response = await async_client.post("/mcp", json=request)
+    assert response.status_code == 500
+    data = response.json()
+    assert "Internal error" in data["detail"]

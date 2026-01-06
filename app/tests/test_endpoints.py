@@ -585,3 +585,235 @@ async def test_get_show_with_refresh(mock_get_show, mock_invalidate, mock_invali
     # Verify cache was invalidated
     assert mock_invalidate.called
     assert mock_invalidate_show.called
+
+
+# =============================================================================
+# Error Path Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+@patch("app.api.endpoints.shows.show_service.get_show")
+async def test_get_season_episodes_show_not_found(mock_get_show, mock_get_episodes, async_client: AsyncClient):
+    """Test get_season_episodes with non-existent show."""
+    mock_get_episodes.return_value = []  # No episodes
+    mock_get_show.return_value = None  # Show doesn't exist
+
+    response = await async_client.get("/shows/NonExistent/seasons/1/episodes")
+
+    assert response.status_code == 404
+    assert "Show not found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_show")
+async def test_get_next_episode_show_not_found(mock_get_show, async_client: AsyncClient):
+    """Test get_next_episode with non-existent show."""
+    mock_get_show.return_value = None
+
+    response = await async_client.get("/shows/NonExistent/episodes/next")
+
+    assert response.status_code == 404
+    assert "Show not found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_show")
+async def test_get_next_episode_show_finished(mock_get_show, async_client: AsyncClient):
+    """Test get_next_episode for finished show."""
+    mock_get_show.return_value = create_show_schema(epguides_key="bb", title="Breaking Bad", end_date=date(2013, 9, 29))
+
+    response = await async_client.get("/shows/BreakingBad/episodes/next")
+
+    assert response.status_code == 404
+    assert "finished airing" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+@patch("app.api.endpoints.shows.show_service.get_show")
+async def test_get_next_episode_no_episodes(mock_get_show, mock_get_episodes, async_client: AsyncClient):
+    """Test get_next_episode with no episodes."""
+    mock_get_show.return_value = create_show_schema(epguides_key="test", title="Test Show")
+    mock_get_episodes.return_value = []
+
+    response = await async_client.get("/shows/TestShow/episodes/next")
+
+    assert response.status_code == 404
+    assert "No episodes found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+@patch("app.api.endpoints.shows.show_service.get_show")
+async def test_get_next_episode_all_released(mock_get_show, mock_get_episodes, async_client: AsyncClient):
+    """Test get_next_episode when all episodes are released."""
+    mock_get_show.return_value = create_show_schema(epguides_key="test", title="Test Show")
+    mock_get_episodes.return_value = [
+        EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2020, 1, 1), is_released=True),
+        EpisodeSchema(season=1, number=2, title="Second", release_date=date(2020, 1, 8), is_released=True),
+    ]
+
+    response = await async_client.get("/shows/TestShow/episodes/next")
+
+    assert response.status_code == 404
+    assert "No unreleased episodes found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.invalidate_cache")
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+@patch("app.api.endpoints.shows.show_service.get_show")
+async def test_get_next_episode_stale_cache(
+    mock_get_show, mock_get_episodes, mock_invalidate, async_client: AsyncClient
+):
+    """Test get_next_episode invalidates stale cache."""
+    mock_get_show.return_value = create_show_schema(epguides_key="test", title="Test Show")
+
+    # First call returns stale data (past date), second call returns fresh data
+    stale_episode = EpisodeSchema(season=1, number=1, title="Stale", release_date=date(2020, 1, 1), is_released=False)
+    fresh_episode = EpisodeSchema(season=1, number=2, title="Fresh", release_date=date(2030, 1, 1), is_released=False)
+    mock_get_episodes.side_effect = [[stale_episode], [fresh_episode]]
+
+    response = await async_client.get("/shows/TestShow/episodes/next")
+
+    assert response.status_code == 200
+    assert mock_invalidate.called
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.invalidate_cache")
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+@patch("app.api.endpoints.shows.show_service.get_show")
+async def test_get_next_episode_stale_no_new(
+    mock_get_show, mock_get_episodes, mock_invalidate, async_client: AsyncClient
+):
+    """Test get_next_episode when stale cache refresh finds no unreleased."""
+    mock_get_show.return_value = create_show_schema(epguides_key="test", title="Test Show")
+
+    # First call returns stale data, second call returns all released
+    stale_episode = EpisodeSchema(season=1, number=1, title="Stale", release_date=date(2020, 1, 1), is_released=False)
+    released_episode = EpisodeSchema(
+        season=1, number=1, title="Now Released", release_date=date(2020, 1, 1), is_released=True
+    )
+    mock_get_episodes.side_effect = [[stale_episode], [released_episode]]
+
+    response = await async_client.get("/shows/TestShow/episodes/next")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+async def test_get_latest_episode_no_episodes(mock_get_episodes, async_client: AsyncClient):
+    """Test get_latest_episode with no episodes."""
+    mock_get_episodes.return_value = []
+
+    response = await async_client.get("/shows/TestShow/episodes/latest")
+
+    assert response.status_code == 404
+    assert "No episodes found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+async def test_get_latest_episode_none_released(mock_get_episodes, async_client: AsyncClient):
+    """Test get_latest_episode when no episodes are released."""
+    mock_get_episodes.return_value = [
+        EpisodeSchema(season=1, number=1, title="Upcoming", release_date=date(2030, 1, 1), is_released=False),
+    ]
+
+    response = await async_client.get("/shows/TestShow/episodes/latest")
+
+    assert response.status_code == 404
+    assert "No released episodes found" in response.json()["detail"]
+
+
+# =============================================================================
+# Filter Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.invalidate_show_cache")
+@patch("app.api.endpoints.shows.invalidate_cache")
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+async def test_get_show_episodes_with_refresh(
+    mock_get_episodes, mock_invalidate, mock_invalidate_show, async_client: AsyncClient
+):
+    """Test get_show_episodes with refresh parameter."""
+    mock_get_episodes.return_value = [
+        EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2020, 1, 1), is_released=True),
+    ]
+
+    response = await async_client.get("/shows/TestShow/episodes?refresh=true")
+
+    assert response.status_code == 200
+    mock_invalidate.assert_called_once()
+    mock_invalidate_show.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+async def test_get_show_episodes_filter_by_episode(mock_get_episodes, async_client: AsyncClient):
+    """Test get_show_episodes filter by specific episode in a season."""
+    mock_get_episodes.return_value = [
+        EpisodeSchema(season=1, number=1, title="E1", release_date=date(2020, 1, 1), is_released=True),
+        EpisodeSchema(season=1, number=2, title="E2", release_date=date(2020, 1, 8), is_released=True),
+    ]
+
+    response = await async_client.get("/shows/TestShow/episodes?season=1&episode=2")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["number"] == 2
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+async def test_get_show_episodes_filter_by_year(mock_get_episodes, async_client: AsyncClient):
+    """Test get_show_episodes filter by year."""
+    mock_get_episodes.return_value = [
+        EpisodeSchema(season=1, number=1, title="E1", release_date=date(2020, 1, 1), is_released=True),
+        EpisodeSchema(season=2, number=1, title="S2E1", release_date=date(2021, 1, 1), is_released=True),
+    ]
+
+    response = await async_client.get("/shows/TestShow/episodes?year=2021")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["season"] == 2
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+async def test_get_show_episodes_filter_by_title(mock_get_episodes, async_client: AsyncClient):
+    """Test get_show_episodes filter by title search."""
+    mock_get_episodes.return_value = [
+        EpisodeSchema(season=1, number=1, title="Pilot Episode", release_date=date(2020, 1, 1), is_released=True),
+        EpisodeSchema(season=1, number=2, title="The One", release_date=date(2020, 1, 8), is_released=True),
+    ]
+
+    response = await async_client.get("/shows/TestShow/episodes?title_search=pilot")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert "Pilot" in data[0]["title"]
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_show")
+@patch("app.api.endpoints.shows.show_service.get_episodes")
+async def test_get_show_episodes_no_results_show_not_found(mock_get_episodes, mock_get_show, async_client: AsyncClient):
+    """Test get_show_episodes returns 404 when no episodes and show not found."""
+    mock_get_episodes.return_value = []
+    mock_get_show.return_value = None
+
+    response = await async_client.get("/shows/NonExistent/episodes")
+
+    assert response.status_code == 404
+    assert "Show not found" in response.json()["detail"]

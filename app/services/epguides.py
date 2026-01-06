@@ -415,12 +415,9 @@ def _parse_episode_rows(rows: list[list[str]], column_map: dict[str, int]) -> li
         if not row:
             continue
 
-        try:
-            episode = {key: row[idx] for key, idx in column_map.items() if len(row) > idx}
-            if episode:
-                episodes.append(episode)
-        except (IndexError, KeyError):
-            continue
+        episode = {key: row[idx] for key, idx in column_map.items() if len(row) > idx}
+        if episode:
+            episodes.append(episode)
 
     return episodes
 
