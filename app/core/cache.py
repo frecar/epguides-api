@@ -335,3 +335,78 @@ def cached(
         return wrapper
 
     return decorator
+
+
+# =============================================================================
+# Cache Statistics
+# =============================================================================
+
+
+async def get_cache_stats() -> dict[str, Any]:
+    """
+    Get cache statistics for monitoring.
+
+    Returns counts of cached items by type and Redis memory usage.
+    """
+    try:
+        redis = await get_redis()
+
+        # Get all keys and categorize them
+        keys: list[bytes] = await redis.keys("*")
+        key_strings = [k.decode() if isinstance(k, bytes) else k for k in keys]
+
+        # Categorize keys
+        shows_cached = sum(1 for k in key_strings if k.startswith("show:") and not k.endswith(":raw"))
+        episodes_cached = sum(1 for k in key_strings if k.startswith("episodes:"))
+        seasons_cached = sum(1 for k in key_strings if k.startswith("seasons:"))
+        search_cached = sum(1 for k in key_strings if k.startswith("search:"))
+
+        # Check for master caches
+        has_show_list = "shows:all:raw" in key_strings
+        has_show_index = "show_index" in key_strings
+
+        # Get TTL for key caches
+        ttls = {}
+        for key_name, prefix in [
+            ("shows_list", "shows:all:raw"),
+            ("show_index", "show_index"),
+        ]:
+            if prefix in key_strings:
+                ttl = await redis.ttl(prefix)
+                ttls[key_name] = ttl if ttl > 0 else "no expiry"
+
+        # Get Redis memory info
+        info: dict[str, Any] = await redis.info("memory")
+        used_memory = info.get("used_memory_human", "unknown")
+        peak_memory = info.get("used_memory_peak_human", "unknown")
+
+        return {
+            "status": "connected",
+            "total_keys": len(key_strings),
+            "cached_items": {
+                "shows": shows_cached,
+                "episodes": episodes_cached,
+                "seasons": seasons_cached,
+                "searches": search_cached,
+            },
+            "master_caches": {
+                "show_list": has_show_list,
+                "show_index": has_show_index,
+            },
+            "ttl_seconds": ttls,
+            "ttl_config": {
+                "ongoing_shows": f"{TTL_7_DAYS} (7 days)",
+                "finished_shows": f"{TTL_1_YEAR} (1 year)",
+                "show_list": f"{TTL_30_DAYS} (30 days)",
+            },
+            "memory": {
+                "used": used_memory,
+                "peak": peak_memory,
+            },
+        }
+    except Exception as e:
+        logger.error("Failed to get cache stats: %s", e)
+        return {
+            "status": "error",
+            "error": str(e),
+        }
