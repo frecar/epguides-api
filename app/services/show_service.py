@@ -96,8 +96,18 @@ async def _get_all_shows_raw() -> list[dict[str, Any]]:
     # Check cache (use orjson for faster parsing)
     cached_data = await cache_get(cache_key)
     if cached_data:
-        result: list[dict[str, Any]] = orjson.loads(cached_data)
-        return result
+        try:
+            result: list[dict[str, Any]] = orjson.loads(cached_data)
+            # Validate it's actually a list of dicts with required fields
+            if isinstance(result, list) and result:
+                first = result[0]
+                if isinstance(first, dict) and "epguides_key" in first and "title" in first:
+                    return result
+            raise ValueError("Invalid cache format - missing required fields")
+        except (orjson.JSONDecodeError, TypeError, ValueError) as e:
+            # Corrupted cache - delete and fetch fresh
+            logger.warning("Corrupted cache for %s, clearing: %s", cache_key, e)
+            await cache_delete(cache_key)
 
     # Fetch and cache (use orjson for faster serialization)
     raw_data = await epguides.get_all_shows_metadata()
