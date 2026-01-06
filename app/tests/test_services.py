@@ -32,16 +32,24 @@ async def test_get_all_shows(mock_get_metadata):
 
 
 @pytest.mark.asyncio
-@patch("app.services.show_service.get_all_shows")
-async def test_search_shows(mock_get_all):
+@patch("app.services.epguides.get_all_shows_metadata")
+async def test_search_shows(mock_get_metadata):
     """Test searching shows."""
-    from app.models.schemas import create_show_schema
-
-    mock_shows = [
-        create_show_schema(epguides_key="bb", title="Breaking Bad"),
-        create_show_schema(epguides_key="got", title="Game of Thrones"),
+    mock_data = [
+        {
+            "directory": "bb",
+            "title": "Breaking Bad",
+            "network": "AMC",
+            "run time": "60 min",
+        },
+        {
+            "directory": "got",
+            "title": "Game of Thrones",
+            "network": "HBO",
+            "run time": "60 min",
+        },
     ]
-    mock_get_all.return_value = mock_shows
+    mock_get_metadata.return_value = mock_data
 
     results = await show_service.search_shows("breaking")
     assert len(results) == 1
@@ -84,21 +92,22 @@ def test_parse_imdb_id():
 
 @pytest.mark.asyncio
 @patch("app.services.epguides.get_episodes_data")
-@patch("app.services.show_service.get_all_shows")
-async def test_get_show_does_not_set_end_date_with_unreleased_episodes(mock_get_all, mock_get_episodes_data):
+@patch("app.services.epguides.get_all_shows_metadata")
+async def test_get_show_does_not_set_end_date_with_unreleased_episodes(mock_get_metadata, mock_get_episodes_data):
     """Test that get_show does NOT set end_date when there are unreleased episodes."""
     from datetime import datetime, timedelta
 
     from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
-    from app.models.schemas import create_show_schema
 
-    # Create a show without end_date
-    mock_show = create_show_schema(
-        epguides_key="fallout",
-        title="Fallout",
-        end_date=None,
-    )
-    mock_get_all.return_value = [mock_show]
+    # Mock show data from epguides
+    mock_get_metadata.return_value = [
+        {
+            "directory": "fallout",
+            "title": "Fallout",
+            "network": "Amazon",
+            "run time": "60 min",
+        }
+    ]
 
     # Create episode data with:
     # - Some released episodes (old dates)
@@ -132,21 +141,22 @@ async def test_get_show_does_not_set_end_date_with_unreleased_episodes(mock_get_
 
 @pytest.mark.asyncio
 @patch("app.services.epguides.get_episodes_data")
-@patch("app.services.show_service.get_all_shows")
-async def test_get_show_sets_end_date_when_all_episodes_released(mock_get_all, mock_get_episodes_data):
+@patch("app.services.epguides.get_all_shows_metadata")
+async def test_get_show_sets_end_date_when_all_episodes_released(mock_get_metadata, mock_get_episodes_data):
     """Test that get_show DOES set end_date when all episodes are released."""
     from datetime import datetime, timedelta
 
     from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
-    from app.models.schemas import create_show_schema
 
-    # Create a show without end_date
-    mock_show = create_show_schema(
-        epguides_key="finishedshow",
-        title="Finished Show",
-        end_date=None,
-    )
-    mock_get_all.return_value = [mock_show]
+    # Mock show data from epguides
+    mock_get_metadata.return_value = [
+        {
+            "directory": "finishedshow",
+            "title": "Finished Show",
+            "network": "Netflix",
+            "run time": "60 min",
+        }
+    ]
 
     # Create episode data with all episodes released (old dates)
     threshold = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
