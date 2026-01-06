@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.api.endpoints import mcp, shows
-from app.core.cache import close_redis_pool
+from app.core.cache import close_redis_pool, get_cache_stats
 from app.core.config import settings
 from app.core.constants import VERSION
 from app.core.middleware import RequestLoggingMiddleware
@@ -263,3 +263,44 @@ def llm_health_check() -> dict[str, str | bool]:
         "configured": bool(settings.LLM_API_URL),
         "api_url": settings.LLM_API_URL or "not configured",
     }
+
+
+@app.get("/health/cache", tags=["Health"], summary="📊 Cache statistics")
+async def cache_health_check() -> dict:
+    """
+    **View Redis cache statistics.**
+
+    Monitor cache health, see what's cached, and check memory usage.
+
+    ### Response
+    ```json
+    {
+      "status": "connected",
+      "total_keys": 42,
+      "cached_items": {
+        "shows": 15,
+        "episodes": 12,
+        "seasons": 8,
+        "searches": 5
+      },
+      "master_caches": {
+        "show_list": true,
+        "show_index": true
+      },
+      "ttl_seconds": {
+        "shows_list": 2592000,
+        "show_index": 2592000
+      },
+      "ttl_config": {
+        "ongoing_shows": "604800 (7 days)",
+        "finished_shows": "31536000 (1 year)",
+        "show_list": "2592000 (30 days)"
+      },
+      "memory": {
+        "used": "18.45M",
+        "peak": "20.12M"
+      }
+    }
+    ```
+    """
+    return await get_cache_stats()
