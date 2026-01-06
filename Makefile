@@ -8,19 +8,19 @@ setup:
 run:
 	$(PYTHON) -m uvicorn app.main:app --reload --port 3000
 
-# Development mode (with hot reload)
+# Development (hot reload, lightweight Redis)
 up:
 	docker compose up -d
 
-# Production mode (multi-worker, no reload)
+# Production (12 workers, 5GB Redis, optimized for 16 cores)
 up-prod:
-	docker compose --profile prod up -d epguides-api-prod redis
+	docker compose -f docker-compose.prod.yml up -d
 
 down:
-	docker compose down --remove-orphans
+	docker compose down 2>/dev/null; docker compose -f docker-compose.prod.yml down 2>/dev/null
 
 logs:
-	docker compose logs -f epguides-api 2>/dev/null || docker compose logs -f epguides-api-prod
+	docker compose logs -f
 
 test:
 	$(PYTHON) -m pytest
