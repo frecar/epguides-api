@@ -20,9 +20,9 @@ Free REST API for TV show data, episode lists, air dates, and plot summaries. Al
 
 - 📺 **TV Show Database** — Metadata for thousands of TV series
 - 🔍 **Search** — Find shows by title
-- 📅 **Episode Data** — Full episode lists with air dates
-- 📝 **Plot Summaries** — Episode descriptions via TVMaze
-- 🖼️ **Poster Images** — Show and season posters via TVMaze
+- 📅 **Seasons & Episodes** — Browse by season or get full episode lists
+- 📝 **Plot Summaries** — Episode and season descriptions via TVMaze
+- 🖼️ **Images** — Show posters, season posters, episode stills
 - ⏭️ **Episode Tracking** — Get next/latest episodes
 - 🤖 **AI Search** — Natural language queries (LLM-powered)
 - 🔌 **MCP Server** — JSON-RPC for AI assistants
@@ -35,13 +35,16 @@ No API key needed. Just start making requests:
 # Search for shows
 curl "https://epguides.frecar.no/shows/search?query=breaking+bad"
 
-# Get show details
+# Get show details (with poster)
 curl "https://epguides.frecar.no/shows/BreakingBad"
 
-# Get episodes
-curl "https://epguides.frecar.no/shows/BreakingBad/episodes"
+# List seasons (with posters & summaries)
+curl "https://epguides.frecar.no/shows/BreakingBad/seasons"
 
-# Filter by season
+# Get episodes for a season (with episode stills)
+curl "https://epguides.frecar.no/shows/BreakingBad/seasons/1/episodes"
+
+# Get all episodes with filtering
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
 
 # Get next episode
@@ -73,7 +76,7 @@ make up
 | Source | Data |
 |--------|------|
 | [epguides.com](http://epguides.com) | Show catalog, episode lists, air dates |
-| [TVMaze](https://api.tvmaze.com) | Episode summaries, show/season posters |
+| [TVMaze](https://api.tvmaze.com) | Summaries, show/season posters, episode stills |
 | [IMDB](https://imdb.com) | IMDB IDs |
 
 ## 📄 License

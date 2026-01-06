@@ -15,7 +15,9 @@ Complete reference for all REST API endpoints.
 | `GET` | `/shows/` | List all shows (paginated) |
 | `GET` | `/shows/search` | Search shows by title |
 | `GET` | `/shows/{key}` | Get show metadata |
-| `GET` | `/shows/{key}/episodes` | Get episodes with filtering |
+| `GET` | `/shows/{key}/seasons` | List seasons with posters |
+| `GET` | `/shows/{key}/seasons/{n}/episodes` | Get episodes for a season |
+| `GET` | `/shows/{key}/episodes` | Get all episodes with filtering |
 | `GET` | `/shows/{key}/episodes/next` | Get next unreleased episode |
 | `GET` | `/shows/{key}/episodes/latest` | Get latest released episode |
 | `GET` | `/health` | Health check |
@@ -114,21 +116,96 @@ Get detailed metadata for a specific show.
       "external_epguides_url": "http://www.epguides.com/BreakingBad",
       "external_imdb_url": "https://www.imdb.com/title/tt0903747",
       "api_self_url": "https://epguides.frecar.no/shows/BreakingBad",
+      "api_seasons_url": "https://epguides.frecar.no/shows/BreakingBad/seasons",
       "api_episodes_url": "https://epguides.frecar.no/shows/BreakingBad/episodes"
     }
     ```
 
 ---
 
-## 📅 Episodes
+## 📅 Seasons
 
-### Get Episodes
+### List Seasons
+
+```http
+GET /shows/{epguides_key}/seasons
+```
+
+List all seasons for a show with poster images and summaries.
+
+```bash
+curl "https://epguides.frecar.no/shows/BreakingBad/seasons"
+```
+
+??? success "Response"
+    ```json
+    [
+      {
+        "number": 1,
+        "episode_count": 7,
+        "premiere_date": "2008-01-20",
+        "end_date": "2008-03-09",
+        "poster_url": "https://static.tvmaze.com/uploads/images/original_untouched/24/60941.jpg",
+        "summary": "High school chemistry teacher Walter White...",
+        "api_episodes_url": "https://epguides.frecar.no/shows/BreakingBad/seasons/1/episodes"
+      },
+      {
+        "number": 2,
+        "episode_count": 13,
+        "premiere_date": "2009-03-08",
+        "end_date": "2009-05-31",
+        "poster_url": "https://static.tvmaze.com/uploads/images/original_untouched/24/60942.jpg",
+        "summary": null,
+        "api_episodes_url": "https://epguides.frecar.no/shows/BreakingBad/seasons/2/episodes"
+      }
+    ]
+    ```
+
+---
+
+### Get Season Episodes
+
+```http
+GET /shows/{epguides_key}/seasons/{season_number}/episodes
+```
+
+Get all episodes for a specific season.
+
+```bash
+curl "https://epguides.frecar.no/shows/BreakingBad/seasons/1/episodes"
+```
+
+??? success "Response"
+    ```json
+    [
+      {
+        "number": 1,
+        "season": 1,
+        "title": "Pilot",
+        "release_date": "2008-01-20",
+        "is_released": true,
+        "run_time_min": 60,
+        "episode_number": 1,
+        "summary": "A high school chemistry teacher...",
+        "poster_url": "https://static.tvmaze.com/uploads/images/original_untouched/36/92299.jpg"
+      }
+    ]
+    ```
+
+!!! info "Episode Images"
+    Each episode has a `poster_url` with a still image from that episode (from TVMaze).
+
+---
+
+## 🎬 Episodes
+
+### Get All Episodes
 
 ```http
 GET /shows/{epguides_key}/episodes
 ```
 
-Get all episodes with optional filtering.
+Get all episodes with optional filtering and AI-powered search.
 
 !!! example "Filter Parameters"
     | Parameter | Type | Description |
@@ -158,12 +235,6 @@ Get all episodes with optional filtering.
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=2&episode=5"
     ```
 
-=== "By Year"
-
-    ```bash
-    curl "https://epguides.frecar.no/shows/BreakingBad/episodes?year=2008"
-    ```
-
 === "Title Search"
 
     ```bash
@@ -174,23 +245,6 @@ Get all episodes with optional filtering.
 
     ```bash
     curl "https://epguides.frecar.no/shows/BreakingBad/episodes?nlq=finale+episodes"
-    ```
-
-??? success "Response"
-    ```json
-    [
-      {
-        "number": 1,
-        "season": 1,
-        "title": "Pilot",
-        "release_date": "2008-01-20",
-        "is_released": true,
-        "run_time_min": 60,
-        "episode_number": 1,
-        "summary": "A high school chemistry teacher...",
-        "poster_url": "https://static.tvmaze.com/uploads/images/original_untouched/0/2400.jpg"
-      }
-    ]
     ```
 
 ---
@@ -282,14 +336,16 @@ curl "https://epguides.frecar.no/health/llm"
 
 ## 📝 Response Notes
 
+!!! info "Images"
+    - **Show `poster_url`**: Main show poster from TVMaze
+    - **Season `poster_url`**: Season-specific poster (falls back to show poster)
+    - **Episode `poster_url`**: Still image from the episode
+
 !!! info "`end_date` Field"
     May be `null` if not available. Use individual show endpoint for derived values.
 
 !!! info "`summary` Field"
-    Episode summaries from TVMaze enable AI-powered search.
-
-!!! info "`imdb_id` Field"
-    Useful for cross-referencing with IMDB and other services.
+    Episode and season summaries from TVMaze enable AI-powered search.
 
 ---
 

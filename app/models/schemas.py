@@ -32,7 +32,30 @@ class EpisodeSchema(BaseModel):
     run_time_min: int | None = Field(None, ge=1, description="Runtime in minutes")
     episode_number: int | None = Field(None, ge=1, description="Absolute episode number (1-indexed)")
     summary: str | None = Field(None, description="Episode summary/description")
-    poster_url: str | None = Field(None, description="Season poster URL (falls back to show poster)")
+    poster_url: str | None = Field(None, description="Episode still image URL from TVMaze")
+
+
+# =============================================================================
+# Season Schema
+# =============================================================================
+
+
+class SeasonSchema(BaseModel):
+    """
+    Season data with poster and summary.
+
+    Contains metadata for a single season of a TV show.
+    """
+
+    number: int = Field(..., ge=0, description="Season number (0 for specials)")
+    episode_count: int = Field(..., ge=0, description="Number of episodes in this season")
+    premiere_date: date | None = Field(None, description="First episode air date")
+    end_date: date | None = Field(None, description="Last episode air date")
+    poster_url: str | None = Field(None, description="Season poster image URL from TVMaze")
+    summary: str | None = Field(None, description="Season summary/description")
+    api_episodes_url: str = Field(..., description="API endpoint for episodes in this season")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 # =============================================================================
@@ -112,8 +135,14 @@ class ShowSchema(BaseModel):
         return f"{base_url}/shows/{self.epguides_key}"
 
     @computed_field
+    def api_seasons_url(self) -> str:
+        """API endpoint URL for this show's seasons."""
+        base_url = settings.API_BASE_URL.rstrip("/")
+        return f"{base_url}/shows/{self.epguides_key}/seasons"
+
+    @computed_field
     def api_episodes_url(self) -> str:
-        """API endpoint URL for this show's episodes."""
+        """API endpoint URL for all episodes (unfiltered)."""
         base_url = settings.API_BASE_URL.rstrip("/")
         return f"{base_url}/shows/{self.epguides_key}/episodes"
 
