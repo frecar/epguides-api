@@ -1,33 +1,100 @@
+# =============================================================================
+# Development: docker compose up
+# Production:  docker compose --profile prod up
+# =============================================================================
+
 services:
+  # ---------------------------------------------------------------------------
+  # Development API (with hot reload)
+  # ---------------------------------------------------------------------------
   epguides-api:
-    command: >
-      uvicorn app.main:app --reload --host 0.0.0.0 --port 3000
     build:
       context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 3000
+      --reload
+      --reload-dir /app/app
+      --log-level info
     ports:
-      - 3000:3000
+      - "3000:3000"
     volumes:
       - ./:/app
+    env_file:
+      - .env
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles: ["", "dev"]  # Default profile
+
+  # ---------------------------------------------------------------------------
+  # Production API (multi-worker, no reload)
+  # ---------------------------------------------------------------------------
+  epguides-api-prod:
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-prod}
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 3000
+      --workers 4
+      --loop uvloop
+      --http httptools
+      --timeout-keep-alive 30
+      --limit-concurrency 200
+      --log-level warning
+    ports:
+      - "3000:3000"
     env_file:
       - .env
     depends_on:
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 128M
+    restart: unless-stopped
+    profiles: ["prod"]
 
+  # ---------------------------------------------------------------------------
+  # Redis Cache
+  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     command: >
       redis-server
-      --maxmemory 5120mb
+      --maxmemory 512mb
       --maxmemory-policy allkeys-lru
       --save 60 1
       --appendonly no
+      --tcp-keepalive 300
     ports:
-      - 6379:6379
+      - "6379:6379"
     volumes:
-      - ~/docker_volumes/redis-data:/data
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 600M
+    restart: unless-stopped
+
+volumes:
+  redis-data:
