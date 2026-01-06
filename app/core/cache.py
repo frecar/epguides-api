@@ -228,10 +228,9 @@ def cache(
                 if cached:
                     try:
                         return orjson.loads(cached)  # type: ignore
-                    except (orjson.JSONDecodeError, TypeError) as e:
-                        # Corrupted cache - clear and continue
-                        logger.warning("Corrupted cache for %s, clearing: %s", cache_key, e)
-                        await cache_delete(cache_key)
+                    except orjson.JSONDecodeError as e:
+                        # Corrupted JSON - log warning (cache cleared on deployment)
+                        logger.warning("Corrupted JSON in cache %s: %s", cache_key, e)
 
                 result = await func(*args, **kwargs)
                 if result:
@@ -300,16 +299,14 @@ def cached(
                             return [model(**item) for item in data]  # type: ignore
                         return model(**data) if data else None  # type: ignore
                     return data  # type: ignore
-                except (orjson.JSONDecodeError, TypeError, KeyError) as e:
-                    # Corrupted cache data - log and delete, then continue to fetch fresh
-                    logger.warning("Corrupted cache data for %s, clearing: %s", cache_key, e)
-                    await cache_delete(cache_key)
+                except orjson.JSONDecodeError as e:
+                    # Corrupted JSON - log warning (cache cleared on deployment)
+                    logger.warning("Corrupted JSON in cache %s: %s", cache_key, e)
                 except Exception as e:
-                    # Pydantic validation or other errors - also clear cache
-                    logger.warning("Invalid cache data for %s, clearing: %s", cache_key, e)
-                    await cache_delete(cache_key)
+                    # Pydantic validation error - log and continue to fetch fresh
+                    logger.warning("Cache validation error for %s: %s", cache_key, e)
 
-            # Cache miss (or corrupted cache) - execute function
+            # Cache miss or error - execute function
             result = await func(*args, **kwargs)
 
             # Cache the result

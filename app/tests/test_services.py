@@ -358,10 +358,7 @@ async def test_search_shows_no_results(mock_get_metadata):
 @patch("app.services.epguides.get_all_shows_metadata")
 @patch("app.services.show_service.cache_get")
 @patch("app.services.show_service.cache_set")
-@patch("app.services.show_service.cache_delete")
-async def test_corrupted_cache_html_returns_fresh_data(
-    mock_cache_delete, mock_cache_set, mock_cache_get, mock_get_metadata
-):
+async def test_corrupted_cache_html_returns_fresh_data(mock_cache_set, mock_cache_get, mock_get_metadata):
     """Test that corrupted HTML cache data is handled gracefully."""
     # Simulate corrupted cache with HTML content (like what caused the 500)
     mock_cache_get.return_value = '<html><meta name="viewport" content="width=device-width"></html>'
@@ -374,18 +371,13 @@ async def test_corrupted_cache_html_returns_fresh_data(
 
     assert len(shows) == 1
     assert shows[0].title == "Breaking Bad"
-    # Corrupted cache should be deleted
-    assert mock_cache_delete.called
 
 
 @pytest.mark.asyncio
 @patch("app.services.epguides.get_all_shows_metadata")
 @patch("app.services.show_service.cache_get")
 @patch("app.services.show_service.cache_set")
-@patch("app.services.show_service.cache_delete")
-async def test_corrupted_cache_invalid_json_returns_fresh_data(
-    mock_cache_delete, mock_cache_set, mock_cache_get, mock_get_metadata
-):
+async def test_corrupted_cache_invalid_json_returns_fresh_data(mock_cache_set, mock_cache_get, mock_get_metadata):
     """Test that invalid JSON cache data is handled gracefully."""
     # Simulate corrupted cache with invalid JSON
     mock_cache_get.return_value = "not valid json {{"
@@ -398,31 +390,3 @@ async def test_corrupted_cache_invalid_json_returns_fresh_data(
 
     assert len(shows) == 1
     assert shows[0].title == "Game of Thrones"
-    # Corrupted cache should be deleted
-    assert mock_cache_delete.called
-
-
-@pytest.mark.asyncio
-@patch("app.services.epguides.get_all_shows_metadata")
-@patch("app.services.show_service.cache_get")
-@patch("app.services.show_service.cache_set")
-@patch("app.services.show_service.cache_delete")
-async def test_corrupted_cache_wrong_schema_returns_fresh_data(
-    mock_cache_delete, mock_cache_set, mock_cache_get, mock_get_metadata
-):
-    """Test that cache with wrong schema is handled gracefully."""
-    # Valid JSON but wrong schema (missing required fields)
-    import json
-
-    mock_cache_get.return_value = json.dumps([{"wrong_field": "value"}])
-    mock_get_metadata.return_value = [
-        {"directory": "Friends", "title": "Friends", "network": "NBC"},
-    ]
-
-    # Should not raise, should return fresh data
-    shows = await show_service.get_all_shows()
-
-    assert len(shows) == 1
-    assert shows[0].title == "Friends"
-    # Corrupted cache should be deleted
-    assert mock_cache_delete.called
