@@ -39,6 +39,7 @@ Tools provide interactive operations:
 |------|-------------|------------|
 | `search_shows` | Search for shows | `query` (required) |
 | `get_show` | Get show details | `epguides_key` (required) |
+| `get_seasons` | Get seasons with posters | `epguides_key` (required) |
 | `get_episodes` | Get all episodes | `epguides_key` (required) |
 | `get_next_episode` | Next unreleased episode | `epguides_key` (required) |
 | `get_latest_episode` | Latest aired episode | `epguides_key` (required) |

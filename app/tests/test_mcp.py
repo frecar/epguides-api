@@ -89,7 +89,7 @@ async def test_tools_list(mcp_server):
     assert response["jsonrpc"] == "2.0"
     assert "result" in response
     assert "tools" in response["result"]
-    assert len(response["result"]["tools"]) == 5
+    assert len(response["result"]["tools"]) == 6
 
 
 @pytest.mark.asyncio
