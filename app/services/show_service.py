@@ -443,8 +443,9 @@ def _parse_episode(item: dict[str, Any], run_time_min: int | None) -> EpisodeSch
 
         is_released = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS) > release_date
 
-        # Get summary if available (from TVMaze)
+        # Get summary and poster_url if available (from TVMaze)
         summary = item.get("summary", "") or ""
+        poster_url = item.get("poster_url", "") or ""
 
         return EpisodeSchema(
             season=int(season_raw),
@@ -455,6 +456,7 @@ def _parse_episode(item: dict[str, Any], run_time_min: int | None) -> EpisodeSch
             run_time_min=run_time_min,
             episode_number=None,
             summary=summary if summary else None,
+            poster_url=poster_url if poster_url else None,
         )
     except (ValueError, KeyError, TypeError):
         return None
