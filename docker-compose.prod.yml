@@ -2,7 +2,8 @@
 # Production Configuration
 # Usage: make up-prod  (or: docker compose -f docker-compose.prod.yml up)
 # =============================================================================
-# Optimized for 6-core server
+# Optimized for 6-core / 5GB server
+# Memory: API 1.5GB + Redis 3GB + OS ~500MB = 5GB
 
 services:
   epguides-api:
@@ -36,7 +37,7 @@ services:
       resources:
         limits:
           cpus: "5"
-          memory: 2G
+          memory: 1536M
         reservations:
           cpus: "2"
           memory: 512M
@@ -65,7 +66,8 @@ services:
     image: redis:7
     command: >
       redis-server
-      --maxmemory 0
+      --maxmemory 3gb
+      --maxmemory-policy allkeys-lru
       --save ""
       --appendonly no
       --io-threads 2
@@ -87,8 +89,10 @@ services:
       resources:
         limits:
           cpus: "1"
+          memory: 3G
         reservations:
           cpus: "0.5"
+          memory: 1G
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
