@@ -8,6 +8,7 @@ This module provides pure functional interfaces for:
 """
 
 import html
+import json
 import logging
 import re
 from datetime import date, datetime, timedelta
@@ -32,27 +33,24 @@ _MONTH_YEAR_FORMATS = ["%b %Y", "%B %Y", "%b %y", "%B %y"]
 
 def clear_memory_caches() -> None:
     """
-    Clear all in-memory caches.
+    Clear caches for testing.
 
-    Used primarily for testing to ensure clean state between tests.
+    Note: This is a no-op for Redis caches in production.
+    Tests should use mocks to control caching behavior.
     """
-    global _show_list_cache, _show_index_cache, _show_cache_key, _enriched_show_cache, _seasons_cache
-    _show_list_cache = None
-    _show_index_cache = None
-    _show_cache_key = None
-    _enriched_show_cache = {}
-    _seasons_cache = {}
+    pass  # Redis caches are managed by TTL
 
 
-def invalidate_show_memory_cache(normalized_id: str) -> None:
+async def invalidate_show_cache(normalized_id: str) -> None:
     """
-    Invalidate in-memory cache for a specific show.
+    Invalidate Redis cache for a specific show.
 
     Used when refresh=true to ensure fresh data is fetched.
     """
-    global _enriched_show_cache, _seasons_cache
-    _enriched_show_cache.pop(normalized_id, None)
-    _seasons_cache.pop(normalized_id, None)
+    from app.core.cache import invalidate_cache
+
+    await invalidate_cache("enriched_show", normalized_id)
+    await invalidate_cache("seasons", normalized_id)
 
 
 # =============================================================================
@@ -76,51 +74,81 @@ def normalize_show_id(show_id: str) -> str:
     return normalized[3:] if normalized.startswith("the") else normalized
 
 
-# In-memory cache for shows (rebuilt when master list changes)
-_show_list_cache: list[ShowSchema] | None = None
-_show_index_cache: dict[str, ShowSchema] | None = None
-_show_cache_key: str | None = None
-
-
-async def _ensure_show_cache() -> None:
-    """
-    Ensure show caches are populated.
-
-    Lazily builds both the list and index caches from raw data.
-    Only rebuilds when underlying data changes.
-    """
-    global _show_list_cache, _show_index_cache, _show_cache_key
-
-    raw_data = await epguides.get_all_shows_metadata()
-    cache_key = str(len(raw_data))
-
-    if _show_cache_key != cache_key:
-        shows = [_map_csv_row_to_show(row) for row in raw_data]
-        _show_list_cache = shows
-        _show_index_cache = {normalize_show_id(s.epguides_key): s for s in shows}
-        _show_cache_key = cache_key
-
-
 async def get_all_shows() -> list[ShowSchema]:
     """
-    Get all shows from master list (cached in memory).
+    Get all shows from master list.
+
+    Data is cached in Redis via the epguides module (30 days).
+    Parsing is fast since the raw data is already cached.
 
     Returns:
         List of all available shows.
     """
-    await _ensure_show_cache()
-    return _show_list_cache or []
+    raw_data = await epguides.get_all_shows_metadata()
+    return [_map_csv_row_to_show(row) for row in raw_data]
 
 
-async def _get_show_index() -> dict[str, ShowSchema]:
+async def _get_show_from_index(normalized_id: str) -> ShowSchema | None:
     """
-    Get show lookup index for O(1) access by normalized key.
+    Get a single show by normalized ID using Redis hash for O(1) lookup.
+
+    Uses Redis HGET for efficient single-key lookup without loading all shows.
 
     Returns:
-        Dict mapping normalized_key -> ShowSchema.
+        ShowSchema if found, None otherwise.
     """
-    await _ensure_show_cache()
-    return _show_index_cache or {}
+    from app.core.cache import get_redis
+
+    redis = await get_redis()
+    cache_key = "show_index"
+
+    try:
+        # Try to get from Redis hash
+        cached: str | None = await redis.hget(cache_key, normalized_id)  # type: ignore[assignment]
+        if cached:
+            data = json.loads(cached)
+            return ShowSchema(**data)
+
+        # Cache miss - need to build the index
+        # Check if index exists at all
+        exists = await redis.exists(cache_key)
+        if not exists:
+            # Build and cache the entire index
+            await _build_show_index_cache()
+            cached = await redis.hget(cache_key, normalized_id)  # type: ignore[assignment]
+            if cached:
+                data = json.loads(cached)
+                return ShowSchema(**data)
+
+        return None
+
+    except Exception as e:
+        logger.warning("Redis show index error: %s, falling back to full scan", e)
+        # Fallback: load all shows and search
+        shows = await get_all_shows()
+        return next((s for s in shows if normalize_show_id(s.epguides_key) == normalized_id), None)
+
+
+async def _build_show_index_cache() -> None:
+    """Build Redis hash index for O(1) show lookups."""
+    from app.core.cache import get_redis
+    from app.core.constants import CACHE_TTL_SHOWS_METADATA_SECONDS
+
+    redis = await get_redis()
+    cache_key = "show_index"
+
+    raw_data = await epguides.get_all_shows_metadata()
+    shows = [_map_csv_row_to_show(row) for row in raw_data]
+
+    # Build hash mapping
+    pipeline = redis.pipeline()
+    for show in shows:
+        normalized_key = normalize_show_id(show.epguides_key)
+        pipeline.hset(cache_key, normalized_key, show.model_dump_json())
+
+    pipeline.expire(cache_key, CACHE_TTL_SHOWS_METADATA_SECONDS)
+    await pipeline.execute()
+    logger.info("Built show index cache with %d entries", len(shows))
 
 
 async def search_shows(query: str) -> list[ShowSchema]:
@@ -135,20 +163,16 @@ async def search_shows(query: str) -> list[ShowSchema]:
     Returns:
         List of shows matching the query.
     """
-    index = await _get_show_index()
+    shows = await get_all_shows()
     query_lower = query.lower()
-    return [s for s in index.values() if query_lower in s.title.lower()]
-
-
-# Cache for enriched show data
-_enriched_show_cache: dict[str, ShowSchema] = {}
+    return [s for s in shows if query_lower in s.title.lower()]
 
 
 async def get_show(show_id: str) -> ShowSchema | None:
     """
     Get show details with enriched metadata.
 
-    Uses in-memory caching for fast repeated lookups.
+    Uses Redis caching for the enriched show data.
 
     Args:
         show_id: The epguides key or show identifier.
@@ -156,26 +180,51 @@ async def get_show(show_id: str) -> ShowSchema | None:
     Returns:
         ShowSchema with complete metadata, or None if not found.
     """
-    normalized_id = normalize_show_id(show_id)
+    from app.core.cache import get_redis
 
-    # Check enriched cache first
-    if normalized_id in _enriched_show_cache:
-        return _enriched_show_cache[normalized_id]
+    normalized_id = normalize_show_id(show_id)
+    cache_key = f"enriched_show:{normalized_id}"
+
+    redis = await get_redis()
+
+    try:
+        # Check Redis cache first
+        cached = await redis.get(cache_key)
+        if cached:
+            logger.debug("Cache hit: %s", cache_key)
+            return ShowSchema(**json.loads(cached))
+    except Exception as e:
+        logger.warning("Redis error for %s: %s", cache_key, e)
 
     # O(1) lookup from show index
-    index = await _get_show_index()
-    show = index.get(normalized_id)
+    show = await _get_show_from_index(normalized_id)
 
     if show:
         show = await _enrich_show_metadata(show, normalized_id)
-        _enriched_show_cache[normalized_id] = show
+        await _cache_enriched_show(show, normalized_id)
         return show
 
     # Fallback: create from scraped data
     scraped = await _create_show_from_scrape(normalized_id)
     if scraped:
-        _enriched_show_cache[normalized_id] = scraped
+        await _cache_enriched_show(scraped, normalized_id)
     return scraped
+
+
+async def _cache_enriched_show(show: ShowSchema, normalized_id: str) -> None:
+    """Cache enriched show data in Redis."""
+    from app.core.cache import CACHE_TTL_FINISHED, get_redis
+
+    redis = await get_redis()
+    cache_key = f"enriched_show:{normalized_id}"
+
+    # Use longer TTL for finished shows
+    ttl = CACHE_TTL_FINISHED if show.end_date else settings.CACHE_TTL_SECONDS
+
+    try:
+        await redis.setex(cache_key, ttl, show.model_dump_json())
+    except Exception as e:
+        logger.warning("Failed to cache enriched show %s: %s", normalized_id, e)
 
 
 async def get_episodes(show_id: str) -> list[EpisodeSchema]:
@@ -215,15 +264,11 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     return episodes
 
 
-# Cache for seasons data
-_seasons_cache: dict[str, list[SeasonSchema]] = {}
-
-
 async def get_seasons(show_id: str) -> list[SeasonSchema]:
     """
     Get seasons for a show with poster and summary from TVMaze.
 
-    Uses caching and parallel TVMaze calls for performance.
+    Uses Redis caching and parallel TVMaze calls for performance.
 
     Args:
         show_id: The epguides key or show identifier.
@@ -233,11 +278,22 @@ async def get_seasons(show_id: str) -> list[SeasonSchema]:
     """
     import asyncio
 
-    normalized_id = normalize_show_id(show_id)
+    from app.core.cache import get_redis
 
-    # Check cache first
-    if normalized_id in _seasons_cache:
-        return _seasons_cache[normalized_id]
+    normalized_id = normalize_show_id(show_id)
+    cache_key = f"seasons:{normalized_id}"
+
+    redis = await get_redis()
+
+    # Check Redis cache first
+    try:
+        cached = await redis.get(cache_key)
+        if cached:
+            logger.debug("Cache hit: %s", cache_key)
+            data = json.loads(cached)
+            return [SeasonSchema(**s) for s in data]
+    except Exception as e:
+        logger.warning("Redis error for %s: %s", cache_key, e)
 
     base_url = settings.API_BASE_URL.rstrip("/")
 
@@ -311,8 +367,13 @@ async def get_seasons(show_id: str) -> list[SeasonSchema]:
             )
         )
 
-    # Cache the result
-    _seasons_cache[normalized_id] = seasons
+    # Cache the result in Redis
+    try:
+        seasons_json = json.dumps([s.model_dump(mode="json") for s in seasons], default=str)
+        await redis.setex(cache_key, settings.CACHE_TTL_SECONDS, seasons_json)
+    except Exception as e:
+        logger.warning("Failed to cache seasons for %s: %s", normalized_id, e)
+
     return seasons
 
 
@@ -446,9 +507,8 @@ async def _fetch_imdb_id_for_show(show: ShowSchema) -> ShowSchema:
 
 
 async def _get_show_runtime(normalized_id: str) -> int | None:
-    """Get runtime for a show from the index (O(1) lookup)."""
-    index = await _get_show_index()
-    show = index.get(normalized_id)
+    """Get runtime for a show using Redis hash lookup."""
+    show = await _get_show_from_index(normalized_id)
     return show.run_time_min if show else None
 
 
