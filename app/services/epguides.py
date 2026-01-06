@@ -269,6 +269,149 @@ async def _merge_tvmaze_summaries(episodes: list[dict[str, Any]], maze_id: str) 
         return episodes
 
 
+# =============================================================================
+# TVMaze Images
+# =============================================================================
+
+# Default placeholder when no poster is available
+_DEFAULT_POSTER_URL = "https://static.tvmaze.com/images/no-img/no-img-portrait-text.png"
+
+
+@cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="tvmaze_show")
+async def get_tvmaze_show_data(maze_id: str) -> dict[str, Any] | None:
+    """
+    Fetch show data from TVMaze including poster image.
+
+    Args:
+        maze_id: TVMaze show ID.
+
+    Returns:
+        TVMaze show data dict or None on error.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+            response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}")
+            if response.status_code != 200:
+                return None
+            return response.json()
+    except Exception as e:
+        logger.warning("Failed to fetch TVMaze show data for maze=%s: %s", maze_id, e)
+        return None
+
+
+@cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="tvmaze_seasons")
+async def get_tvmaze_seasons(maze_id: str) -> list[dict[str, Any]]:
+    """
+    Fetch season data from TVMaze including season posters.
+
+    Args:
+        maze_id: TVMaze show ID.
+
+    Returns:
+        List of season data dicts with image URLs.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+            response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}/seasons")
+            if response.status_code != 200:
+                return []
+            return response.json()
+    except Exception as e:
+        logger.warning("Failed to fetch TVMaze seasons for maze=%s: %s", maze_id, e)
+        return []
+
+
+def extract_poster_url(tvmaze_data: dict[str, Any] | None) -> str:
+    """
+    Extract poster URL from TVMaze data.
+
+    Falls back to default placeholder if no image available.
+
+    Args:
+        tvmaze_data: TVMaze API response dict.
+
+    Returns:
+        URL to poster image.
+    """
+    if not tvmaze_data:
+        return _DEFAULT_POSTER_URL
+
+    image = tvmaze_data.get("image")
+    if image:
+        # Prefer original, fall back to medium
+        return image.get("original") or image.get("medium") or _DEFAULT_POSTER_URL
+
+    return _DEFAULT_POSTER_URL
+
+
+async def get_show_poster(maze_id: str) -> str:
+    """
+    Get poster URL for a show.
+
+    Args:
+        maze_id: TVMaze show ID.
+
+    Returns:
+        URL to show poster image.
+    """
+    show_data = await get_tvmaze_show_data(maze_id)
+    return extract_poster_url(show_data)
+
+
+async def get_season_posters(maze_id: str, show_poster_url: str | None = None) -> dict[int, str]:
+    """
+    Get poster URLs for all seasons of a show.
+
+    Falls back to show poster if season poster not available.
+
+    Args:
+        maze_id: TVMaze show ID.
+        show_poster_url: Show poster URL to use as fallback.
+
+    Returns:
+        Dict mapping season number to poster URL.
+    """
+    if not show_poster_url:
+        show_poster_url = await get_show_poster(maze_id)
+
+    seasons = await get_tvmaze_seasons(maze_id)
+    season_posters: dict[int, str] = {}
+
+    for season in seasons:
+        season_num = season.get("number")
+        if season_num is None:
+            continue
+
+        # Use season poster if available, otherwise show poster
+        season_poster = extract_poster_url(season)
+        if season_poster == _DEFAULT_POSTER_URL:
+            season_poster = show_poster_url
+
+        season_posters[season_num] = season_poster
+
+    return season_posters
+
+
+async def get_maze_id_for_show(show_id: str) -> str | None:
+    """
+    Get TVMaze ID for a show by scraping its epguides page.
+
+    Args:
+        show_id: Epguides show identifier.
+
+    Returns:
+        TVMaze show ID or None if not found.
+    """
+    url = f"{EPGUIDES_BASE_URL}/{show_id}"
+    response = await _fetch_url(url)
+
+    if not response or response.status_code != 200:
+        return None
+
+    _, _, maze_id = _extract_csv_url_and_maze_id(response.text)
+    return maze_id
+
+
 def _parse_episode_rows(rows: list[list[str]], column_map: dict[str, int]) -> list[dict[str, Any]]:
     """
     Parse CSV rows into episode dictionaries.

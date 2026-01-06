@@ -32,6 +32,7 @@ class EpisodeSchema(BaseModel):
     run_time_min: int | None = Field(None, ge=1, description="Runtime in minutes")
     episode_number: int | None = Field(None, ge=1, description="Absolute episode number (1-indexed)")
     summary: str | None = Field(None, description="Episode summary/description")
+    poster_url: str | None = Field(None, description="Season poster URL (falls back to show poster)")
 
 
 # =============================================================================
@@ -89,6 +90,7 @@ class ShowSchema(BaseModel):
     end_date: date | None = Field(None, description="Last episode air date (if ended)")
     country: str | None = Field(None, description="Country of origin")
     total_episodes: int | None = Field(None, ge=0, description="Total episode count")
+    poster_url: str | None = Field(None, description="Show poster image URL from TVMaze")
 
     # Computed URL fields
     @computed_field
@@ -156,6 +158,7 @@ def create_show_schema(
     end_date: date | None = None,
     country: str | None = None,
     total_episodes: int | None = None,
+    poster_url: str | None = None,
 ) -> ShowSchema:
     """
     Create a ShowSchema with explicit optional fields.
@@ -173,6 +176,7 @@ def create_show_schema(
         end_date: Last air date (optional).
         country: Country of origin (optional).
         total_episodes: Episode count (optional).
+        poster_url: Show poster image URL (optional).
 
     Returns:
         Configured ShowSchema instance.
@@ -187,4 +191,5 @@ def create_show_schema(
         end_date=end_date,
         country=country,
         total_episodes=total_episodes,
+        poster_url=poster_url,
     )

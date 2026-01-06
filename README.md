@@ -22,6 +22,7 @@ Free REST API for TV show data, episode lists, air dates, and plot summaries. Al
 - 🔍 **Search** — Find shows by title
 - 📅 **Episode Data** — Full episode lists with air dates
 - 📝 **Plot Summaries** — Episode descriptions via TVMaze
+- 🖼️ **Poster Images** — Show and season posters via TVMaze
 - ⏭️ **Episode Tracking** — Get next/latest episodes
 - 🤖 **AI Search** — Natural language queries (LLM-powered)
 - 🔌 **MCP Server** — JSON-RPC for AI assistants
@@ -72,7 +73,7 @@ make up
 | Source | Data |
 |--------|------|
 | [epguides.com](http://epguides.com) | Show catalog, episode lists, air dates |
-| [TVMaze](https://api.tvmaze.com) | Episode summaries |
+| [TVMaze](https://api.tvmaze.com) | Episode summaries, show/season posters |
 | [IMDB](https://imdb.com) | IMDB IDs |
 
 ## 📄 License

@@ -116,7 +116,7 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     Get episodes for a show.
 
     Episodes are sorted by season and episode number, and enriched
-    with show metadata like runtime.
+    with show metadata like runtime and season posters from TVMaze.
 
     For finished shows (all episodes released), extends cache TTL to 1 year.
 
@@ -138,6 +138,9 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     episodes.sort(key=lambda ep: (ep.season, ep.number))
     episodes = [ep.model_copy(update={"episode_number": idx}) for idx, ep in enumerate(episodes, start=1)]
 
+    # Fetch season posters from TVMaze and attach to episodes
+    episodes = await _enrich_episodes_with_posters(episodes, normalized_id)
+
     # Extend cache for finished shows (all episodes released, none upcoming)
     if episodes:
         has_unreleased = any(not ep.is_released for ep in episodes)
@@ -146,6 +149,41 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
             logger.debug("Extended episode cache to 1 year for finished show: %s", normalized_id)
 
     return episodes
+
+
+async def _enrich_episodes_with_posters(episodes: list[EpisodeSchema], normalized_id: str) -> list[EpisodeSchema]:
+    """
+    Attach season posters to episodes.
+
+    Each episode gets the poster for its season. Falls back to show poster
+    if season poster not available.
+
+    Args:
+        episodes: List of episodes to enrich.
+        normalized_id: Normalized show identifier.
+
+    Returns:
+        Episodes with poster_url field populated.
+    """
+    if not episodes:
+        return episodes
+
+    maze_id = await epguides.get_maze_id_for_show(normalized_id)
+    if not maze_id:
+        return episodes
+
+    # Get show poster and season posters
+    show_poster = await epguides.get_show_poster(maze_id)
+    season_posters = await epguides.get_season_posters(maze_id, show_poster)
+
+    # Attach poster to each episode
+    enriched: list[EpisodeSchema] = []
+    for ep in episodes:
+        # Use season poster if available, otherwise show poster
+        poster = season_posters.get(ep.season, show_poster)
+        enriched.append(ep.model_copy(update={"poster_url": poster}))
+
+    return enriched
 
 
 async def enrich_shows_with_imdb_ids(shows: list[ShowSchema]) -> list[ShowSchema]:
@@ -198,10 +236,10 @@ def _find_show_by_id(shows: list[ShowSchema], normalized_id: str) -> ShowSchema 
 
 async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSchema:
     """
-    Enrich show with IMDB ID and derived episode data.
+    Enrich show with IMDB ID, poster, and derived episode data.
 
-    Fetches IMDB ID if missing and derives end_date/total_episodes
-    from actual episode data for accuracy.
+    Fetches IMDB ID if missing, poster from TVMaze, and derives
+    end_date/total_episodes from actual episode data for accuracy.
 
     For finished shows (with end_date), extends cache TTL to 1 year
     since the data won't change.
@@ -220,12 +258,25 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
         if updates:
             show = show.model_copy(update=updates)
 
+    # Fetch poster from TVMaze
+    if not show.poster_url:
+        show = await _enrich_show_with_poster(show, normalized_id)
+
     # Extend cache TTL for finished shows (data won't change)
     if show.end_date:
         await extend_cache_ttl("episodes", normalized_id, CACHE_TTL_FINISHED)
         await extend_cache_ttl("show_metadata", normalized_id, CACHE_TTL_FINISHED)
         logger.debug("Extended cache to 1 year for finished show: %s", normalized_id)
 
+    return show
+
+
+async def _enrich_show_with_poster(show: ShowSchema, normalized_id: str) -> ShowSchema:
+    """Fetch and attach poster URL from TVMaze."""
+    maze_id = await epguides.get_maze_id_for_show(normalized_id)
+    if maze_id:
+        poster_url = await epguides.get_show_poster(maze_id)
+        return show.model_copy(update={"poster_url": poster_url})
     return show
 
 

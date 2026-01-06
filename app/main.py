@@ -106,6 +106,7 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 - 📺 **TV Database** — Thousands of shows with metadata
 - 🔍 **Search** — Find shows by title
 - 📅 **Episodes** — Full lists with air dates and summaries
+- 🖼️ **Posters** — Show and season images from TVMaze
 - ⏭️ **Tracking** — Get next/latest episodes
 - 🤖 **MCP Server** — JSON-RPC for AI assistants
 - ⚡ **Smart Cache** — 7 days ongoing, 1 year finished

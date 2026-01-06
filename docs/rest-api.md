@@ -110,6 +110,7 @@ Get detailed metadata for a specific show.
       "end_date": "2013-09-29",
       "country": "US",
       "total_episodes": 63,
+      "poster_url": "https://static.tvmaze.com/uploads/images/original_untouched/0/2400.jpg",
       "external_epguides_url": "http://www.epguides.com/BreakingBad",
       "external_imdb_url": "https://www.imdb.com/title/tt0903747",
       "api_self_url": "https://epguides.frecar.no/shows/BreakingBad",
@@ -186,7 +187,8 @@ Get all episodes with optional filtering.
         "is_released": true,
         "run_time_min": 60,
         "episode_number": 1,
-        "summary": "A high school chemistry teacher..."
+        "summary": "A high school chemistry teacher...",
+        "poster_url": "https://static.tvmaze.com/uploads/images/original_untouched/0/2400.jpg"
       }
     ]
     ```
