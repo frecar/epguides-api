@@ -191,14 +191,12 @@ async def get_seasons(epguides_key: str) -> list[SeasonSchema]:
     GET /shows/BreakingBad/seasons
     ```
     """
-    show = await show_service.get_show(epguides_key)
-    if not show:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Show not found: {epguides_key}",
-        )
-
     seasons = await show_service.get_seasons(epguides_key)
+    if not seasons:
+        # Check if show exists at all
+        show = await show_service.get_show(epguides_key)
+        if not show:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Show not found: {epguides_key}")
     return seasons
 
 
@@ -221,21 +219,16 @@ async def get_season_episodes(
     GET /shows/BreakingBad/seasons/1/episodes
     ```
     """
-    show = await show_service.get_show(epguides_key)
-    if not show:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Show not found: {epguides_key}",
-        )
-
     episodes = await show_service.get_episodes(epguides_key)
     season_episodes = [ep for ep in episodes if ep.season == season_number]
 
     if not season_episodes:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Season {season_number} not found for {epguides_key}",
-        )
+        # Check if show exists or just no episodes for this season
+        if not episodes:
+            show = await show_service.get_show(epguides_key)
+            if not show:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Show not found: {epguides_key}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Season {season_number} not found")
 
     return season_episodes
 

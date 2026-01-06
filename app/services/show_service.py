@@ -31,14 +31,18 @@ _DATE_PLACEHOLDER_PATTERNS = [r"^_+", r"^TBA", r"^TBD", r"^\?+", r"^N/A"]
 _MONTH_YEAR_FORMATS = ["%b %Y", "%B %Y", "%b %y", "%B %y"]
 
 
-def clear_memory_caches() -> None:
-    """
-    Clear caches for testing.
+# =============================================================================
+# Cache TTLs (centralized - data changes slowly)
+# =============================================================================
 
-    Note: This is a no-op for Redis caches in production.
-    Tests should use mocks to control caching behavior.
-    """
-    pass  # Redis caches are managed by TTL
+CACHE_TTL_30_DAYS = 86400 * 30  # Show list/index
+CACHE_TTL_7_DAYS = 86400 * 7  # Enriched shows, seasons, episodes
+CACHE_TTL_1_YEAR = 86400 * 365  # Finished shows
+
+
+def clear_memory_caches() -> None:
+    """No-op. Kept for test compatibility - Redis manages all caching."""
+    pass
 
 
 async def invalidate_show_cache(normalized_id: str) -> None:
@@ -47,41 +51,24 @@ async def invalidate_show_cache(normalized_id: str) -> None:
 
     redis = await get_redis()
     try:
-        await redis.delete(f"show:{normalized_id}", f"seasons:{normalized_id}")
+        await redis.delete(
+            f"show:{normalized_id}",
+            f"seasons:{normalized_id}",
+            f"episodes_parsed:{normalized_id}",
+        )
     except Exception:
         pass
 
 
 # =============================================================================
-# Public API Functions
+# Public API
 # =============================================================================
 
 
 def normalize_show_id(show_id: str) -> str:
-    """
-    Normalize show identifier for lookup.
-
-    Handles case-insensitive matching and removes "the" prefix.
-
-    Args:
-        show_id: Raw show identifier (e.g., "The Breaking Bad")
-
-    Returns:
-        Normalized identifier (e.g., "breakingbad")
-    """
+    """Normalize show ID: lowercase, no spaces, strip 'the' prefix."""
     normalized = show_id.lower().replace(" ", "")
     return normalized[3:] if normalized.startswith("the") else normalized
-
-
-# =============================================================================
-# Cache TTLs (aggressive caching - data changes slowly)
-# =============================================================================
-
-CACHE_TTL_SHOWS_LIST = 86400 * 30  # 30 days - show list rarely changes
-CACHE_TTL_SHOW_INDEX = 86400 * 30  # 30 days - same as list
-CACHE_TTL_ENRICHED = 86400 * 7  # 7 days for enriched show data
-CACHE_TTL_SEASONS = 86400 * 7  # 7 days for seasons
-CACHE_TTL_FINISHED = 86400 * 365  # 1 year for finished shows
 
 
 async def get_all_shows() -> list[ShowSchema]:
@@ -108,7 +95,7 @@ async def get_all_shows() -> list[ShowSchema]:
     shows = [_map_csv_row_to_show(row) for row in raw_data]
 
     try:
-        await redis.setex(cache_key, CACHE_TTL_SHOWS_LIST, json.dumps([s.model_dump(mode="json") for s in shows]))
+        await redis.setex(cache_key, CACHE_TTL_30_DAYS, json.dumps([s.model_dump(mode="json") for s in shows]))
     except Exception as e:
         logger.warning("Cache write error: %s", e)
 
@@ -157,7 +144,7 @@ async def _build_show_index() -> None:
     pipe = redis.pipeline()
     for show in shows:
         pipe.hset("show_index", normalize_show_id(show.epguides_key), show.model_dump_json())
-    pipe.expire("show_index", CACHE_TTL_SHOW_INDEX)
+    pipe.expire("show_index", CACHE_TTL_30_DAYS)
     await pipe.execute()
 
     logger.info("Built show index: %d shows", len(shows))
@@ -208,7 +195,7 @@ async def get_show(show_id: str) -> ShowSchema | None:
 
     # Enrich and cache
     show = await _enrich_show_metadata(show, normalized_id)
-    ttl = CACHE_TTL_FINISHED if show.end_date else CACHE_TTL_ENRICHED
+    ttl = CACHE_TTL_1_YEAR if show.end_date else CACHE_TTL_7_DAYS
 
     try:
         await redis.setex(f"show:{normalized_id}", ttl, show.model_dump_json())
@@ -233,7 +220,7 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     Returns:
         List of episodes sorted by season and episode number.
     """
-    from app.core.cache import CACHE_TTL_FINISHED, extend_cache_ttl
+    from app.core.cache import extend_cache_ttl
 
     normalized_id = normalize_show_id(show_id)
     raw_data = await epguides.get_episodes_data(normalized_id)
@@ -245,12 +232,9 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     episodes.sort(key=lambda ep: (ep.season, ep.number))
     episodes = [ep.model_copy(update={"episode_number": idx}) for idx, ep in enumerate(episodes, start=1)]
 
-    # Extend cache for finished shows (all episodes released, none upcoming)
-    if episodes:
-        has_unreleased = any(not ep.is_released for ep in episodes)
-        if not has_unreleased:
-            await extend_cache_ttl("episodes", normalized_id, CACHE_TTL_FINISHED)
-            logger.debug("Extended episode cache to 1 year for finished show: %s", normalized_id)
+    # Extend cache for finished shows
+    if episodes and not any(not ep.is_released for ep in episodes):
+        await extend_cache_ttl("episodes", normalized_id, CACHE_TTL_1_YEAR)
 
     return episodes
 
@@ -352,7 +336,7 @@ async def get_seasons(show_id: str) -> list[SeasonSchema]:
     try:
         await redis.setex(
             f"seasons:{normalized_id}",
-            CACHE_TTL_SEASONS,
+            CACHE_TTL_7_DAYS,
             json.dumps([s.model_dump(mode="json") for s in seasons], default=str),
         )
     except Exception:
@@ -404,11 +388,6 @@ async def enrich_shows_with_imdb_ids(shows: list[ShowSchema]) -> list[ShowSchema
 # =============================================================================
 
 
-def _find_show_by_id(shows: list[ShowSchema], normalized_id: str) -> ShowSchema | None:
-    """Find a show in a list by normalized ID."""
-    return next((s for s in shows if s.epguides_key.lower() == normalized_id), None)
-
-
 async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSchema:
     """
     Enrich show with IMDB ID, poster, and derived episode data.
@@ -421,40 +400,35 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
     import asyncio
     from collections.abc import Coroutine
 
-    from app.core.cache import CACHE_TTL_FINISHED, extend_cache_ttl
+    from app.core.cache import extend_cache_ttl
 
     needs_imdb = not show.imdb_id
     needs_poster = not show.poster_url
 
-    # Parallel fetch: IMDB ID (if needed), episode stats, and poster
+    # Parallel fetch: IMDB ID, episode stats, poster
     tasks: list[Coroutine[Any, Any, Any]] = [
         _fetch_imdb_id_for_show(show) if needs_imdb else asyncio.sleep(0),
         _calculate_episode_stats(normalized_id),
         _get_poster_url(normalized_id) if needs_poster else asyncio.sleep(0),
     ]
-
     results = await asyncio.gather(*tasks)
 
-    # Apply IMDB enrichment
-    if needs_imdb and results[0] and isinstance(results[0], ShowSchema):
+    # Apply results
+    if needs_imdb and isinstance(results[0], ShowSchema):
         show = results[0]
 
-    # Apply episode stats
-    episode_stats = results[1]
-    if episode_stats and isinstance(episode_stats, _EpisodeStats):
-        updates = _build_show_updates(show, episode_stats)
+    if isinstance(results[1], _EpisodeStats):
+        updates = _build_show_updates(show, results[1])
         if updates:
             show = show.model_copy(update=updates)
 
-    # Apply poster
-    if needs_poster and results[2] and isinstance(results[2], str):
+    if needs_poster and isinstance(results[2], str):
         show = show.model_copy(update={"poster_url": results[2]})
 
-    # Extend cache TTL for finished shows (data won't change)
+    # Extend cache for finished shows
     if show.end_date:
-        await extend_cache_ttl("episodes", normalized_id, CACHE_TTL_FINISHED)
-        await extend_cache_ttl("show_metadata", normalized_id, CACHE_TTL_FINISHED)
-        logger.debug("Extended cache to 1 year for finished show: %s", normalized_id)
+        await extend_cache_ttl("episodes", normalized_id, CACHE_TTL_1_YEAR)
+        await extend_cache_ttl("show_metadata", normalized_id, CACHE_TTL_1_YEAR)
 
     return show
 
