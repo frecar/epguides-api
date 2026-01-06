@@ -99,6 +99,20 @@ _TOOLS = [
             "required": ["epguides_key"],
         },
     },
+    {
+        "name": "get_seasons",
+        "description": "Get all seasons for a TV show with posters and summaries",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "epguides_key": {
+                    "type": "string",
+                    "description": "Epguides show identifier",
+                }
+            },
+            "required": ["epguides_key"],
+        },
+    },
 ]
 
 
@@ -218,6 +232,7 @@ class MCPServer:
             "get_episodes": self._tool_get_episodes,
             "get_next_episode": self._tool_get_next_episode,
             "get_latest_episode": self._tool_get_latest_episode,
+            "get_seasons": self._tool_get_seasons,
         }
 
         handler = tool_handlers.get(tool_name)
@@ -290,6 +305,17 @@ class MCPServer:
 
         last_ep = released[-1]
         return self._success(self._text_content(json.dumps(last_ep.model_dump(), indent=2, default=str)))
+
+    async def _tool_get_seasons(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get all seasons for a show with posters and summaries."""
+        epguides_key = args.get("epguides_key", "")
+        seasons = await show_service.get_seasons(epguides_key)
+
+        if not seasons:
+            return self._error(_ERROR_INVALID_PARAMS, f"No seasons found for: {epguides_key}")
+
+        result = [season.model_dump() for season in seasons]
+        return self._success(self._text_content(json.dumps(result, indent=2, default=str)))
 
     # -------------------------------------------------------------------------
     # Response Helpers
