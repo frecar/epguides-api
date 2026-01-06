@@ -150,7 +150,7 @@ async def get_show_metadata(
         normalized_key = show_service.normalize_show_id(epguides_key)
         await invalidate_cache("episodes", normalized_key)
         await invalidate_cache("show_metadata", normalized_key)
-        show_service.invalidate_show_memory_cache(normalized_key)
+        await show_service.invalidate_show_cache(normalized_key)
 
     show = await show_service.get_show(epguides_key)
     if not show:
@@ -315,7 +315,7 @@ async def get_show_episodes(
     if refresh:
         normalized_key = show_service.normalize_show_id(epguides_key)
         await invalidate_cache("episodes", normalized_key)
-        show_service.invalidate_show_memory_cache(normalized_key)
+        await show_service.invalidate_show_cache(normalized_key)
 
     episodes = await show_service.get_episodes(epguides_key)
 
