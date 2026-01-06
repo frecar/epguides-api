@@ -101,10 +101,10 @@ async def invalidate_cache(key_prefix: str, key_suffix: str) -> bool:
     try:
         redis = await get_redis()
         cache_key = f"{key_prefix}:{key_suffix}"
-        deleted: int = await redis.delete(cache_key)
+        deleted = cast(int, await redis.delete(cache_key))
         if deleted:
             logger.info("Invalidated cache: %s", cache_key)
-        return deleted > 0
+        return bool(deleted > 0)
     except Exception as e:
         logger.error("Failed to invalidate cache %s:%s: %s", key_prefix, key_suffix, e)
         return False
@@ -125,7 +125,7 @@ async def extend_cache_ttl(key_prefix: str, key_suffix: str, new_ttl: int) -> bo
     try:
         redis = await get_redis()
         cache_key = f"{key_prefix}:{key_suffix}"
-        result: bool = await redis.expire(cache_key, new_ttl)
+        result = cast(bool, await redis.expire(cache_key, new_ttl))
         if result:
             logger.info("Extended cache TTL for %s to %d seconds", cache_key, new_ttl)
         return result
@@ -143,7 +143,7 @@ async def cache_get(key: str) -> str | None:
     """Get raw value from cache, or None on miss/error."""
     try:
         redis = await get_redis()
-        result: str | None = await redis.get(key)
+        result = cast(str | None, await redis.get(key))
         return result
     except Exception as e:
         logger.warning("Cache read error for %s: %s", key, e)
@@ -172,7 +172,8 @@ async def cache_hget(hash_key: str, field: str) -> str | None:
     """Get field from hash, or None on miss/error."""
     try:
         redis = await get_redis()
-        result = await cast(Awaitable[str | None], redis.hget(hash_key, field))
+        # redis.hget returns Awaitable[str | None] but type stubs are wrong
+        result: str | None = await redis.hget(hash_key, field)  # type: ignore[misc]
         return result
     except Exception as e:
         logger.warning("Cache hash read error for %s[%s]: %s", hash_key, field, e)
@@ -183,8 +184,8 @@ async def cache_exists(key: str) -> bool:
     """Check if key exists in cache."""
     try:
         redis = await get_redis()
-        count: int = await redis.exists(key)
-        return count > 0
+        count = cast(int, await redis.exists(key))
+        return bool(count > 0)
     except Exception:
         return False
 

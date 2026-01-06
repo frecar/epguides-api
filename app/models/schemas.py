@@ -29,10 +29,10 @@ class EpisodeSchema(BaseModel):
     title: str = Field(..., min_length=1, description="Episode title")
     release_date: date = Field(..., description="Original air date")
     is_released: bool = Field(..., description="Whether the episode has aired")
-    run_time_min: int | None = Field(None, ge=1, description="Runtime in minutes")
-    episode_number: int | None = Field(None, ge=1, description="Absolute episode number (1-indexed)")
-    summary: str | None = Field(None, description="Episode summary/description")
-    poster_url: str | None = Field(None, description="Episode still image URL from TVMaze")
+    run_time_min: int | None = Field(default=None, ge=1, description="Runtime in minutes")
+    episode_number: int | None = Field(default=None, ge=1, description="Absolute episode number (1-indexed)")
+    summary: str | None = Field(default=None, description="Episode summary/description")
+    poster_url: str | None = Field(default=None, description="Episode still image URL from TVMaze")
 
 
 # =============================================================================
