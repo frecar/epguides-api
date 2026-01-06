@@ -36,8 +36,6 @@ logger = logging.getLogger(__name__)
 # Constants
 # =============================================================================
 
-_BATCH_SIZE = 5
-_BATCH_DELAY_SECONDS = 0.5
 _DATE_PLACEHOLDER_PATTERNS = [r"^_+", r"^TBA", r"^TBD", r"^\?+", r"^N/A"]
 _MONTH_YEAR_FORMATS = ["%b %Y", "%B %Y", "%b %y", "%B %y"]
 
@@ -229,7 +227,7 @@ def _build_season_stats(episodes: list[EpisodeSchema]) -> dict[int, dict[str, An
     return stats
 
 
-async def _fetch_tvmaze_season_data(maze_id: int | None) -> tuple[dict[int, dict[str, Any]], str | None]:
+async def _fetch_tvmaze_season_data(maze_id: str | None) -> tuple[dict[int, dict[str, Any]], str | None]:
     """Fetch season posters and summaries from TVMaze."""
     import asyncio
 
@@ -254,90 +252,62 @@ async def _fetch_tvmaze_season_data(maze_id: int | None) -> tuple[dict[int, dict
     return seasons, show_poster
 
 
-async def enrich_shows_with_imdb_ids(shows: list[ShowSchema]) -> list[ShowSchema]:
-    """
-    Enrich a list of shows with IMDB IDs by scraping epguides pages.
-
-    Only fetches IMDB IDs for shows that don't have them.
-    Uses batching to avoid overwhelming the server.
-
-    Args:
-        shows: List of shows to enrich.
-
-    Returns:
-        List of shows with IMDB IDs populated where available.
-    """
-    import asyncio
-
-    shows_needing_enrichment = [s for s in shows if not s.imdb_id]
-    if not shows_needing_enrichment:
-        return shows
-
-    enriched_map: dict[str, ShowSchema] = {}
-
-    for i in range(0, len(shows_needing_enrichment), _BATCH_SIZE):
-        batch = shows_needing_enrichment[i : i + _BATCH_SIZE]
-
-        # Process batch in parallel
-        batch_results = await asyncio.gather(*[_fetch_imdb_id_for_show(s) for s in batch])
-
-        for enriched_show in batch_results:
-            enriched_map[enriched_show.epguides_key] = enriched_show
-
-        # Rate limit between batches
-        if i + _BATCH_SIZE < len(shows_needing_enrichment):
-            await asyncio.sleep(_BATCH_DELAY_SECONDS)
-
-    # Merge enriched shows back, preserving order
-    return [enriched_map.get(show.epguides_key, show) for show in shows]
-
-
 # =============================================================================
 # Private Helper Functions - Show Processing
 # =============================================================================
 
 
 async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSchema:
-    """
-    Enrich show with IMDB ID, poster, and derived episode data.
-
-    Uses parallel fetching for performance.
-
-    For finished shows (with end_date), extends cache TTL to 1 year
-    since the data won't change.
-    """
+    """Enrich show with IMDB ID, poster, and episode stats."""
     import asyncio
-    from collections.abc import Coroutine
 
-    needs_imdb = not show.imdb_id
-    needs_poster = not show.poster_url
+    updates: dict[str, Any] = {}
 
-    # Parallel fetch: IMDB ID, episode stats, poster
-    tasks: list[Coroutine[Any, Any, Any]] = [
-        _fetch_imdb_id_for_show(show) if needs_imdb else asyncio.sleep(0),
-        _calculate_episode_stats(normalized_id),
-        _get_poster_url(normalized_id) if needs_poster else asyncio.sleep(0),
-    ]
+    # Parallel fetch only what's needed
+    tasks: list[Any] = []
+    task_keys: list[str] = []
+
+    if not show.imdb_id:
+        tasks.append(_fetch_imdb_id(show.epguides_key))
+        task_keys.append("imdb_id")
+
+    if not show.poster_url:
+        tasks.append(_get_poster_url(normalized_id))
+        task_keys.append("poster_url")
+
+    tasks.append(_calculate_episode_stats(normalized_id))
+    task_keys.append("stats")
+
+    # Execute all tasks in parallel
     results = await asyncio.gather(*tasks)
 
     # Apply results
-    if needs_imdb and isinstance(results[0], ShowSchema):
-        show = results[0]
+    for key, result in zip(task_keys, results, strict=False):
+        if key == "imdb_id" and result:
+            updates["imdb_id"] = result
+        elif key == "poster_url" and result:
+            updates["poster_url"] = result
+        elif key == "stats" and isinstance(result, _EpisodeStats):
+            updates.update(_build_show_updates(show, result))
 
-    if isinstance(results[1], _EpisodeStats):
-        updates = _build_show_updates(show, results[1])
-        if updates:
-            show = show.model_copy(update=updates)
+    # Apply all updates at once
+    if updates:
+        show = show.model_copy(update=updates)
 
-    if needs_poster and isinstance(results[2], str):
-        show = show.model_copy(update={"poster_url": results[2]})
-
-    # Extend cache TTLs for finished shows (data won't change)
+    # Extend cache for finished shows
     if show.end_date:
         await extend_cache_ttl("episodes", normalized_id, TTL_1_YEAR)
         await extend_cache_ttl("show", normalized_id, TTL_1_YEAR)
 
     return show
+
+
+async def _fetch_imdb_id(epguides_key: str) -> str | None:
+    """Fetch IMDB ID for a show."""
+    metadata = await epguides.get_show_metadata(epguides_key)
+    if metadata and metadata[0]:
+        return _parse_imdb_id(metadata[0])
+    return None
 
 
 async def _get_poster_url(normalized_id: str) -> str | None:
@@ -360,15 +330,6 @@ async def _create_show_from_scrape(normalized_id: str) -> ShowSchema | None:
         title=metadata[1],
         imdb_id=imdb_id,
     )
-
-
-async def _fetch_imdb_id_for_show(show: ShowSchema) -> ShowSchema:
-    """Fetch and attach IMDB ID for a single show."""
-    metadata = await epguides.get_show_metadata(show.epguides_key)
-    if metadata and metadata[0]:
-        imdb_id = _parse_imdb_id(metadata[0])
-        return show.model_copy(update={"imdb_id": imdb_id})
-    return show
 
 
 async def _get_show_runtime(normalized_id: str) -> int | None:
