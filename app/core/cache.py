@@ -149,6 +149,58 @@ async def extend_cache_ttl(key_prefix: str, key_suffix: str, new_ttl: int) -> bo
 
 
 # =============================================================================
+# Simple Cache Helpers
+# =============================================================================
+
+
+async def cache_get(key: str) -> str | None:
+    """Get raw value from cache, or None on miss/error."""
+    try:
+        redis = await get_redis()
+        return await redis.get(key)
+    except Exception as e:
+        logger.warning("Cache read error for %s: %s", key, e)
+        return None
+
+
+async def cache_set(key: str, value: str, ttl: int) -> None:
+    """Set value in cache with TTL. Fails silently."""
+    try:
+        redis = await get_redis()
+        await redis.setex(key, ttl, value)
+    except Exception as e:
+        logger.warning("Cache write error for %s: %s", key, e)
+
+
+async def cache_delete(*keys: str) -> None:
+    """Delete one or more cache keys. Fails silently."""
+    try:
+        redis = await get_redis()
+        await redis.delete(*keys)
+    except Exception as e:
+        logger.warning("Cache delete error: %s", e)
+
+
+async def cache_hget(hash_key: str, field: str) -> str | None:
+    """Get field from hash, or None on miss/error."""
+    try:
+        redis = await get_redis()
+        return await redis.hget(hash_key, field)
+    except Exception as e:
+        logger.warning("Cache hash read error for %s[%s]: %s", hash_key, field, e)
+        return None
+
+
+async def cache_exists(key: str) -> bool:
+    """Check if key exists in cache."""
+    try:
+        redis = await get_redis()
+        return await redis.exists(key) > 0
+    except Exception:
+        return False
+
+
+# =============================================================================
 # Caching Decorator
 # =============================================================================
 
