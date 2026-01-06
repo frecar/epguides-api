@@ -2,19 +2,19 @@
 # Production Configuration
 # Usage: make up-prod  (or: docker compose -f docker-compose.prod.yml up)
 # =============================================================================
-# Optimized for 4-core server with 1GB Redis cache
+# Optimized for 6-core server
 
 services:
   epguides-api:
     build:
       context: .
-    # 3 workers = 4 cores - 1 (reserved for Redis + OS)
+    # 5 workers = 6 cores - 1 (reserved for Redis + OS)
     # uvloop + httptools: ~2x faster than default asyncio
     command: >
       uvicorn app.main:app
       --host 0.0.0.0
       --port 3000
-      --workers 3
+      --workers 5
       --loop uvloop
       --http httptools
       --timeout-keep-alive 30
@@ -35,11 +35,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "3"
-          memory: 1G
+          cpus: "5"
+          memory: 2G
         reservations:
-          cpus: "1"
-          memory: 256M
+          cpus: "2"
+          memory: 512M
     healthcheck:
       test:
         [
@@ -65,8 +65,7 @@ services:
     image: redis:7
     command: >
       redis-server
-      --maxmemory 1024mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory 0
       --save ""
       --appendonly no
       --io-threads 2
@@ -88,10 +87,8 @@ services:
       resources:
         limits:
           cpus: "1"
-          memory: 1280M
         reservations:
           cpus: "0.5"
-          memory: 1G
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
