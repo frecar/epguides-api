@@ -21,12 +21,14 @@ make up
 
 | Command | Description |
 |---------|-------------|
-| `make up` | ▶️ Start Docker services |
-| `make down` | ⏹️ Stop Docker services |
+| `make up` | ▶️ Start development environment |
+| `make up-prod` | 🚀 Start production environment |
+| `make down` | ⏹️ Stop all Docker services |
 | `make test` | 🧪 Run all tests |
 | `make fix` | 🔧 Format and lint |
-| `make run` | ▶️ Run locally |
-| `make docs` | 📖 Serve docs |
+| `make run` | ▶️ Run locally (no Docker) |
+| `make logs` | 📋 View container logs |
+| `make docs` | 📖 Serve docs locally |
 | `make docs-build` | 📦 Build static docs |
 
 ---
@@ -163,7 +165,79 @@ make fix
 
 ---
 
-## 🐳 Production Deployment
+## 🐳 Docker Environments
+
+!!! info "Two Docker Compose Files"
+    The project includes separate configurations for development and production.
+
+### Development Mode
+
+```bash
+make up
+# or: docker compose up -d
+```
+
+**Features:**
+
+- 🔄 Hot reload (code changes apply instantly)
+- 🐛 Debug logging
+- 💾 256MB Redis cache
+- 📁 Volume mount for live code editing
+
+### Production Mode
+
+```bash
+make up-prod
+# or: docker compose -f docker-compose.prod.yml up -d
+```
+
+**Features:**
+
+- ⚡ 12 uvicorn workers (optimized for 16-core server)
+- 🚀 uvloop + httptools (2x faster)
+- 💾 5GB Redis cache with io-threads
+- 📊 Health checks and logging rotation
+- 🔒 Resource limits and reservations
+
+### Configuration Comparison
+
+| Setting | Development | Production |
+|---------|-------------|------------|
+| **Workers** | 1 (with reload) | 12 |
+| **Event loop** | asyncio | uvloop |
+| **HTTP parser** | default | httptools |
+| **Log level** | debug | warning |
+| **Redis memory** | 256MB | 5GB |
+| **Redis io-threads** | - | 8 |
+| **Health checks** | Basic | Full |
+| **Restart policy** | - | unless-stopped |
+
+### Switching Environments
+
+```bash
+# Stop current environment
+make down
+
+# Start development
+make up
+
+# Or start production
+make up-prod
+```
+
+### View Logs
+
+```bash
+# Development
+docker compose logs -f
+
+# Production
+docker compose -f docker-compose.prod.yml logs -f
+```
+
+---
+
+## 🏗️ Production Deployment
 
 ### Build Image
 
@@ -171,7 +245,7 @@ make fix
 docker build -t epguides-api .
 ```
 
-### Run Container
+### Run with Custom Redis
 
 ```bash
 docker run -d -p 3000:3000 \
@@ -181,14 +255,15 @@ docker run -d -p 3000:3000 \
   epguides-api
 ```
 
-### Docker Features
+### Dockerfile Features
 
 | Feature | Description |
 |---------|-------------|
+| 🏗️ Multi-stage build | Smaller final image |
 | 👤 Non-root user | Security best practice |
 | 💚 Health check | For orchestration |
-| 📦 Layer caching | Fast rebuilds |
-| 🏔️ Alpine base | Smaller image |
+| ⚡ PYTHONOPTIMIZE=2 | Optimized bytecode |
+| 📦 Slim base | Minimal attack surface |
 
 ---
 

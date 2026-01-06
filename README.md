@@ -63,13 +63,25 @@ Full documentation at **[epguides-api.readthedocs.io](https://epguides-api.readt
 
 ## 🛠️ Self-Hosting
 
+### Development
+
 ```bash
 git clone https://github.com/frecar/epguides-api.git
 cd epguides-api
 make up
 
-# API running at http://localhost:3000
+# API at http://localhost:3000 (with hot reload)
 ```
+
+### Production
+
+```bash
+make up-prod
+
+# 12 workers, uvloop, 5GB Redis cache
+```
+
+See [Development Guide](https://epguides-api.readthedocs.io/en/latest/development/) for details.
 
 ## 📊 Data Sources
 
