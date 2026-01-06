@@ -21,7 +21,9 @@ from app.core.cache import (
     TTL_30_DAYS,
     cache_delete,
     cache_exists,
+    cache_get,
     cache_hget,
+    cache_set,
     cached,
     extend_cache_ttl,
     get_redis,
@@ -61,11 +63,62 @@ def normalize_show_id(show_id: str) -> str:
     return normalized[3:] if normalized.startswith("the") else normalized
 
 
-@cached("shows:all", ttl=TTL_30_DAYS, model=ShowSchema, is_list=True)  # No param - static key
 async def get_all_shows() -> list[ShowSchema]:
     """Get all shows. Cache TTL: 30 days."""
+    raw = await _get_all_shows_raw()
+    return [ShowSchema(**item) for item in raw]
+
+
+async def get_shows_page(page: int, limit: int) -> tuple[list[ShowSchema], int]:
+    """Get paginated shows efficiently (only converts page items to Pydantic)."""
+    raw = await _get_all_shows_raw()
+    total = len(raw)
+    start = (page - 1) * limit
+    end = start + limit
+    page_items = [ShowSchema(**item) for item in raw[start:end]]
+    return page_items, total
+
+
+async def search_shows_fast(query: str) -> list[ShowSchema]:
+    """Search shows efficiently (only converts matches to Pydantic)."""
+    raw = await _get_all_shows_raw()
+    query_lower = query.lower()
+    matches = [item for item in raw if query_lower in item.get("title", "").lower()]
+    return [ShowSchema(**item) for item in matches[:100]]  # Limit results
+
+
+async def _get_all_shows_raw() -> list[dict[str, Any]]:
+    """Get raw show data (cached as dicts, not Pydantic models)."""
+    cache_key = "shows:all:raw"
+
+    # Check cache
+    cached_data = await cache_get(cache_key)
+    if cached_data:
+        result: list[dict[str, Any]] = json.loads(cached_data)
+        return result
+
+    # Fetch and cache
     raw_data = await epguides.get_all_shows_metadata()
-    return [_map_csv_row_to_show(row) for row in raw_data]
+    shows: list[dict[str, Any]] = [_map_csv_row_to_dict(row) for row in raw_data]
+    await cache_set(cache_key, json.dumps(shows, default=str), TTL_30_DAYS)
+    return shows
+
+
+def _map_csv_row_to_dict(row: dict[str, str]) -> dict[str, Any]:
+    """Map CSV row to dict (faster than creating ShowSchema)."""
+    title = _clean_title(row.get("title", ""))
+    return {
+        "epguides_key": row.get("directory", ""),
+        "title": title,
+        "imdb_id": None,
+        "network": row.get("network") or None,
+        "run_time_min": _parse_run_time(row.get("run time")),
+        "start_date": str(_parse_date(row.get("start date"))) if _parse_date(row.get("start date")) else None,
+        "end_date": str(_parse_date(row.get("end date"))) if _parse_date(row.get("end date")) else None,
+        "country": row.get("country") or None,
+        "total_episodes": _parse_total_episodes(row.get("number of episodes")),
+        "poster_url": None,
+    }
 
 
 async def _get_show_by_key(normalized_id: str) -> ShowSchema | None:
@@ -116,9 +169,7 @@ async def search_shows(query: str) -> list[ShowSchema]:
     Returns:
         List of shows matching the query.
     """
-    shows = await get_all_shows()
-    query_lower = query.lower()
-    return [s for s in shows if query_lower in s.title.lower()]
+    return await search_shows_fast(query)
 
 
 def _show_ttl(show: ShowSchema | None) -> int | None:
