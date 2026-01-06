@@ -126,8 +126,10 @@ async def test_get_all_shows(mock_get_metadata, mock_cache_get, mock_cache_set):
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.services.epguides.get_all_shows_metadata")
-async def test_search_shows(mock_get_metadata):
+async def test_search_shows(mock_get_metadata, mock_cache_get, mock_cache_set):
     """Test searching shows."""
     mock_data = [
         {
@@ -238,16 +240,20 @@ async def test_get_show_does_not_set_end_date_with_unreleased_episodes(
 
 
 @pytest.mark.asyncio
-@patch("app.core.cache.extend_cache_ttl")
+@patch("app.services.show_service.extend_cache_ttl")
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_exists", return_value=False)
+@patch("app.services.show_service.cache_hget", return_value=None)
+@patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.core.cache.cache_set")
-@patch("app.core.cache.cache_exists", return_value=False)
-@patch("app.core.cache.cache_hget", return_value=None)
 @patch("app.core.cache.cache_get", return_value=None)
 @patch("app.services.epguides.get_episodes_data")
 @patch("app.services.epguides.get_all_shows_metadata")
 async def test_get_show_sets_end_date_when_all_episodes_released(
     mock_get_metadata,
     mock_get_episodes_data,
+    mock_core_cache_get,
+    mock_core_cache_set,
     mock_cache_get,
     mock_cache_hget,
     mock_cache_exists,
@@ -426,8 +432,10 @@ def test_parse_date_string_edge_cases():
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.services.epguides.get_all_shows_metadata")
-async def test_search_shows_case_insensitive(mock_get_metadata):
+async def test_search_shows_case_insensitive(mock_get_metadata, mock_cache_get, mock_cache_set):
     """Test that search is case-insensitive."""
     mock_get_metadata.return_value = [
         {"directory": "bb", "title": "Breaking Bad"},
@@ -446,8 +454,10 @@ async def test_search_shows_case_insensitive(mock_get_metadata):
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.services.epguides.get_all_shows_metadata")
-async def test_search_shows_no_results(mock_get_metadata):
+async def test_search_shows_no_results(mock_get_metadata, mock_cache_get, mock_cache_set):
     """Test search with no matching results."""
     mock_get_metadata.return_value = [
         {"directory": "bb", "title": "Breaking Bad"},
