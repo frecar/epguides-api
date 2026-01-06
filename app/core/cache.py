@@ -201,7 +201,7 @@ async def cache_exists(key: str) -> bool:
 
 
 # =============================================================================
-# Caching Decorator
+# Caching Decorators
 # =============================================================================
 
 
@@ -210,7 +210,7 @@ def cache(
     key_prefix: str = "",
 ) -> Callable[[Callable[P, Coroutine[Any, Any, R]]], Callable[P, Awaitable[R]]]:
     """
-    Async caching decorator using Redis.
+    Async caching decorator for raw JSON data.
 
     Uses the first function argument as the cache key suffix.
     Falls back to calling the function on cache errors.
@@ -219,12 +219,9 @@ def cache(
         ttl_seconds: Cache time-to-live in seconds.
         key_prefix: Prefix for cache keys (e.g., "episodes", "shows").
 
-    Returns:
-        Decorator function.
-
     Example:
-        @cache(ttl_seconds=3600, key_prefix="show")
-        async def get_show(show_id: str) -> dict:
+        @cache(ttl_seconds=3600, key_prefix="raw_data")
+        async def fetch_data(key: str) -> dict:
             ...
     """
 
@@ -233,33 +230,102 @@ def cache(
     ) -> Callable[P, Awaitable[R]]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            # Build cache key from first positional argument
             cache_key_suffix = args[0] if args else "global"
             cache_key = f"{key_prefix}:{cache_key_suffix}"
 
-            redis = await get_redis()
-
             try:
-                # Check cache
-                cached = await redis.get(cache_key)
+                cached = await cache_get(cache_key)
                 if cached:
-                    logger.debug("Cache hit: %s", cache_key)
                     return json.loads(cached)  # type: ignore[return-value]
 
-                # Cache miss - call function
-                logger.debug("Cache miss: %s", cache_key)
                 result = await func(*args, **kwargs)
-
-                # Store result if not empty
                 if result:
-                    await redis.setex(cache_key, ttl_seconds, json.dumps(result, default=str))
-
+                    await cache_set(cache_key, json.dumps(result, default=str), ttl_seconds)
                 return result
-
             except Exception as e:
                 logger.error("Cache error for %s: %s", cache_key, e)
-                # Fallback to direct function call
                 return await func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def cached(
+    key_template: str,
+    ttl: int,
+    model: type | None = None,
+    is_list: bool = False,
+    key_transform: Callable[[str], str] | None = None,
+    ttl_if: Callable[[Any], int | None] | None = None,
+) -> Callable[[Callable[P, Coroutine[Any, Any, R]]], Callable[P, Awaitable[R]]]:
+    """
+    Clean caching decorator for Pydantic models.
+
+    Args:
+        key_template: Cache key template, e.g. "show:{0}" where {0} is first arg.
+        ttl: Default TTL in seconds.
+        model: Pydantic model class for deserialization (optional).
+        is_list: If True, deserialize as list of models.
+        key_transform: Transform function for the cache key arg (e.g., normalize_show_id).
+        ttl_if: Function to override TTL based on result. Return new TTL or None to use default.
+
+    Example:
+        @cached("show:{0}", ttl=SEVEN_DAYS, model=ShowSchema, key_transform=normalize_id)
+        async def get_show(show_id: str) -> ShowSchema | None:
+            # Just business logic, no cache boilerplate
+            ...
+
+        @cached("episodes:{0}", ttl=SEVEN_DAYS, model=EpisodeSchema, is_list=True)
+        async def get_episodes(show_id: str) -> list[EpisodeSchema]:
+            ...
+    """
+
+    def decorator(
+        func: Callable[P, Coroutine[Any, Any, R]],
+    ) -> Callable[P, Awaitable[R]]:
+        @wraps(func)
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            # Build cache key
+            key_arg = str(args[0]) if args else "global"
+            if key_transform:
+                key_arg = key_transform(key_arg)
+            cache_key = key_template.format(key_arg)
+
+            # Check cache
+            cached_data = await cache_get(cache_key)
+            if cached_data:
+                data = json.loads(cached_data)
+                if model:
+                    if is_list:
+                        return [model(**item) for item in data]  # type: ignore[return-value]
+                    return model(**data) if data else None  # type: ignore[return-value]
+                return data  # type: ignore[return-value]
+
+            # Cache miss - execute function
+            result = await func(*args, **kwargs)
+
+            # Cache the result
+            if result is not None:
+                # Determine TTL (allow override based on result)
+                final_ttl = ttl
+                if ttl_if:
+                    override = ttl_if(result)
+                    if override is not None:
+                        final_ttl = override
+
+                # Serialize
+                if model:
+                    if is_list:
+                        serialized = json.dumps([item.model_dump(mode="json") for item in result], default=str)
+                    else:
+                        serialized = result.model_dump_json()  # type: ignore[union-attr]
+                else:
+                    serialized = json.dumps(result, default=str)
+
+                await cache_set(cache_key, serialized, final_ttl)
+
+            return result
 
         return wrapper
 
