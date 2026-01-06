@@ -11,11 +11,23 @@ services:
     env_file:
       - .env
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+
   redis:
-    command: bash -c "redis-server --save 10 1"
-    image: redis
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1
+      --appendonly no
     ports:
       - 6379:6379
     volumes:
       - ~/docker_volumes/redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3

@@ -48,8 +48,7 @@ async def get_redis() -> Redis:
     """
     Get or create Redis client with connection pooling.
 
-    Returns:
-        Shared Redis client instance.
+    Pool is sized for typical API workloads (20 concurrent connections).
     """
     global _redis_client, _redis_pool
 
@@ -60,7 +59,9 @@ async def get_redis() -> Redis:
             db=settings.REDIS_DB,
             password=settings.REDIS_PASSWORD,
             decode_responses=True,
-            max_connections=10,
+            max_connections=20,
+            socket_timeout=5.0,
+            socket_connect_timeout=5.0,
         )
         _redis_client = Redis(connection_pool=_redis_pool)
 
