@@ -87,9 +87,9 @@ def test_normalize_show_id():
 
 def test_parse_imdb_id():
     """Test IMDB ID parsing."""
-    assert show_service.parse_imdb_id("tt0903747") == "tt0903747"
-    assert show_service.parse_imdb_id("tt123456") == "tt0123456"  # Padded
-    assert show_service.parse_imdb_id("invalid") == "invalid"
+    assert show_service._parse_imdb_id("tt0903747") == "tt0903747"
+    assert show_service._parse_imdb_id("tt123456") == "tt0123456"  # Padded
+    assert show_service._parse_imdb_id("invalid") == "invalid"
 
 
 @pytest.mark.asyncio
