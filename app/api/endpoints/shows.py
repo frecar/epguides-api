@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.core.cache import invalidate_cache
 from app.models.responses import PaginatedResponse
-from app.models.schemas import EpisodeSchema, ShowDetailsSchema, ShowListSchema, ShowSchema
+from app.models.schemas import EpisodeSchema, SeasonSchema, ShowDetailsSchema, ShowListSchema, ShowSchema
 from app.services import llm_service, show_service
 
 router = APIRouter()
@@ -163,6 +163,80 @@ async def get_show_metadata(
         return ShowDetailsSchema(**show.model_dump(), episodes=episodes)
 
     return show
+
+
+# =============================================================================
+# Season Endpoints
+# =============================================================================
+
+
+@router.get(
+    "/{epguides_key}/seasons",
+    response_model=list[SeasonSchema],
+    summary="📅 List seasons",
+)
+async def get_seasons(epguides_key: str) -> list[SeasonSchema]:
+    """
+    **List all seasons** for a show with poster images and summaries.
+
+    Each season includes:
+    - Season poster image from TVMaze
+    - Season summary (when available)
+    - Episode count and air date range
+    - Link to episodes for that season
+
+    ### Example
+    ```
+    GET /shows/BreakingBad/seasons
+    ```
+    """
+    show = await show_service.get_show(epguides_key)
+    if not show:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Show not found: {epguides_key}",
+        )
+
+    seasons = await show_service.get_seasons(epguides_key)
+    return seasons
+
+
+@router.get(
+    "/{epguides_key}/seasons/{season_number}/episodes",
+    response_model=list[EpisodeSchema],
+    summary="📋 Get season episodes",
+)
+async def get_season_episodes(
+    epguides_key: str,
+    season_number: int,
+) -> list[EpisodeSchema]:
+    """
+    **Get all episodes** for a specific season.
+
+    Each episode includes a still image from the episode (from TVMaze).
+
+    ### Example
+    ```
+    GET /shows/BreakingBad/seasons/1/episodes
+    ```
+    """
+    show = await show_service.get_show(epguides_key)
+    if not show:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Show not found: {epguides_key}",
+        )
+
+    episodes = await show_service.get_episodes(epguides_key)
+    season_episodes = [ep for ep in episodes if ep.season == season_number]
+
+    if not season_episodes:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Season {season_number} not found for {epguides_key}",
+        )
+
+    return season_episodes
 
 
 # =============================================================================

@@ -191,9 +191,9 @@ async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
     rows = await fetch_csv(csv_url)
     episodes = _parse_episode_rows(rows, column_map)
 
-    # Fetch and merge TVMaze summaries if we have a maze ID
+    # Fetch and merge TVMaze episode data (summaries + images) if we have a maze ID
     if maze_id and episodes:
-        episodes = await _merge_tvmaze_summaries(episodes, maze_id)
+        episodes = await _merge_tvmaze_episode_data(episodes, maze_id)
 
     return episodes
 
@@ -223,16 +223,16 @@ def _extract_csv_url_and_maze_id(page_html: str) -> tuple[str | None, dict[str, 
     return None, {}, None
 
 
-async def _merge_tvmaze_summaries(episodes: list[dict[str, Any]], maze_id: str) -> list[dict[str, Any]]:
+async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: str) -> list[dict[str, Any]]:
     """
-    Fetch episode summaries from TVMaze and merge into episode data.
+    Fetch episode data from TVMaze and merge summaries and images into episode data.
 
     Args:
         episodes: List of episode dicts from epguides CSV.
         maze_id: TVMaze show ID.
 
     Returns:
-        Episodes with 'summary' field added where available.
+        Episodes with 'summary' and 'poster_url' fields added where available.
     """
     try:
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
@@ -242,30 +242,45 @@ async def _merge_tvmaze_summaries(episodes: list[dict[str, Any]], maze_id: str) 
 
             tvmaze_episodes = response.json()
 
-            # Build lookup by season/episode
-            summary_map: dict[tuple[int, int], str] = {}
+            # Build lookup by season/episode for summary and image
+            tvmaze_data_map: dict[tuple[int, int], dict[str, str]] = {}
             for ep in tvmaze_episodes:
                 season = ep.get("season")
                 number = ep.get("number")
+                if not season or not number:
+                    continue
+
+                # Extract summary
                 summary = ep.get("summary") or ""
-                # Strip HTML tags from summary
                 if summary:
                     summary = re.sub(r"<[^>]+>", "", summary).strip()
-                if season and number and summary:
-                    summary_map[(season, number)] = summary
 
-            # Merge summaries into episodes
+                # Extract episode image (still from the episode)
+                image = ep.get("image")
+                poster_url = ""
+                if image:
+                    poster_url = image.get("original") or image.get("medium") or ""
+
+                tvmaze_data_map[(season, number)] = {
+                    "summary": summary,
+                    "poster_url": poster_url,
+                }
+
+            # Merge TVMaze data into episodes
             for episode in episodes:
                 try:
                     key = (int(episode.get("season", 0)), int(episode.get("number", 0)))
-                    episode["summary"] = summary_map.get(key, "")
+                    tvmaze_ep = tvmaze_data_map.get(key, {})
+                    episode["summary"] = tvmaze_ep.get("summary", "")
+                    episode["poster_url"] = tvmaze_ep.get("poster_url", "")
                 except (ValueError, TypeError):
                     episode["summary"] = ""
+                    episode["poster_url"] = ""
 
             return episodes
 
     except Exception as e:
-        logger.warning("Failed to fetch TVMaze summaries for maze=%s: %s", maze_id, e)
+        logger.warning("Failed to fetch TVMaze episode data for maze=%s: %s", maze_id, e)
         return episodes
 
 

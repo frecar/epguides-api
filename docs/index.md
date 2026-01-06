@@ -31,8 +31,8 @@ A high-performance **TV show API** providing access to metadata for thousands of
 |---------|-------------|
 | 📺 **Browse TV Shows** | Access metadata for thousands of TV series |
 | 🔍 **Search Shows** | Find shows by title with instant results |
-| 📅 **Get Episode Lists** | Full episode data with air dates and summaries |
-| 🖼️ **Posters & Images** | Show and season poster images from TVMaze |
+| 📅 **Seasons & Episodes** | Browse by season or get full episode lists |
+| 🖼️ **Images** | Show posters, season posters, episode stills |
 | ⏭️ **Track New Episodes** | Get next/upcoming episode for any show |
 | 🤖 **AI-Powered Search** | Natural language queries like "finale episodes" |
 | 🔌 **MCP for AI Assistants** | JSON-RPC endpoint for Claude, ChatGPT, etc. |
@@ -45,13 +45,16 @@ A high-performance **TV show API** providing access to metadata for thousands of
 # Search for TV shows
 curl "https://epguides.frecar.no/shows/search?query=breaking+bad"
 
-# Get show details
+# Get show details (with poster)
 curl "https://epguides.frecar.no/shows/BreakingBad"
 
-# Get all episodes
-curl "https://epguides.frecar.no/shows/BreakingBad/episodes"
+# List seasons (with posters & summaries)
+curl "https://epguides.frecar.no/shows/BreakingBad/seasons"
 
-# Filter by season
+# Get episodes for a season (with episode stills)
+curl "https://epguides.frecar.no/shows/BreakingBad/seasons/1/episodes"
+
+# Get all episodes with filtering
 curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
 
 # Get next upcoming episode
@@ -100,8 +103,8 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 |------|--------|-------------|
 | **Shows** | [epguides.com](http://epguides.com) | Title, network, country, start/end dates |
 | **Episodes** | [epguides.com](http://epguides.com) | Season, episode number, title, air date |
-| **Summaries** | [TVMaze](https://api.tvmaze.com) | Plot descriptions for episodes |
-| **Posters** | [TVMaze](https://api.tvmaze.com) | Show and season poster images |
+| **Summaries** | [TVMaze](https://api.tvmaze.com) | Episode and season descriptions |
+| **Images** | [TVMaze](https://api.tvmaze.com) | Show posters, season posters, episode stills |
 | **IMDB IDs** | [IMDB](https://imdb.com) | Cross-reference with IMDB |
 
 ---

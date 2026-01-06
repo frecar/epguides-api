@@ -13,8 +13,9 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from app.core.config import settings
 from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
-from app.models.schemas import EpisodeSchema, ShowSchema, create_show_schema
+from app.models.schemas import EpisodeSchema, SeasonSchema, ShowSchema, create_show_schema
 from app.services import epguides
 
 logger = logging.getLogger(__name__)
@@ -113,10 +114,10 @@ async def get_show(show_id: str) -> ShowSchema | None:
 
 async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     """
-    Get episodes for a show.
+    Get all episodes for a show.
 
     Episodes are sorted by season and episode number, and enriched
-    with show metadata like runtime and season posters from TVMaze.
+    with show metadata like runtime, summaries, and episode images from TVMaze.
 
     For finished shows (all episodes released), extends cache TTL to 1 year.
 
@@ -138,9 +139,6 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     episodes.sort(key=lambda ep: (ep.season, ep.number))
     episodes = [ep.model_copy(update={"episode_number": idx}) for idx, ep in enumerate(episodes, start=1)]
 
-    # Fetch season posters from TVMaze and attach to episodes
-    episodes = await _enrich_episodes_with_posters(episodes, normalized_id)
-
     # Extend cache for finished shows (all episodes released, none upcoming)
     if episodes:
         has_unreleased = any(not ep.is_released for ep in episodes)
@@ -151,39 +149,86 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     return episodes
 
 
-async def _enrich_episodes_with_posters(episodes: list[EpisodeSchema], normalized_id: str) -> list[EpisodeSchema]:
+async def get_seasons(show_id: str) -> list[SeasonSchema]:
     """
-    Attach season posters to episodes.
-
-    Each episode gets the poster for its season. Falls back to show poster
-    if season poster not available.
+    Get seasons for a show with poster and summary from TVMaze.
 
     Args:
-        episodes: List of episodes to enrich.
-        normalized_id: Normalized show identifier.
+        show_id: The epguides key or show identifier.
 
     Returns:
-        Episodes with poster_url field populated.
+        List of seasons with metadata, posters, and episode counts.
     """
+    normalized_id = normalize_show_id(show_id)
+    base_url = settings.API_BASE_URL.rstrip("/")
+
+    # Get episodes to derive season info
+    episodes = await get_episodes(show_id)
     if not episodes:
-        return episodes
+        return []
 
-    maze_id = await epguides.get_maze_id_for_show(normalized_id)
-    if not maze_id:
-        return episodes
-
-    # Get show poster and season posters
-    show_poster = await epguides.get_show_poster(maze_id)
-    season_posters = await epguides.get_season_posters(maze_id, show_poster)
-
-    # Attach poster to each episode
-    enriched: list[EpisodeSchema] = []
+    # Build season stats from episodes
+    season_stats: dict[int, dict[str, Any]] = {}
     for ep in episodes:
-        # Use season poster if available, otherwise show poster
-        poster = season_posters.get(ep.season, show_poster)
-        enriched.append(ep.model_copy(update={"poster_url": poster}))
+        if ep.season not in season_stats:
+            season_stats[ep.season] = {
+                "episode_count": 0,
+                "premiere_date": ep.release_date,
+                "end_date": ep.release_date,
+            }
+        season_stats[ep.season]["episode_count"] += 1
+        if ep.release_date < season_stats[ep.season]["premiere_date"]:
+            season_stats[ep.season]["premiere_date"] = ep.release_date
+        if ep.release_date > season_stats[ep.season]["end_date"]:
+            season_stats[ep.season]["end_date"] = ep.release_date
 
-    return enriched
+    # Get TVMaze season data for posters and summaries
+    maze_id = await epguides.get_maze_id_for_show(normalized_id)
+    tvmaze_seasons: dict[int, dict[str, Any]] = {}
+    show_poster = None
+
+    if maze_id:
+        show_poster = await epguides.get_show_poster(maze_id)
+        tvmaze_season_list = await epguides.get_tvmaze_seasons(maze_id)
+        for season_data in tvmaze_season_list:
+            season_num = season_data.get("number")
+            if season_num is not None:
+                # Extract summary (strip HTML)
+                summary = season_data.get("summary") or ""
+                if summary:
+                    import re
+
+                    summary = re.sub(r"<[^>]+>", "", summary).strip()
+
+                # Extract poster
+                poster_url = epguides.extract_poster_url(season_data)
+                if poster_url == epguides._DEFAULT_POSTER_URL and show_poster:
+                    poster_url = show_poster
+
+                tvmaze_seasons[season_num] = {
+                    "summary": summary,
+                    "poster_url": poster_url,
+                }
+
+    # Build season schemas
+    seasons: list[SeasonSchema] = []
+    for season_num in sorted(season_stats.keys()):
+        stats = season_stats[season_num]
+        tvmaze_data = tvmaze_seasons.get(season_num, {})
+
+        seasons.append(
+            SeasonSchema(
+                number=season_num,
+                episode_count=stats["episode_count"],
+                premiere_date=stats["premiere_date"],
+                end_date=stats["end_date"],
+                poster_url=tvmaze_data.get("poster_url") or show_poster,
+                summary=tvmaze_data.get("summary") or None,
+                api_episodes_url=f"{base_url}/shows/{normalized_id}/seasons/{season_num}/episodes",
+            )
+        )
+
+    return seasons
 
 
 async def enrich_shows_with_imdb_ids(shows: list[ShowSchema]) -> list[ShowSchema]:
