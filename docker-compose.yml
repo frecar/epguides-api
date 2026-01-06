@@ -18,7 +18,7 @@ services:
     image: redis:7-alpine
     command: >
       redis-server
-      --maxmemory 512mb
+      --maxmemory 5120mb
       --maxmemory-policy allkeys-lru
       --save 60 1
       --appendonly no

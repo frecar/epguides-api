@@ -466,3 +466,127 @@ async def test_search_query_too_short(async_client: AsyncClient):
     """Test search query validation."""
     response = await async_client.get("/shows/search?query=a")
     assert response.status_code == 422  # min_length=2
+
+
+# =============================================================================
+# Seasons Endpoint Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_seasons")
+@patch("app.services.show_service.get_show")
+async def test_get_seasons_success(mock_get_show, mock_get_seasons, async_client: AsyncClient):
+    """Test getting seasons for a show."""
+    from app.models.schemas import SeasonSchema
+
+    mock_get_show.return_value = create_show_schema(epguides_key="breakingbad", title="Breaking Bad")
+    mock_get_seasons.return_value = [
+        SeasonSchema(
+            number=1,
+            episode_count=7,
+            premiere_date=date(2008, 1, 20),
+            end_date=date(2008, 3, 9),
+            poster_url="https://example.com/s1.jpg",
+            summary="First season",
+            api_episodes_url="http://test/shows/breakingbad/seasons/1/episodes",
+        ),
+        SeasonSchema(
+            number=2,
+            episode_count=13,
+            premiere_date=date(2009, 3, 8),
+            end_date=date(2009, 5, 31),
+            poster_url=None,
+            summary=None,
+            api_episodes_url="http://test/shows/breakingbad/seasons/2/episodes",
+        ),
+    ]
+
+    response = await async_client.get("/shows/BreakingBad/seasons")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["number"] == 1
+    assert data[0]["episode_count"] == 7
+    assert data[1]["number"] == 2
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_seasons")
+@patch("app.services.show_service.get_show")
+async def test_get_seasons_show_not_found(mock_get_show, mock_get_seasons, async_client: AsyncClient):
+    """Test seasons endpoint returns 404 for nonexistent show."""
+    mock_get_seasons.return_value = []
+    mock_get_show.return_value = None
+
+    response = await async_client.get("/shows/NonExistentShow/seasons")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_episodes")
+@patch("app.services.show_service.get_show")
+async def test_get_season_episodes_success(mock_get_show, mock_get_episodes, async_client: AsyncClient):
+    """Test getting episodes for a specific season."""
+    mock_get_show.return_value = create_show_schema(epguides_key="bb", title="Breaking Bad")
+    mock_get_episodes.return_value = [
+        EpisodeSchema(
+            season=1, number=1, title="Pilot", release_date=date(2008, 1, 20), is_released=True, episode_number=1
+        ),
+        EpisodeSchema(
+            season=1,
+            number=2,
+            title="Cat's in the Bag",
+            release_date=date(2008, 1, 27),
+            is_released=True,
+            episode_number=2,
+        ),
+        EpisodeSchema(season=2, number=1, title="Seven Thirty-Seven", release_date=date(2009, 3, 8), is_released=True),
+    ]
+
+    response = await async_client.get("/shows/BreakingBad/seasons/1/episodes")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2  # Only season 1 episodes
+    assert all(ep["season"] == 1 for ep in data)
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_episodes")
+@patch("app.services.show_service.get_show")
+async def test_get_season_episodes_not_found(mock_get_show, mock_get_episodes, async_client: AsyncClient):
+    """Test season episodes returns 404 for nonexistent season."""
+    mock_get_show.return_value = create_show_schema(epguides_key="bb", title="Breaking Bad")
+    mock_get_episodes.return_value = [
+        EpisodeSchema(
+            season=1, number=1, title="Pilot", release_date=date(2008, 1, 20), is_released=True, episode_number=1
+        ),
+    ]
+
+    response = await async_client.get("/shows/BreakingBad/seasons/99/episodes")
+
+    assert response.status_code == 404
+
+
+# =============================================================================
+# Refresh Parameter Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.invalidate_show_cache")
+@patch("app.api.endpoints.shows.invalidate_cache")
+@patch("app.api.endpoints.shows.show_service.get_show")
+async def test_get_show_with_refresh(mock_get_show, mock_invalidate, mock_invalidate_show, async_client: AsyncClient):
+    """Test refresh parameter invalidates cache."""
+    mock_get_show.return_value = create_show_schema(epguides_key="bb", title="Breaking Bad")
+
+    response = await async_client.get("/shows/BreakingBad?refresh=true")
+
+    assert response.status_code == 200
+    # Verify cache was invalidated
+    assert mock_invalidate.called
+    assert mock_invalidate_show.called
