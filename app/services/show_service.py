@@ -109,7 +109,7 @@ async def _get_show_by_key(normalized_id: str) -> ShowSchema | None:
 
 
 async def _build_show_index() -> None:
-    """Build Redis hash for O(1) show lookups."""
+    """Build Redis hashes for O(1) lookups: shows, runtimes, titles."""
     from app.core.cache import get_redis
 
     shows = await get_all_shows()
@@ -118,8 +118,13 @@ async def _build_show_index() -> None:
         redis = await get_redis()
         pipe = redis.pipeline()
         for show in shows:
-            pipe.hset("show_index", normalize_show_id(show.epguides_key), show.model_dump_json())
+            key = normalize_show_id(show.epguides_key)
+            pipe.hset("show_index", key, show.model_dump_json())
+            # Store runtime separately for O(1) lookup without deserializing full show
+            if show.run_time_min:
+                pipe.hset("runtime_index", key, str(show.run_time_min))
         pipe.expire("show_index", CACHE_TTL_30_DAYS)
+        pipe.expire("runtime_index", CACHE_TTL_30_DAYS)
         await pipe.execute()
         logger.info("Built show index: %d shows", len(shows))
     except Exception as e:
@@ -175,12 +180,12 @@ async def get_show(show_id: str) -> ShowSchema | None:
 
 async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     """
-    Get all episodes for a show.
+    Get all episodes for a show (cached in Redis).
 
     Episodes are sorted by season and episode number, and enriched
     with show metadata like runtime, summaries, and episode images from TVMaze.
 
-    For finished shows (all episodes released), extends cache TTL to 1 year.
+    For finished shows (all episodes released), cache TTL is extended to 1 year.
 
     Args:
         show_id: The epguides key or show identifier.
@@ -188,11 +193,22 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     Returns:
         List of episodes sorted by season and episode number.
     """
-    from app.core.cache import extend_cache_ttl
+    from app.core.cache import cache_get, cache_set
 
     normalized_id = normalize_show_id(show_id)
-    raw_data = await epguides.get_episodes_data(normalized_id)
-    run_time_min = await _get_show_runtime(normalized_id)
+    cache_key = f"episodes_parsed:{normalized_id}"
+
+    # Check cache for already-parsed episodes
+    if cached := await cache_get(cache_key):
+        return [EpisodeSchema(**ep) for ep in json.loads(cached)]
+
+    # Fetch raw data and runtime in parallel
+    import asyncio
+
+    raw_data, run_time_min = await asyncio.gather(
+        epguides.get_episodes_data(normalized_id),
+        _get_show_runtime(normalized_id),
+    )
 
     episodes = [episode for item in raw_data if (episode := _parse_episode(item, run_time_min)) is not None]
 
@@ -200,9 +216,10 @@ async def get_episodes(show_id: str) -> list[EpisodeSchema]:
     episodes.sort(key=lambda ep: (ep.season, ep.number))
     episodes = [ep.model_copy(update={"episode_number": idx}) for idx, ep in enumerate(episodes, start=1)]
 
-    # Extend cache for finished shows
-    if episodes and not any(not ep.is_released for ep in episodes):
-        await extend_cache_ttl("episodes", normalized_id, CACHE_TTL_1_YEAR)
+    # Cache with appropriate TTL
+    is_finished = episodes and all(ep.is_released for ep in episodes)
+    ttl = CACHE_TTL_1_YEAR if is_finished else CACHE_TTL_7_DAYS
+    await cache_set(cache_key, json.dumps([ep.model_dump(mode="json") for ep in episodes], default=str), ttl)
 
     return episodes
 
@@ -377,9 +394,10 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
     if needs_poster and isinstance(results[2], str):
         show = show.model_copy(update={"poster_url": results[2]})
 
-    # Extend cache for finished shows
+    # Extend cache TTLs for finished shows (data won't change)
     if show.end_date:
         await extend_cache_ttl("episodes", normalized_id, CACHE_TTL_1_YEAR)
+        await extend_cache_ttl("episodes_parsed", normalized_id, CACHE_TTL_1_YEAR)
         await extend_cache_ttl("show_metadata", normalized_id, CACHE_TTL_1_YEAR)
 
     return show
@@ -417,9 +435,20 @@ async def _fetch_imdb_id_for_show(show: ShowSchema) -> ShowSchema:
 
 
 async def _get_show_runtime(normalized_id: str) -> int | None:
-    """Get runtime for a show."""
-    show = await _get_show_by_key(normalized_id)
-    return show.run_time_min if show else None
+    """Get runtime for a show (O(1) from runtime index)."""
+    from app.core.cache import cache_exists, cache_hget
+
+    # O(1) lookup from dedicated runtime index
+    if cached := await cache_hget("runtime_index", normalized_id):
+        return int(cached)
+
+    # Build index if missing
+    if not await cache_exists("runtime_index"):
+        await _build_show_index()
+        if cached := await cache_hget("runtime_index", normalized_id):
+            return int(cached)
+
+    return None
 
 
 # =============================================================================
