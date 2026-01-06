@@ -79,7 +79,7 @@ async def _query_llm(
         Filtered episodes or None on error.
     """
     # Prepare episode context for LLM (limit size to avoid token limits)
-    episode_context = []
+    episode_context: list[dict[str, Any]] = []
     for ep in episodes[:_MAX_EPISODES_FOR_CONTEXT]:
         ep_data: dict[str, Any] = {
             "idx": len(episode_context),  # Pre-calculate index for LLM

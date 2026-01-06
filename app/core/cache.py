@@ -9,7 +9,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable, Coroutine
 from functools import wraps
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypeVar, cast
 
 from redis.asyncio import ConnectionPool, Redis
 
@@ -104,7 +104,7 @@ async def invalidate_cache(key_prefix: str, key_suffix: str) -> bool:
     try:
         redis = await get_redis()
         cache_key = f"{key_prefix}:{key_suffix}"
-        deleted = await redis.delete(cache_key)
+        deleted: int = await redis.delete(cache_key)
         if deleted:
             logger.info("Invalidated cache: %s", cache_key)
         return deleted > 0
@@ -144,7 +144,7 @@ async def extend_cache_ttl(key_prefix: str, key_suffix: str, new_ttl: int) -> bo
     try:
         redis = await get_redis()
         cache_key = f"{key_prefix}:{key_suffix}"
-        result = await redis.expire(cache_key, new_ttl)
+        result: bool = await redis.expire(cache_key, new_ttl)
         if result:
             logger.info("Extended cache TTL for %s to %d seconds", cache_key, new_ttl)
         return result
@@ -162,7 +162,8 @@ async def cache_get(key: str) -> str | None:
     """Get raw value from cache, or None on miss/error."""
     try:
         redis = await get_redis()
-        return await redis.get(key)
+        result: str | None = await redis.get(key)
+        return result
     except Exception as e:
         logger.warning("Cache read error for %s: %s", key, e)
         return None
@@ -190,7 +191,8 @@ async def cache_hget(hash_key: str, field: str) -> str | None:
     """Get field from hash, or None on miss/error."""
     try:
         redis = await get_redis()
-        return await redis.hget(hash_key, field)
+        result = await cast(Awaitable[str | None], redis.hget(hash_key, field))
+        return result
     except Exception as e:
         logger.warning("Cache hash read error for %s[%s]: %s", hash_key, field, e)
         return None
@@ -200,7 +202,8 @@ async def cache_exists(key: str) -> bool:
     """Check if key exists in cache."""
     try:
         redis = await get_redis()
-        return await redis.exists(key) > 0
+        count: int = await redis.exists(key)
+        return count > 0
     except Exception:
         return False
 
@@ -241,7 +244,7 @@ def cache(
             try:
                 cached = await cache_get(cache_key)
                 if cached:
-                    return json.loads(cached)  # type: ignore[return-value]
+                    return json.loads(cached)  # type: ignore
 
                 result = await func(*args, **kwargs)
                 if result:
@@ -308,9 +311,9 @@ def cached(
                 data = json.loads(cached_data)
                 if model:
                     if is_list:
-                        return [model(**item) for item in data]  # type: ignore[return-value]
-                    return model(**data) if data else None  # type: ignore[return-value]
-                return data  # type: ignore[return-value]
+                        return [model(**item) for item in data]  # type: ignore
+                    return model(**data) if data else None  # type: ignore
+                return data  # type: ignore
 
             # Cache miss - execute function
             result = await func(*args, **kwargs)
@@ -324,12 +327,13 @@ def cached(
                     if override is not None:
                         final_ttl = override
 
-                # Serialize
+                # Serialize (type: ignore needed as R is generic)
                 if model:
                     if is_list:
-                        serialized = json.dumps([item.model_dump(mode="json") for item in result], default=str)
+                        items = list(result)  # type: ignore
+                        serialized = json.dumps([i.model_dump(mode="json") for i in items], default=str)
                     else:
-                        serialized = result.model_dump_json()  # type: ignore[union-attr]
+                        serialized = result.model_dump_json()  # type: ignore
                 else:
                     serialized = json.dumps(result, default=str)
 
