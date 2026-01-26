@@ -992,18 +992,18 @@ async def test_get_show_by_key_fallback_to_list(mock_get_all, mock_exists, mock_
 
 
 @pytest.mark.asyncio
-@patch("app.services.show_service.cache_hget")
-@patch("app.services.show_service.cache_exists")
-@patch("app.services.show_service.get_redis")
-@patch("app.services.show_service.get_all_shows")
+@patch("app.services.show_service.cache_hget", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_exists", new_callable=AsyncMock)
+@patch("app.services.show_service.get_redis", new_callable=AsyncMock)
+@patch("app.services.show_service.get_all_shows", new_callable=AsyncMock)
 async def test_get_show_by_key_builds_index(mock_get_all, mock_redis, mock_exists, mock_hget):
     """Test _get_show_by_key builds index when missing."""
     mock_hget.side_effect = [None, None]  # First lookup fails, then after index build also fails
     mock_exists.return_value = False  # Index doesn't exist
 
-    mock_pipe = AsyncMock()
+    mock_pipe = MagicMock()
     mock_pipe.execute = AsyncMock()
-    mock_redis_client = AsyncMock()
+    mock_redis_client = MagicMock()
     mock_redis_client.pipeline.return_value = mock_pipe
     mock_redis.return_value = mock_redis_client
 
@@ -1018,15 +1018,15 @@ async def test_get_show_by_key_builds_index(mock_get_all, mock_redis, mock_exist
 
 
 @pytest.mark.asyncio
-@patch("app.services.show_service.get_redis")
-@patch("app.services.show_service.get_all_shows")
+@patch("app.services.show_service.get_redis", new_callable=AsyncMock)
+@patch("app.services.show_service.get_all_shows", new_callable=AsyncMock)
 async def test_build_show_index_success(mock_get_all, mock_redis):
     """Test _build_show_index builds index correctly."""
     mock_pipe = MagicMock()
     mock_pipe.execute = AsyncMock(return_value=None)
     mock_pipe.hset = MagicMock(return_value=mock_pipe)
     mock_pipe.expire = MagicMock(return_value=mock_pipe)
-    mock_redis_client = AsyncMock()
+    mock_redis_client = MagicMock()
     mock_redis_client.pipeline.return_value = mock_pipe
     mock_redis.return_value = mock_redis_client
 
@@ -1857,10 +1857,10 @@ def test_parse_episode_with_exception():
 
 
 @pytest.mark.asyncio
-@patch("app.services.show_service.cache_hget")
-@patch("app.services.show_service.cache_exists")
-@patch("app.services.show_service.get_redis")
-@patch("app.services.show_service.get_all_shows")
+@patch("app.services.show_service.cache_hget", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_exists", new_callable=AsyncMock)
+@patch("app.services.show_service.get_redis", new_callable=AsyncMock)
+@patch("app.services.show_service.get_all_shows", new_callable=AsyncMock)
 async def test_get_show_by_key_rebuilds_index(mock_get_all, mock_redis, mock_exists, mock_hget):
     """Test _get_show_by_key rebuilds index when it doesn't exist."""
     import json
@@ -1869,7 +1869,7 @@ async def test_get_show_by_key_rebuilds_index(mock_get_all, mock_redis, mock_exi
     mock_pipe.execute = AsyncMock()
     mock_pipe.hset = MagicMock(return_value=mock_pipe)
     mock_pipe.expire = MagicMock(return_value=mock_pipe)
-    mock_redis_client = AsyncMock()
+    mock_redis_client = MagicMock()
     mock_redis_client.pipeline.return_value = mock_pipe
     mock_redis.return_value = mock_redis_client
 
