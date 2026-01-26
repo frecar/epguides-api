@@ -25,3 +25,9 @@ repos:
         always_run: true
         stages: [pre-commit]
 
+      - id: strip-co-author
+        name: Remove Co-Authored-By lines from commit message
+        entry: bash -c 'sed -i "/^Co-Authored-By:/d" "$1"' --
+        language: system
+        always_run: true
+        stages: [commit-msg]
