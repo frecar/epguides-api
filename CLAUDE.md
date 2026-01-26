@@ -1,82 +1,83 @@
-# CLAUDE.md
+# Epguides API
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+REST API for TV show metadata, episodes, air dates, and summaries. Also provides an MCP server for AI assistants.
 
-## Project Overview
+## Tech Stack
 
-Epguides API is a high-performance REST API for TV show metadata, episode information, air dates, and plot summaries. It also provides an MCP (Model Context Protocol) server for AI assistant integration.
-
-- **Framework:** FastAPI with async/await throughout
+- **Framework:** FastAPI (async)
 - **Caching:** Redis with TTL-based invalidation
-- **Data Sources:**
-  - **epguides.com** (primary): Master show list, episode CSV data
-  - **TVMaze API** (fallback): Episodes, summaries, images when epguides unavailable
+- **Data Sources:** epguides.com (primary), TVMaze API (fallback)
+- **Python:** 3.12+
 - **Public API:** https://epguides.frecar.no
 
 ## Commands
 
-| Command | Purpose |
-|---------|---------|
-| `make up` | Start dev environment (Docker + hot reload) |
-| `make down` | Stop all Docker services |
-| `make test` | Run tests (100% coverage required) |
-| `make fix` | Format (black) + lint (ruff) + auto-fix |
-| `make cache-clear` | Flush Redis cache |
-| `make up-prod` | Start production environment |
-
-Run a single test:
 ```bash
-pytest app/tests/test_endpoints.py::test_specific_function -v
+make help          # Show all commands
+make up            # Start dev environment (Docker + hot reload)
+make down          # Stop all services
+make test          # Run tests (100% coverage required)
+make fix           # Format + lint with ruff
+make doctor        # Check environment health
+make urls          # Show service URLs
+make clean         # Remove cache files
+```
+
+Run single test:
+```bash
+pytest app/tests/test_endpoints.py::test_function -v
 ```
 
 ## Architecture
 
 ```
 app/
-├── api/endpoints/       # REST routes (FastAPI routers)
+├── api/endpoints/       # REST routes
 │   ├── shows.py         # /shows/* endpoints
-│   └── mcp.py           # /mcp endpoint (JSON-RPC for AI assistants)
+│   └── mcp.py           # /mcp JSON-RPC endpoint
 ├── core/
-│   ├── cache.py         # Redis caching with @cached decorator
-│   ├── config.py        # Pydantic settings from env vars
-│   └── constants.py     # TTLs, version, external URLs
-├── mcp/server.py        # MCP protocol JSON-RPC implementation
+│   ├── cache.py         # Redis caching, @cached decorator
+│   ├── config.py        # Pydantic settings
+│   └── constants.py     # TTLs, version, URLs
 ├── models/
-│   ├── schemas.py       # Pydantic models (ShowSchema, EpisodeSchema)
-│   └── responses.py     # Response wrappers (PaginatedResponse)
+│   ├── schemas.py       # ShowSchema, EpisodeSchema
+│   └── responses.py     # PaginatedResponse
 ├── services/
-│   ├── show_service.py  # Core business logic
-│   ├── epguides.py      # External APIs: epguides.com (primary), TVMaze (fallback)
-│   └── llm_service.py   # Natural language query processing
-└── tests/               # pytest suite (100% coverage enforced)
+│   ├── show_service.py  # Business logic
+│   ├── epguides.py      # External API calls
+│   └── llm_service.py   # Natural language queries
+└── tests/               # 100% coverage required
 ```
 
-**Layered architecture flow:** API endpoints → Services → External APIs, with Redis caching at the service layer.
+**Flow:** Endpoints -> Services -> External APIs, with Redis caching at service layer.
 
 ## Code Patterns
 
-### Caching with @cached decorator
+### Caching
+
 ```python
 @cached("show:{show_id}", ttl=TTL_7_DAYS, model=ShowSchema, key_transform=normalize_show_id)
 async def get_show(show_id: str) -> ShowSchema | None:
     ...
 ```
 
-TTL constants in `app/core/constants.py`:
-- `TTL_7_DAYS` — Ongoing shows, episodes, seasons
-- `TTL_30_DAYS` — Show list, indexes
-- `TTL_1_YEAR` — Finished shows (won't change)
+TTL constants (`app/core/constants.py`):
+- `TTL_7_DAYS` - Ongoing shows, episodes
+- `TTL_30_DAYS` - Show list, indexes
+- `TTL_1_YEAR` - Finished shows
 
-### Schema factory functions
+### Schema Factory
+
 ```python
-# Always use factory function (handles defaults)
+# Use factory function (handles defaults)
 show = create_show_schema(epguides_key="test", title="Test")
 
-# NOT direct instantiation
+# Not direct instantiation
 show = ShowSchema(...)  # Don't do this
 ```
 
-### Parallel async fetches
+### Async Parallel
+
 ```python
 results = await asyncio.gather(
     epguides.get_episodes_data(show_id),
@@ -86,7 +87,7 @@ results = await asyncio.gather(
 
 ## Testing
 
-**100% test coverage is enforced** by pre-commit hooks. Commits are blocked if coverage drops below 100%.
+100% coverage enforced by pre-commit. Commits blocked if coverage drops.
 
 Mock patterns:
 ```python
@@ -94,21 +95,23 @@ Mock patterns:
 @patch("app.services.show_service.get_show")           # Service layer
 ```
 
-Performance tests in `test_performance.py`: hard limit < 50ms, target < 20ms.
+Performance tests: < 50ms hard limit, < 20ms target.
 
-If code can't be tested, remove it — no `# pragma: no cover`.
+If code can't be tested, remove it.
 
 ## Pre-commit Hooks
 
-Auto-enforced on every commit:
-1. Version update (increments build number)
-2. Code formatting (`make fix`)
-3. Test coverage (blocks if < 100%)
+Runs automatically on commit:
+1. Trailing whitespace, YAML check, large files, merge conflicts, private keys
+2. Ruff lint + format
+3. Version update
+4. Tests with 100% coverage
 
-Setup: `pre-commit install`
+Setup: `make setup` (installs venv + hooks)
 
 ## Style
 
-- Line length: 120 characters
-- Python 3.11+
-- All I/O must be async
+- Line length: 120
+- Python 3.12+
+- All I/O async
+- Ruff for linting and formatting

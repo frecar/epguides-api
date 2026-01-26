@@ -1,7 +1,6 @@
 # Python
-*.py[cod]
-*.pyc
 __pycache__/
+*.py[cod]
 *.so
 *.egg
 *.egg-info/
@@ -11,9 +10,8 @@ build/
 
 # Virtual environments
 venv/
+.venv/
 env/
-ENV/
-.venv
 
 # IDE
 .idea/
@@ -22,63 +20,28 @@ ENV/
 *.swo
 *~
 
-# Logs
-*.log
-error.log
-info.log
-
 # Environment
 .env
-local.cfg
 .env.local
+local.cfg
 
-# Testing
+# Testing & Coverage
 .coverage
 coverage.xml
 htmlcov/
 .pytest_cache/
 .tox/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Docker
-.dockerignore
+# Type checking & Linting
+.mypy_cache/
+.ruff_cache/
 
 # Documentation build
 site/
 
-# C extensions
-*.so
+# OS
+.DS_Store
+Thumbs.db
 
-# Packages
-*.egg
-*.egg-info
-dist
-build
-eggs
-parts
-bin
-var
-sdist
-develop-eggs
-.installed.cfg
-lib
-lib64
-
-# Installer logs
-pip-log.txt
-
-# Unit test / coverage reports
-.coverage
-.tox
-nosetests.xml
-
-# Translations
-*.mo
-
-# Mr Developer
-.mr.developer.cfg
-.project
-.pydevproject
+# Logs
+*.log

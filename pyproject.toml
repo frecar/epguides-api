@@ -1,63 +1,49 @@
-[tool.black]
-line-length = 120
-target-version = ['py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
+[project]
+name = "epguides-api"
+version = "1.0.0"
+description = "REST API for TV show metadata, episodes, and air dates"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [{name = "Fredrik Carlsen", email = "frecar@carlsen.io"}]
+keywords = ["tv", "shows", "api", "epguides", "fastapi"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
 ]
 ignore = [
-    "E501",  # line too long (handled by black)
-    "B008",  # do not perform function calls in argument defaults
-    "C901",  # too complex
+    "E501",   # line too long (formatter handles this)
+    "B008",   # function calls in argument defaults (FastAPI Depends)
+    "UP046", # Generic subclass vs type params (Pydantic compat)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]  # unused imports
+"__init__.py" = ["F401"]
+"app/tests/*" = ["S101"]  # allow assert in tests
 
-[tool.isort]
-profile = "black"
-line_length = 120
-skip_gitignore = true
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["app/tests"]
+addopts = "-q --tb=short"
 
 [tool.coverage.run]
 source = ["app"]
-omit = [
-    "app/tests/*",
-    "app/__init__.py",
-    "app/*/__init__.py",
-]
+omit = ["app/tests/*", "app/__init__.py", "app/*/__init__.py"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -72,10 +58,8 @@ show_missing = true
 skip_covered = false
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
-
-
