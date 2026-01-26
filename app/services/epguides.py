@@ -1,10 +1,13 @@
 """
-Epguides.com data fetching and parsing.
+External data fetching for TV show information.
 
-This module handles all external API calls to epguides.com:
-- Fetching the master show list
-- Scraping show metadata (IMDB IDs)
-- Parsing episode CSV data
+This module handles all external API calls:
+- epguides.com: Master show list, episode CSV data, IMDB IDs
+- TVMaze API: Episode data (fallback), summaries, posters
+
+Data fetching strategy for episodes:
+1. Primary: Fetch from epguides.com (established data source)
+2. Fallback: Fetch from TVMaze API (when epguides is unreachable)
 
 All functions are async and use Redis caching for performance.
 """
@@ -159,43 +162,315 @@ _TVMAZE_COLUMNS = {"season": 1, "number": 2, "release_date": 3, "title": 4}
 _TVMAZE_API_URL = "https://api.tvmaze.com"
 
 
-@cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="episodes")
-async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
-    """
-    Fetch episode data for a show.
+# =============================================================================
+# TVMaze Episode Fetching (Fallback)
+# =============================================================================
 
-    Scrapes the epguides show page to find CSV export URL,
-    then fetches and parses the episode data. Also fetches
-    episode summaries from TVMaze when available.
+
+async def _search_tvmaze_by_title(title: str) -> dict[str, Any] | None:
+    """
+    Search TVMaze for a show by its title.
+
+    Uses the single-search endpoint which returns the best match.
+
+    Args:
+        title: Show title (e.g., "Shark Tank", "Game of Thrones").
+
+    Returns:
+        TVMaze show data dict or None if not found.
+    """
+    if not title:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+            response = await client.get(
+                f"{_TVMAZE_API_URL}/singlesearch/shows",
+                params={"q": title},
+            )
+            if response.status_code == 404:
+                return None
+            if response.status_code != 200:
+                logger.warning("TVMaze search failed for '%s': HTTP %d", title, response.status_code)
+                return None
+            return response.json()
+    except Exception as e:
+        logger.warning("TVMaze search error for '%s': %s", title, e)
+        return None
+
+
+async def _fetch_tvmaze_episodes(maze_id: str) -> list[dict[str, Any]]:
+    """
+    Fetch all episodes for a show from TVMaze.
+
+    Returns episodes in the same format as epguides CSV parsing,
+    but with summaries and poster URLs included.
+
+    Args:
+        maze_id: TVMaze show ID.
+
+    Returns:
+        List of episode dicts with season, number, title, release_date, summary, poster_url.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+            response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}/episodes")
+            if response.status_code != 200:
+                logger.warning("TVMaze episodes fetch failed: HTTP %d for maze=%s", response.status_code, maze_id)
+                return []
+
+            tvmaze_episodes = response.json()
+            episodes: list[dict[str, Any]] = []
+
+            for ep in tvmaze_episodes:
+                season = ep.get("season")
+                number = ep.get("number")
+                name = ep.get("name")
+                airdate = ep.get("airdate")
+
+                # Skip episodes missing required fields
+                if not all([season, number, name, airdate]):
+                    continue
+
+                # Clean HTML from summary
+                summary = ep.get("summary") or ""
+                if summary:
+                    summary = re.sub(r"<[^>]+>", "", summary).strip()
+
+                # Extract poster URL
+                image = ep.get("image")
+                poster_url = ""
+                if image:
+                    poster_url = image.get("original") or image.get("medium") or ""
+
+                episodes.append(
+                    {
+                        "season": str(season),
+                        "number": str(number),
+                        "title": name,
+                        "release_date": airdate,
+                        "summary": summary,
+                        "poster_url": poster_url,
+                    }
+                )
+
+            return episodes
+
+    except Exception as e:
+        logger.warning("TVMaze episodes fetch error for maze=%s: %s", maze_id, e)
+        return []
+
+
+async def _get_show_title(show_id: str) -> str | None:
+    """
+    Get the actual show title for a show ID.
+
+    Strategy:
+    1. Look up title from cached show metadata (most accurate)
+    2. Fall back to converting show_id to searchable format
+
+    Args:
+        show_id: Epguides show identifier (e.g., "sharktank", "GameOfThrones").
+
+    Returns:
+        Show title (e.g., "Shark Tank") or converted show_id.
+    """
+    # Strategy 1: Look up in cached metadata
+    metadata = await get_all_shows_metadata()
+    show_id_lower = show_id.lower()
+
+    for show in metadata:
+        directory = show.get("directory", "").lower()
+        if directory == show_id_lower:
+            title = show.get("title")
+            if title:
+                return title
+
+    # Strategy 2: Convert show_id to searchable format
+    # This handles cases like "SharkTank" -> "Shark Tank" or "gameofthrones" -> "game of thrones"
+    return _convert_show_id_to_title(show_id)
+
+
+def _convert_show_id_to_title(show_id: str) -> str:
+    """
+    Convert a show ID to a searchable title.
+
+    Handles common patterns:
+    - CamelCase: "SharkTank" -> "Shark Tank"
+    - Lowercase: "sharktank" -> "shark tank" (using common word detection)
+
+    TVMaze search is fuzzy, so approximate titles usually work.
 
     Args:
         show_id: Epguides show identifier.
 
     Returns:
-        List of episode dictionaries with season, number, title, release_date, summary.
-        Returns empty list on error.
+        A search-friendly version of the show ID.
     """
+    # Handle CamelCase (e.g., "SharkTank" -> "Shark Tank")
+    title = re.sub(r"([a-z])([A-Z])", r"\1 \2", show_id)
+
+    # If no spaces were added and it's all lowercase, try to add word boundaries
+    if " " not in title and title.islower():
+        title = _add_word_boundaries(title)
+
+    return title.strip()
+
+
+def _add_word_boundaries(text: str) -> str:
+    """
+    Add spaces at likely word boundaries in a lowercase string.
+
+    Uses a list of common TV show words to identify boundaries.
+    This is a heuristic - TVMaze's fuzzy search helps with imperfect matches.
+
+    Args:
+        text: Lowercase string without spaces (e.g., "sharktank").
+
+    Returns:
+        String with spaces at detected word boundaries.
+    """
+    # Common words in TV show titles, ordered by length (longer first)
+    # to avoid partial matches (e.g., "the" matching inside "thrones")
+    common_words = [
+        # 10+ chars
+        "recreation",
+        # 8+ chars
+        "stranger",
+        "breaking",
+        "walking",
+        "brooklyn",
+        "american",
+        # 7 chars
+        "thrones",
+        "friends",
+        "anatomy",
+        # 6 chars
+        "queens",
+        "things",
+        "office",
+        "mirror",
+        "knight",
+        "modern",
+        # 5 chars
+        "shark",
+        "house",
+        "parks",
+        "place",
+        "black",
+        "girls",
+        "crown",
+        "night",
+        "greys",
+        "white",
+        # 4 chars
+        "tank",
+        "game",
+        "dead",
+        "good",
+        "boys",
+        "nine",
+        "nine",
+        "star",
+        "trek",
+        "wars",
+        "band",
+        # 3 chars (careful with these)
+        "bad",
+        "big",
+        "new",
+        "old",
+        "day",
+        "and",
+    ]
+
+    result = text
+
+    # Try to split on common word boundaries
+    # Process longer words first to avoid partial matches
+    for word in common_words:
+        if word in result and len(word) >= 3:
+            # Add space before the word (if preceded by letters)
+            result = re.sub(rf"([a-z])({word})", r"\1 \2", result)
+            # Add space after the word (if followed by letters)
+            result = re.sub(rf"({word})([a-z])", r"\1 \2", result)
+
+    # Handle common prefixes at the start (the, a, an)
+    for prefix in ["the", "a", "an"]:
+        if result.startswith(prefix + " "):
+            # Already has space, good
+            break
+        if result.startswith(prefix) and len(result) > len(prefix):
+            rest = result[len(prefix) :]
+            # Only split if what follows looks like a separate word
+            if rest[0].isalpha() and rest not in ["re", "nd", "n"]:  # Avoid "there", "and", "an"
+                result = prefix + " " + rest
+                break
+
+    # Clean up multiple spaces
+    result = re.sub(r"\s+", " ", result).strip()
+
+    return result
+
+
+@cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="episodes")
+async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
+    """
+    Fetch episode data for a show.
+
+    Fetching strategy:
+    1. Try epguides.com (primary source)
+       - Scrape show page for CSV export URL
+       - Parse episode CSV data
+       - Enrich with TVMaze summaries/images
+    2. If epguides fails, try TVMaze directly (fallback)
+       - Look up show title from our cached metadata
+       - Search TVMaze by title
+       - Fetch episodes from TVMaze
+
+    Args:
+        show_id: Epguides show identifier (e.g., "sharktank").
+
+    Returns:
+        List of episode dictionaries with season, number, title, release_date, summary, poster_url.
+        Returns empty list if both sources fail.
+    """
+    # Strategy 1: Try epguides.com (primary)
     url = f"{EPGUIDES_BASE_URL}/{show_id}"
     response = await _fetch_url(url)
 
-    if not response or response.status_code != 200:
-        return []
+    if response and response.status_code == 200:
+        text = response.text
+        csv_url, column_map, maze_id = _extract_csv_url_and_maze_id(text)
 
-    text = response.text
-    csv_url, column_map, maze_id = _extract_csv_url_and_maze_id(text)
+        if csv_url:
+            rows = await fetch_csv(csv_url)
+            episodes = _parse_episode_rows(rows, column_map)
 
-    if not csv_url:
-        logger.warning("No CSV URL found for %s", show_id)
-        return []
+            if episodes:
+                # Enrich with TVMaze data (summaries + images)
+                if maze_id:
+                    episodes = await _merge_tvmaze_episode_data(episodes, maze_id)
+                logger.debug("Fetched %d episodes from epguides for %s", len(episodes), show_id)
+                return episodes
 
-    rows = await fetch_csv(csv_url)
-    episodes = _parse_episode_rows(rows, column_map)
+    # Strategy 2: TVMaze fallback
+    # Get the proper show title from our metadata for accurate search
+    show_title = await _get_show_title(show_id)
+    if show_title:
+        tvmaze_show = await _search_tvmaze_by_title(show_title)
+        if tvmaze_show:
+            maze_id = str(tvmaze_show.get("id", ""))
+            if maze_id:
+                episodes = await _fetch_tvmaze_episodes(maze_id)
+                if episodes:
+                    logger.info(
+                        "Fetched %d episodes from TVMaze for '%s' (maze=%s)", len(episodes), show_title, maze_id
+                    )
+                    return episodes
 
-    # Fetch and merge TVMaze episode data (summaries + images) if we have a maze ID
-    if maze_id and episodes:
-        episodes = await _merge_tvmaze_episode_data(episodes, maze_id)
-
-    return episodes
+    logger.warning("No episode data found for %s", show_id)
+    return []
 
 
 def _extract_csv_url_and_maze_id(page_html: str) -> tuple[str | None, dict[str, int], str | None]:
@@ -378,7 +653,11 @@ async def get_show_poster(maze_id: str) -> str:
 @cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="maze_id")
 async def get_maze_id_for_show(show_id: str) -> str | None:
     """
-    Get TVMaze ID for a show by scraping its epguides page.
+    Get TVMaze ID for a show.
+
+    Strategy:
+    1. Try scraping epguides page for maze ID
+    2. If that fails, search TVMaze by show title
 
     Cached to avoid repeated HTTP calls.
 
@@ -388,14 +667,25 @@ async def get_maze_id_for_show(show_id: str) -> str | None:
     Returns:
         TVMaze show ID or None if not found.
     """
+    # Strategy 1: Try epguides
     url = f"{EPGUIDES_BASE_URL}/{show_id}"
     response = await _fetch_url(url)
 
-    if not response or response.status_code != 200:
-        return None
+    if response and response.status_code == 200:
+        _, _, maze_id = _extract_csv_url_and_maze_id(response.text)
+        if maze_id:
+            return maze_id
 
-    _, _, maze_id = _extract_csv_url_and_maze_id(response.text)
-    return maze_id
+    # Strategy 2: Search TVMaze by title
+    show_title = await _get_show_title(show_id)
+    if show_title:
+        tvmaze_show = await _search_tvmaze_by_title(show_title)
+        if tvmaze_show:
+            maze_id = tvmaze_show.get("id")
+            if maze_id:
+                return str(maze_id)
+
+    return None
 
 
 def _parse_episode_rows(rows: list[list[str]], column_map: dict[str, int]) -> list[dict[str, Any]]:

@@ -1218,9 +1218,10 @@ def test_build_show_updates_no_end_date_for_ongoing():
 
 
 @pytest.mark.asyncio
+@patch("app.services.epguides._get_show_title", return_value=None)
 @patch("app.services.epguides._fetch_url")
-async def test_get_episodes_data_returns_empty_on_error(mock_fetch):
-    """Test get_episodes_data returns empty list on error."""
+async def test_get_episodes_data_returns_empty_on_error(mock_fetch, mock_get_title):
+    """Test get_episodes_data returns empty when both epguides and TVMaze fail."""
     mock_fetch.return_value = None
 
     result = await epguides.get_episodes_data("test")
@@ -1229,11 +1230,12 @@ async def test_get_episodes_data_returns_empty_on_error(mock_fetch):
 
 
 @pytest.mark.asyncio
+@patch("app.services.epguides._get_show_title", return_value=None)
 @patch("app.core.cache.cache_set")
 @patch("app.core.cache.cache_get", return_value=None)
 @patch("app.services.epguides._fetch_url")
-async def test_get_episodes_data_no_csv_url(mock_fetch, mock_cache_get, mock_cache_set):
-    """Test get_episodes_data returns empty when no CSV URL found."""
+async def test_get_episodes_data_no_csv_url(mock_fetch, mock_cache_get, mock_cache_set, mock_get_title):
+    """Test get_episodes_data returns empty when no CSV URL and no TVMaze fallback."""
     from unittest.mock import MagicMock
 
     mock_response = MagicMock()
@@ -1244,6 +1246,31 @@ async def test_get_episodes_data_no_csv_url(mock_fetch, mock_cache_get, mock_cac
     result = await epguides.get_episodes_data("test_no_csv")
 
     assert result == []
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_tvmaze_episodes")
+@patch("app.services.epguides._search_tvmaze_by_title")
+@patch("app.services.epguides._get_show_title")
+@patch("app.services.epguides._fetch_url")
+async def test_get_episodes_data_tvmaze_fallback(mock_fetch, mock_get_title, mock_search, mock_episodes):
+    """Test get_episodes_data uses TVMaze fallback when epguides fails."""
+    # epguides fails
+    mock_fetch.return_value = None
+
+    # TVMaze fallback succeeds
+    mock_get_title.return_value = "Test Show"
+    mock_search.return_value = {"id": 12345, "name": "Test Show"}
+    mock_episodes.return_value = [
+        {"season": "1", "number": "1", "title": "Pilot", "release_date": "2020-01-01", "summary": "", "poster_url": ""}
+    ]
+
+    result = await epguides.get_episodes_data("testshow")
+
+    assert len(result) == 1
+    assert result[0]["title"] == "Pilot"
+    mock_search.assert_called_once_with("Test Show")
+    mock_episodes.assert_called_once_with("12345")
 
 
 @pytest.mark.asyncio
@@ -1276,6 +1303,199 @@ async def test_get_tvmaze_seasons_error(mock_client_class):
     result = await epguides.get_tvmaze_seasons("12345")
 
     assert result == []
+
+
+# =============================================================================
+# TVMaze Fallback Functions Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_search_tvmaze_by_title_success(mock_client_class):
+    """Test _search_tvmaze_by_title returns show data on success."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 329, "name": "Shark Tank"}
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._search_tvmaze_by_title("Shark Tank")
+
+    assert result is not None
+    assert result["id"] == 329
+    assert result["name"] == "Shark Tank"
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_search_tvmaze_by_title_not_found(mock_client_class):
+    """Test _search_tvmaze_by_title returns None on 404."""
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._search_tvmaze_by_title("Nonexistent Show")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_search_tvmaze_by_title_error(mock_client_class):
+    """Test _search_tvmaze_by_title returns None on error."""
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = Exception("Connection error")
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._search_tvmaze_by_title("Test")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_search_tvmaze_by_title_empty():
+    """Test _search_tvmaze_by_title returns None for empty title."""
+    result = await epguides._search_tvmaze_by_title("")
+    assert result is None
+
+    result = await epguides._search_tvmaze_by_title(None)
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_tvmaze_episodes_success(mock_client_class):
+    """Test _fetch_tvmaze_episodes returns episode list."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {
+            "season": 1,
+            "number": 1,
+            "name": "Pilot",
+            "airdate": "2020-01-01",
+            "summary": "<p>First episode</p>",
+            "image": {"original": "http://example.com/img.jpg"},
+        },
+        {
+            "season": 1,
+            "number": 2,
+            "name": "Episode 2",
+            "airdate": "2020-01-08",
+            "summary": None,
+            "image": None,
+        },
+    ]
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._fetch_tvmaze_episodes("12345")
+
+    assert len(result) == 2
+    assert result[0]["title"] == "Pilot"
+    assert result[0]["summary"] == "First episode"
+    assert result[0]["poster_url"] == "http://example.com/img.jpg"
+    assert result[1]["summary"] == ""
+    assert result[1]["poster_url"] == ""
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_tvmaze_episodes_error(mock_client_class):
+    """Test _fetch_tvmaze_episodes returns empty on error."""
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = Exception("Connection error")
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._fetch_tvmaze_episodes("12345")
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_tvmaze_episodes_skips_incomplete(mock_client_class):
+    """Test _fetch_tvmaze_episodes skips episodes without required fields."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {"season": 1, "number": 1, "name": "Pilot"},  # Missing airdate
+        {"season": 1, "number": 2, "airdate": "2020-01-01"},  # Missing name
+        {"season": 1, "number": 3, "name": "Complete", "airdate": "2020-01-08"},  # Complete
+    ]
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._fetch_tvmaze_episodes("12345")
+
+    assert len(result) == 1
+    assert result[0]["title"] == "Complete"
+
+
+def test_convert_show_id_to_title():
+    """Test _convert_show_id_to_title handles various formats."""
+    # CamelCase
+    assert epguides._convert_show_id_to_title("SharkTank") == "Shark Tank"
+    assert epguides._convert_show_id_to_title("GameOfThrones") == "Game Of Thrones"
+
+    # Lowercase with common words
+    assert epguides._convert_show_id_to_title("sharktank") == "shark tank"
+    assert epguides._convert_show_id_to_title("breakingbad") == "breaking bad"
+    assert epguides._convert_show_id_to_title("theoffice") == "the office"
+
+    # Already spaced
+    assert epguides._convert_show_id_to_title("the office") == "the office"
+
+
+def test_add_word_boundaries():
+    """Test _add_word_boundaries adds spaces correctly."""
+    assert epguides._add_word_boundaries("sharktank") == "shark tank"
+    assert epguides._add_word_boundaries("breakingbad") == "breaking bad"
+    assert epguides._add_word_boundaries("strangerthings") == "stranger things"
+    assert epguides._add_word_boundaries("theoffice") == "the office"
+    assert epguides._add_word_boundaries("thewalkingdead") == "the walking dead"
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.get_all_shows_metadata")
+async def test_get_show_title_from_metadata(mock_metadata):
+    """Test _get_show_title looks up title from metadata."""
+    mock_metadata.return_value = [
+        {"directory": "SharkTank", "title": "Shark Tank"},
+        {"directory": "GameOfThrones", "title": "Game of Thrones"},
+    ]
+
+    result = await epguides._get_show_title("sharktank")
+    assert result == "Shark Tank"
+
+    result = await epguides._get_show_title("gameofthrones")
+    assert result == "Game of Thrones"
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.get_all_shows_metadata")
+async def test_get_show_title_fallback(mock_metadata):
+    """Test _get_show_title falls back to ID conversion when not in metadata."""
+    mock_metadata.return_value = []
+
+    result = await epguides._get_show_title("sharktank")
+    assert result == "shark tank"
 
 
 @pytest.mark.asyncio
@@ -1347,14 +1567,31 @@ async def test_get_maze_id_for_show(mock_fetch):
 
 
 @pytest.mark.asyncio
+@patch("app.services.epguides._get_show_title", return_value=None)
 @patch("app.services.epguides._fetch_url")
-async def test_get_maze_id_for_show_not_found(mock_fetch):
-    """Test get_maze_id_for_show returns None when not found."""
+async def test_get_maze_id_for_show_not_found(mock_fetch, mock_get_title):
+    """Test get_maze_id_for_show returns None when both epguides and TVMaze fail."""
     mock_fetch.return_value = None
 
     result = await epguides.get_maze_id_for_show("test")
 
     assert result is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._search_tvmaze_by_title")
+@patch("app.services.epguides._get_show_title")
+@patch("app.services.epguides._fetch_url")
+async def test_get_maze_id_for_show_tvmaze_fallback(mock_fetch, mock_get_title, mock_search):
+    """Test get_maze_id_for_show uses TVMaze fallback when epguides fails."""
+    mock_fetch.return_value = None
+    mock_get_title.return_value = "Test Show"
+    mock_search.return_value = {"id": 12345, "name": "Test Show"}
+
+    result = await epguides.get_maze_id_for_show("testshow")
+
+    assert result == "12345"
+    mock_search.assert_called_once_with("Test Show")
 
 
 @pytest.mark.asyncio
@@ -2113,3 +2350,254 @@ def test_parse_date_string_century_correction():
 
     assert result is not None
     assert result.year == 1950  # Century corrected from 2050
+
+
+# =============================================================================
+# Additional Coverage Tests - epguides.py
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_success(mock_client_class):
+    """Test _fetch_url returns response on success."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._fetch_url("http://example.com/test")
+
+    assert result is not None
+    assert result.status_code == 200
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_url")
+async def test_get_all_shows_metadata_success(mock_fetch):
+    """Test get_all_shows_metadata returns data on success."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.encoding = "utf-8"
+    mock_response.text = "directory,title,network\nBreakingBad,Breaking Bad,AMC\n"
+
+    mock_fetch.return_value = mock_response
+
+    result = await epguides.get_all_shows_metadata()
+
+    assert len(result) >= 1
+    assert result[0]["directory"] == "BreakingBad"
+    assert result[0]["title"] == "Breaking Bad"
+
+
+def test_clean_unicode_text_with_replacement_chars():
+    """Test _clean_unicode_text handles U+FFFD replacement characters."""
+    mock_response = MagicMock()
+    mock_response.encoding = "utf-8"
+    mock_response.text = "Hello\ufffdWorld"
+    mock_response.content = b"HelloWorld"
+
+    result = epguides._clean_unicode_text(mock_response)
+
+    assert "\ufffd" not in result
+    assert "HelloWorld" in result
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_search_tvmaze_by_title_non_200_non_404(mock_client_class):
+    """Test _search_tvmaze_by_title handles non-200/non-404 status (e.g., 500)."""
+    mock_response = MagicMock()
+    mock_response.status_code = 500
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._search_tvmaze_by_title("Test Show")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_tvmaze_episodes_non_200(mock_client_class):
+    """Test _fetch_tvmaze_episodes handles non-200 status (e.g., 500)."""
+    mock_response = MagicMock()
+    mock_response.status_code = 500
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._fetch_tvmaze_episodes("12345")
+
+    assert result == []
+
+
+def test_add_word_boundaries_with_prefix_the():
+    """Test _add_word_boundaries handles 'the' prefix via prefix detection."""
+    # "thecat" - "cat" is NOT a common word, so prefix detection should kick in
+    result = epguides._add_word_boundaries("thecat")
+    assert result == "the cat"
+
+
+def test_add_word_boundaries_with_prefix_a():
+    """Test _add_word_boundaries handles 'a' prefix via prefix detection."""
+    # "adog" - "dog" is NOT a common word, so prefix detection should kick in
+    result = epguides._add_word_boundaries("adog")
+    assert result == "a dog"
+
+
+def test_add_word_boundaries_with_prefix_a_before_an():
+    """Test _add_word_boundaries processes 'a' before 'an' prefix."""
+    # "anox" - prefixes are checked in order: the, a, an
+    # "a" matches first, so "anox" becomes "a nox" not "an ox"
+    result = epguides._add_word_boundaries("anox")
+    assert result == "a nox"  # "a" prefix matches before "an"
+
+
+def test_parse_episode_rows_empty_row():
+    """Test _parse_episode_rows skips empty rows."""
+    rows = [
+        ["1", "1", "01 Jan 20", "", "pilot", "Pilot Episode"],
+        [],  # Empty row - should be skipped
+        ["1", "2", "08 Jan 20", "", "ep2", "Second Episode"],
+    ]
+    column_map = {"season": 0, "number": 1, "release_date": 2, "title": 5}
+
+    result = epguides._parse_episode_rows(rows, column_map)
+
+    assert len(result) == 2
+    assert result[0]["title"] == "Pilot Episode"
+    assert result[1]["title"] == "Second Episode"
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_merge_tvmaze_episode_data_image_no_original_or_medium(mock_client_class):
+    """Test _merge_tvmaze_episode_data handles image with empty original/medium."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {
+            "season": 1,
+            "number": 1,
+            "summary": "<p>Test summary</p>",
+            "image": {"thumbnail": "http://example.com/thumb.jpg"},  # No original or medium
+        }
+    ]
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    episodes = [{"season": "1", "number": "1", "title": "Pilot"}]
+    result = await epguides._merge_tvmaze_episode_data(episodes, "12345")
+
+    assert result[0]["poster_url"] == ""  # Should be empty string
+
+
+# =============================================================================
+# Additional Coverage Tests - llm_service.py
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service._query_llm")
+@patch("app.services.llm_service.settings")
+async def test_parse_natural_language_query_exception(mock_settings, mock_query):
+    """Test parse_natural_language_query handles exceptions gracefully."""
+    from app.services import llm_service
+
+    mock_settings.LLM_ENABLED = True
+    mock_settings.LLM_API_URL = "http://example.com/llm"
+    mock_query.side_effect = Exception("LLM service error")
+
+    episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2020-01-01"}]
+
+    result = await llm_service.parse_natural_language_query("test query", episodes)
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_query_llm_non_200_response(mock_client_class):
+    """Test _query_llm handles non-200 response."""
+    from app.services import llm_service
+
+    mock_response = MagicMock()
+    mock_response.status_code = 500
+
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2020-01-01"}]
+
+    result = await llm_service._query_llm("test query", episodes)
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_query_llm_json_decode_error(mock_client_class):
+    """Test _query_llm handles JSON decode errors."""
+    from app.services import llm_service
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"choices": [{"message": {"content": "not valid json ["}}]}
+
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2020-01-01"}]
+
+    result = await llm_service._query_llm("test query", episodes)
+
+    assert result is None
+
+
+# =============================================================================
+# Additional Coverage Tests - show_service.py
+# =============================================================================
+
+
+def test_parse_date_month_year_format():
+    """Test _parse_date handles month-year formats like 'Jan 2020'."""
+    result = show_service._parse_date("Jan 2020")
+
+    assert result is not None
+    assert result.year == 2020
+    assert result.month == 1
+    assert result.day == 1  # Should default to 1st of month
+
+
+def test_parse_date_iso_format():
+    """Test _parse_date handles ISO format dates."""
+    result = show_service._parse_date("2020-01-15")
+
+    assert result is not None
+    assert result.year == 2020
+    assert result.month == 1
+    assert result.day == 15
+
+
+def test_parse_date_invalid_format():
+    """Test _parse_date returns None for unparseable dates."""
+    result = show_service._parse_date("not a date")
+
+    assert result is None
