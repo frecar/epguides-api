@@ -54,48 +54,44 @@ def test_get_version_env_dev_ignored(monkeypatch):
     """Test get_version ignores APP_VERSION='dev'."""
     monkeypatch.setenv("APP_VERSION", "dev")
 
-    with patch("pathlib.Path.exists", return_value=False):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value.returncode = 0
-            mock_run.return_value.stdout = "999\n"
-            result = get_version()
-            # Should use git, not "dev" env var
-            assert result == "999"
+    with patch("pathlib.Path.exists", return_value=False), patch("subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "999\n"
+        result = get_version()
+        # Should use git, not "dev" env var
+        assert result == "999"
 
 
 def test_get_version_from_git(monkeypatch):
     """Test get_version falls back to git commit count."""
     monkeypatch.delenv("APP_VERSION", raising=False)
 
-    with patch("pathlib.Path.exists", return_value=False):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value.returncode = 0
-            mock_run.return_value.stdout = "555\n"
-            result = get_version()
-            assert result == "555"
+    with patch("pathlib.Path.exists", return_value=False), patch("subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "555\n"
+        result = get_version()
+        assert result == "555"
 
 
 def test_get_version_fallback_to_dev(monkeypatch):
     """Test get_version returns 'dev' when all methods fail."""
     monkeypatch.delenv("APP_VERSION", raising=False)
 
-    with patch("pathlib.Path.exists", return_value=False):
-        with patch("subprocess.run") as mock_run:
-            mock_run.side_effect = Exception("git not available")
-            result = get_version()
-            assert result == "dev"
+    with patch("pathlib.Path.exists", return_value=False), patch("subprocess.run") as mock_run:
+        mock_run.side_effect = Exception("git not available")
+        result = get_version()
+        assert result == "dev"
 
 
 def test_get_version_git_fails_returns_dev(monkeypatch):
     """Test get_version returns 'dev' when git returns non-zero."""
     monkeypatch.delenv("APP_VERSION", raising=False)
 
-    with patch("pathlib.Path.exists", return_value=False):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value.returncode = 1
-            mock_run.return_value.stdout = ""
-            result = get_version()
-            assert result == "dev"
+    with patch("pathlib.Path.exists", return_value=False), patch("subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 1
+        mock_run.return_value.stdout = ""
+        result = get_version()
+        assert result == "dev"
 
 
 # =============================================================================

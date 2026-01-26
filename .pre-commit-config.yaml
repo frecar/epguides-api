@@ -1,11 +1,21 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
 
   - repo: local
     hooks:
@@ -17,16 +27,8 @@ repos:
         always_run: true
         stages: [pre-commit]
 
-      - id: make-fix
-        name: Format and fix code
-        entry: make fix
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit]
-
       - id: tests-coverage
-        name: Run tests with 100% coverage (blocks commit if fails)
+        name: Run tests (100% coverage required)
         entry: bash -c 'source venv/bin/activate && PYTHONPATH=. pytest --cov=app --cov-fail-under=100 -q'
         language: system
         pass_filenames: false
@@ -34,7 +36,7 @@ repos:
         stages: [pre-commit]
 
       - id: strip-co-author
-        name: Remove Co-Authored-By lines from commit message
+        name: Strip Co-Authored-By lines
         entry: bash -c 'sed -i "/^Co-Authored-By:/d" "$1"' --
         language: system
         always_run: true

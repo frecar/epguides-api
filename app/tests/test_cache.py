@@ -29,11 +29,10 @@ async def test_close_redis_pool():
     mock_client = AsyncMock()
     mock_pool = AsyncMock()
 
-    with patch.object(cache, "_redis_client", mock_client):
-        with patch.object(cache, "_redis_pool", mock_pool):
-            await cache.close_redis_pool()
-            mock_client.close.assert_called_once()
-            mock_pool.disconnect.assert_called_once()
+    with patch.object(cache, "_redis_client", mock_client), patch.object(cache, "_redis_pool", mock_pool):
+        await cache.close_redis_pool()
+        mock_client.close.assert_called_once()
+        mock_pool.disconnect.assert_called_once()
 
 
 # =============================================================================
@@ -262,11 +261,10 @@ async def test_cache_decorator_fetches_on_miss():
     async def get_data(key: str) -> dict:
         return {"result": "fresh"}
 
-    with patch.object(cache, "cache_get", return_value=None):
-        with patch.object(cache, "cache_set") as mock_set:
-            result = await get_data("mykey")
-            assert result == {"result": "fresh"}
-            mock_set.assert_called_once()
+    with patch.object(cache, "cache_get", return_value=None), patch.object(cache, "cache_set") as mock_set:
+        result = await get_data("mykey")
+        assert result == {"result": "fresh"}
+        mock_set.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -314,11 +312,10 @@ async def test_cached_decorator_fetches_on_miss():
     async def get_show(show_id: str) -> ShowSchema:
         return create_show_schema(epguides_key="fresh", title="Fresh Show")
 
-    with patch.object(cache, "cache_get", return_value=None):
-        with patch.object(cache, "cache_set") as mock_set:
-            result = await get_show("test")
-            assert result.epguides_key == "fresh"
-            mock_set.assert_called_once()
+    with patch.object(cache, "cache_get", return_value=None), patch.object(cache, "cache_set") as mock_set:
+        result = await get_show("test")
+        assert result.epguides_key == "fresh"
+        mock_set.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -348,10 +345,9 @@ async def test_cached_decorator_handles_corrupted_json():
     async def get_show(show_id: str) -> ShowSchema:
         return create_show_schema(epguides_key="fresh", title="Fresh Show")
 
-    with patch.object(cache, "cache_get", return_value="invalid json {{"):
-        with patch.object(cache, "cache_set"):
-            result = await get_show("test")
-            assert result.epguides_key == "fresh"
+    with patch.object(cache, "cache_get", return_value="invalid json {{"), patch.object(cache, "cache_set"):
+        result = await get_show("test")
+        assert result.epguides_key == "fresh"
 
 
 @pytest.mark.asyncio
@@ -386,12 +382,11 @@ async def test_cached_decorator_with_ttl_override():
     async def get_show(show_id: str) -> ShowSchema:
         return create_show_schema(epguides_key="finished", title="Finished Show", end_date=date(2020, 1, 1))
 
-    with patch.object(cache, "cache_get", return_value=None):
-        with patch.object(cache, "cache_set") as mock_set:
-            await get_show("test")
-            # Should use 1 year TTL for finished show
-            call_args = mock_set.call_args
-            assert call_args[0][2] == 31536000
+    with patch.object(cache, "cache_get", return_value=None), patch.object(cache, "cache_set") as mock_set:
+        await get_show("test")
+        # Should use 1 year TTL for finished show
+        call_args = mock_set.call_args
+        assert call_args[0][2] == 31536000
 
 
 @pytest.mark.asyncio
@@ -402,11 +397,10 @@ async def test_cached_decorator_without_model():
     async def get_data(key: str) -> dict:
         return {"raw": "data"}
 
-    with patch.object(cache, "cache_get", return_value=None):
-        with patch.object(cache, "cache_set") as mock_set:
-            result = await get_data("test")
-            assert result == {"raw": "data"}
-            mock_set.assert_called_once()
+    with patch.object(cache, "cache_get", return_value=None), patch.object(cache, "cache_set") as mock_set:
+        result = await get_data("test")
+        assert result == {"raw": "data"}
+        mock_set.assert_called_once()
 
 
 # =============================================================================

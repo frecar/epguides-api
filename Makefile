@@ -3,7 +3,6 @@
 
 .DEFAULT_GOAL := help
 
-# Detect if venv exists and use it, otherwise use system Python
 PYTHON := $(shell if [ -d venv ]; then echo venv/bin/python; else echo python3; fi)
 
 # =============================================================================
@@ -11,36 +10,42 @@ PYTHON := $(shell if [ -d venv ]; then echo venv/bin/python; else echo python3; 
 # =============================================================================
 
 help:
-	@echo "Epguides API - TV Show Metadata REST API"
+	@echo "Epguides API"
 	@echo ""
 	@echo "Quick Start:"
-	@echo "  make up             Start dev environment (Docker + hot reload)"
+	@echo "  make setup          Install venv + pre-commit hooks"
+	@echo "  make up             Start dev environment"
+	@echo "  make test           Run tests (100% coverage)"
 	@echo "  make doctor         Check environment health"
-	@echo "  make test           Run tests (100% coverage required)"
 	@echo ""
 	@echo "Development:"
-	@echo "  make up             Start dev services (background)"
+	@echo "  make up             Start dev (Docker + hot reload)"
 	@echo "  make down           Stop all services"
 	@echo "  make logs           View logs"
 	@echo "  make run            Run locally without Docker"
 	@echo ""
 	@echo "Quality:"
+	@echo "  make fix            Format + lint (ruff)"
+	@echo "  make lint           Lint only"
+	@echo "  make format         Format only"
 	@echo "  make test           Run tests with coverage"
-	@echo "  make fix            Format (black) + lint (ruff) + auto-fix"
-	@echo "  make lint           Check code with ruff"
-	@echo "  make format         Auto-format with black + isort"
 	@echo ""
 	@echo "Production:"
-	@echo "  make up-prod        Start production services"
-	@echo "  make deploy-prod    Build, restart, and clear cache"
-	@echo "  make cache-clear    Flush Redis cache"
+	@echo "  make up-prod        Start production"
+	@echo "  make deploy-prod    Build, restart, clear cache"
+	@echo "  make cache-clear    Flush Redis"
 	@echo ""
 	@echo "Docs:"
 	@echo "  make docs           Serve docs locally"
 	@echo "  make docs-build     Build static docs"
+	@echo ""
+	@echo "Other:"
+	@echo "  make urls           Show service URLs"
+	@echo "  make open           Open Swagger in browser"
+	@echo "  make clean          Remove cache files"
 
 # =============================================================================
-# DOCTOR - Environment Health Check
+# DOCTOR
 # =============================================================================
 
 doctor:
@@ -49,7 +54,8 @@ doctor:
 	@printf "Docker:       " && (docker --version >/dev/null 2>&1 && echo "OK" || echo "MISSING")
 	@printf "Compose:      " && (docker compose version >/dev/null 2>&1 && echo "OK" || echo "MISSING")
 	@printf "Python:       " && ($(PYTHON) --version 2>&1 | head -1 || echo "MISSING")
-	@printf "Venv:         " && ([ -d venv ] && echo "OK (venv/)" || echo "MISSING - run: make setup")
+	@printf "Venv:         " && ([ -d venv ] && echo "OK" || echo "MISSING - run: make setup")
+	@printf "Pre-commit:   " && ([ -f .git/hooks/pre-commit ] && echo "OK" || echo "MISSING - run: make setup")
 	@echo ""
 	@echo "Services:"
 	@printf "  API:        " && (curl -sf http://localhost:3000/health >/dev/null 2>&1 && echo "RUNNING http://localhost:3000" || echo "STOPPED")
@@ -75,12 +81,13 @@ open:
 # =============================================================================
 
 setup:
-	virtualenv -p python3 venv
+	python3 -m venv venv
+	venv/bin/pip install --upgrade pip
 	venv/bin/pip install -r requirements.txt
 	venv/bin/pre-commit install
 	venv/bin/pre-commit install --hook-type commit-msg
 	@echo ""
-	@echo "Setup complete! Run: make up"
+	@echo "Setup complete. Run: make up"
 
 # =============================================================================
 # DEVELOPMENT
@@ -113,7 +120,7 @@ deploy-prod:
 	docker compose -f docker-compose.prod.yml up -d
 	@sleep 3
 	@make cache-clear
-	@echo "Deployment complete, cache cleared"
+	@echo "Deployment complete"
 
 cache-clear:
 	docker exec $$(docker ps -qf "name=redis") redis-cli FLUSHALL 2>/dev/null || echo "Redis not running"
@@ -123,19 +130,17 @@ cache-clear:
 # =============================================================================
 
 test:
-	$(PYTHON) -m pytest
+	PYTHONPATH=. $(PYTHON) -m pytest --cov=app --cov-report=term-missing
 
 format:
-	$(PYTHON) -m black --line-length 120 app/
-	$(PYTHON) -m isort app/
+	$(PYTHON) -m ruff format app/
 
 lint:
 	$(PYTHON) -m ruff check app/
 
 fix:
-	$(PYTHON) -m black --line-length 120 app/
-	$(PYTHON) -m isort app/
-	$(PYTHON) -m ruff check --fix --unsafe-fixes app/
+	$(PYTHON) -m ruff check --fix app/
+	$(PYTHON) -m ruff format app/
 
 # =============================================================================
 # DOCS
@@ -152,6 +157,6 @@ docs-build:
 # =============================================================================
 
 clean:
-	rm -rf .mypy_cache .pytest_cache .ruff_cache
+	rm -rf .mypy_cache .pytest_cache .ruff_cache .coverage
 	find . -name "*.pyc" -delete
 	find . -name "__pycache__" -type d -delete
