@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_REQUESTS: bool = True
 
+    # -------------------------------------------------------------------------
+    # Observability (Optional)
+    # -------------------------------------------------------------------------
+    SENTRY_DSN: str | None = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_file=".env",
