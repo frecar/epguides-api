@@ -41,6 +41,20 @@ _initialize_logging()
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# Sentry Error Tracking (opt-in via SENTRY_DSN env var)
+# =============================================================================
+
+if settings.SENTRY_DSN:  # pragma: no cover
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        release=VERSION,
+        environment="production",
+    )
+
 
 # =============================================================================
 # Application Lifespan
