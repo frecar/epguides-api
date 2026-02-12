@@ -24,12 +24,20 @@ services:
       --log-level warning
     ports:
       - "3000:3000"
-    env_file:
-      - .env
     environment:
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - PYTHONOPTIMIZE=2
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      PYTHONOPTIMIZE: "2"
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-3600}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      API_BASE_URL: ${API_BASE_URL:-https://epguides.frecar.no}
+      LOG_REQUESTS: ${LOG_REQUESTS:-true}
+      LLM_ENABLED: ${LLM_ENABLED:-true}
+      LLM_API_URL: ${LLM_API_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     depends_on:
       redis:
         condition: service_healthy
