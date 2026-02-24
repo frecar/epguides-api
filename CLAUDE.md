@@ -2,6 +2,30 @@
 
 REST API for TV show metadata, episodes, air dates, and summaries. Also provides an MCP server for AI assistants.
 
+## Git Workflow (Standard)
+- **Commit Messages:** Use descriptive prefixes (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`).
+- **Branching:** Work primarily on `main`. Always pull latest before starting.
+- **Pre-commit:** Ensure pre-commit hooks pass before pushing.
+
+## Deployment Workflow (Verified Protocol)
+**ALL changes MUST go through git.** Manual SSH changes are ephemeral and will be overwritten.
+
+1. **Commit & Push:** All production-ready changes MUST be pushed to the `main` branch.
+2. **Push Verification:** Confirm GitHub has the latest hash: `git ls-remote origin main`.
+3. **Trigger Deploy:** Use the `proxmox-manager` CLI to deploy:
+   ```bash
+   cd ~/code/proxmox-manager
+   ./pm services deploy --service epguides --vmid 122 --yes
+   ```
+4. **Server Verification:** Confirm the container pulled the correct hash:
+   ```bash
+   ./pm services run --service epguides --vmid 122 --cmd "cd /opt/epguides && git log -n 1 --oneline"
+   ```
+5. **Force Rebuild (Optional):** If changes don't reflect, force a no-cache build:
+   ```bash
+   ./pm services run --service epguides --vmid 122 --cmd "cd /opt/epguides && docker compose -f docker-compose.prod.yml build --no-cache backend"
+   ```
+
 ## Tech Stack
 
 - **Framework:** FastAPI (async)
