@@ -51,6 +51,7 @@ if settings.SENTRY_DSN:  # pragma: no cover
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        profiles_sample_rate=0.1,
         release=VERSION,
         environment="production",
     )
