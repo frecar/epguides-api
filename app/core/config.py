@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     SENTRY_DSN: str | None = None
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    SENTRY_ENVIRONMENT: str = "production"
 
     model_config = SettingsConfigDict(
         case_sensitive=True,

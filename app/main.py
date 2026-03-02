@@ -53,7 +53,7 @@ if settings.SENTRY_DSN:  # pragma: no cover
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
         profiles_sample_rate=0.1,
         release=VERSION,
-        environment="production",
+        environment=settings.SENTRY_ENVIRONMENT,
     )
 
 
