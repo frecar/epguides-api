@@ -27,6 +27,10 @@ from app.core.constants import CACHE_TTL_SHOWS_METADATA_SECONDS, DATE_FORMATS, E
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; EpguidesBot/1.0; +https://epguides.frecar.no)",
+}
+
 # =============================================================================
 # Date Parsing
 # =============================================================================
@@ -94,7 +98,9 @@ async def _fetch_url(url: str) -> httpx.Response | None:
     Returns None on any error (logged).
     """
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=HTTP_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(
+            follow_redirects=True, timeout=HTTP_TIMEOUT_SECONDS, headers=_DEFAULT_HEADERS
+        ) as client:
             response = await client.get(url)
             response.raise_for_status()
             return response
