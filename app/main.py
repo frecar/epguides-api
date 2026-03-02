@@ -160,12 +160,12 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 if settings.LOG_REQUESTS:
     app.add_middleware(RequestLoggingMiddleware)
 
-# CORS - allow all origins (configure appropriately for production)
+# CORS - public read-only API, allow all origins but no credentials
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
 )
 
