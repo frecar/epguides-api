@@ -63,6 +63,7 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    stop_grace_period: 35s
     logging:
       driver: "json-file"
       options:
