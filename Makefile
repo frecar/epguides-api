@@ -1,5 +1,5 @@
-.PHONY: help setup up down up-prod logs test lint format fix docs docs-build
-.PHONY: cache-clear deploy-prod doctor urls open clean
+.PHONY: help setup up down up-prod logs run test lint format format-check fix ci
+.PHONY: docs docs-build cache-clear deploy-prod doctor urls open clean
 
 .DEFAULT_GOAL := help
 
@@ -25,9 +25,11 @@ help:
 	@echo "  make run            Run locally without Docker"
 	@echo ""
 	@echo "Quality:"
-	@echo "  make fix            Format + lint (ruff)"
-	@echo "  make lint           Lint only"
-	@echo "  make format         Format only"
+	@echo "  make ci             Run all checks (format + lint + test)"
+	@echo "  make fix            Auto-fix format + lint (ruff)"
+	@echo "  make lint           Lint only (ruff check)"
+	@echo "  make format         Format only (ruff format)"
+	@echo "  make format-check   Check formatting without changes"
 	@echo "  make test           Run tests with coverage"
 	@echo ""
 	@echo "Production:"
@@ -135,12 +137,18 @@ test:
 format:
 	$(PYTHON) -m ruff format app/
 
+format-check:
+	$(PYTHON) -m ruff format --check app/
+
 lint:
 	$(PYTHON) -m ruff check app/
 
 fix:
 	$(PYTHON) -m ruff check --fix app/
 	$(PYTHON) -m ruff format app/
+
+ci: format-check lint test
+	@echo "All checks passed"
 
 # =============================================================================
 # DOCS
@@ -157,6 +165,6 @@ docs-build:
 # =============================================================================
 
 clean:
-	rm -rf .mypy_cache .pytest_cache .ruff_cache .coverage
+	rm -rf .mypy_cache .pytest_cache .ruff_cache .coverage htmlcov/
 	find . -name "*.pyc" -delete
 	find . -name "__pycache__" -type d -delete
