@@ -30,7 +30,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    needs: lint
     services:
       redis:
         image: redis:7-alpine
