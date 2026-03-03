@@ -62,13 +62,18 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     stop_grace_period: 35s
     logging:
       driver: "json-file"
       options:
-        max-size: "100m"
-        max-file: "5"
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis:7
@@ -106,11 +111,16 @@ services:
       interval: 5s
       timeout: 3s
       retries: 3
+    read_only: true
+    tmpfs:
+      - /tmp:size=16M
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     logging:
       driver: "json-file"
       options:
-        max-size: "50m"
+        max-size: "10m"
         max-file: "3"
 
 volumes:
