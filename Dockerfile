@@ -3,10 +3,10 @@
 # =============================================================================
 # Multi-stage build for optimal size and security
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Stage 1: Builder - Install dependencies with build tools
-# -----------------------------------------------------------------------------
-FROM python:3.11-slim AS builder
+# ---------------------------------------------------------------------------
+FROM python:3.12-slim AS builder
 
 WORKDIR /build
 
@@ -20,15 +20,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python dependencies
-COPY requirements.txt .
+# Install production-only Python dependencies (excludes test/lint tools)
+COPY requirements-prod.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements-prod.txt
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal production image
-# -----------------------------------------------------------------------------
-FROM python:3.11-slim AS runtime
+# ---------------------------------------------------------------------------
+FROM python:3.12-slim AS runtime
+
+# OCI image metadata
+LABEL org.opencontainers.image.title="Epguides API" \
+      org.opencontainers.image.description="REST API for TV show metadata, episodes, and air dates" \
+      org.opencontainers.image.source="https://github.com/frecar/epguides-api" \
+      org.opencontainers.image.licenses="MIT"
 
 # Build argument for version
 ARG APP_VERSION=dev
