@@ -1,7 +1,8 @@
 """
-HTTP middleware for request/response logging and timing.
+HTTP middleware for request/response logging, timing, and security headers.
 
-Provides detailed request logging with timing information for monitoring.
+Provides detailed request logging with timing information for monitoring,
+and adds security headers to all responses.
 """
 
 import logging
@@ -12,6 +13,43 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
+
+# Security headers applied to every response
+SECURITY_HEADERS: dict[str, str] = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "0",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+}
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to add security headers to all HTTP responses.
+
+    Headers added:
+    - X-Content-Type-Options: nosniff
+    - X-Frame-Options: DENY
+    - X-XSS-Protection: 0 (modern best practice - rely on CSP instead)
+    - Referrer-Policy: strict-origin-when-cross-origin
+    - Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
+    - Permissions-Policy: disallow camera, microphone, geolocation
+    - Strict-Transport-Security: 2 years with includeSubDomains and preload
+    """
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Add security headers to the response."""
+        response = await call_next(request)
+        for header, value in SECURITY_HEADERS.items():
+            response.headers[header] = value
+        return response
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):

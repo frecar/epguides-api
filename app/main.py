@@ -18,7 +18,7 @@ from app.api.endpoints import mcp, shows
 from app.core.cache import close_redis_pool, get_cache_stats
 from app.core.config import settings
 from app.core.constants import VERSION
-from app.core.middleware import RequestLoggingMiddleware
+from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
 from app.exceptions import EpguidesAPIException, ExternalServiceError
 
 # =============================================================================
@@ -160,6 +160,9 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 # Request logging (if enabled)
 if settings.LOG_REQUESTS:
     app.add_middleware(RequestLoggingMiddleware)
+
+# Security headers on all responses
+app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - public read-only API, allow all origins but no credentials
 app.add_middleware(
