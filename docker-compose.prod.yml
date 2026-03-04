@@ -51,13 +51,7 @@ services:
           cpus: "2"
           memory: 512M
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:3000/health')",
-        ]
+      test: ["CMD", "python", "healthcheck.py"]
       interval: 10s
       timeout: 5s
       retries: 3
