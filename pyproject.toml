@@ -61,5 +61,17 @@ skip_covered = false
 python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
 disallow_untyped_defs = false
+check_untyped_defs = true
 ignore_missing_imports = true
+strict_equality = true
+show_error_codes = true
+enable_error_code = ["ignore-without-code", "redundant-cast", "truthy-bool"]
+
+[[tool.mypy.overrides]]
+module = "app.tests.*"
+disallow_untyped_defs = false
+disable_error_code = ["arg-type", "no-untyped-def"]
