@@ -23,7 +23,7 @@ import httpx
 
 from app.core.cache import cache
 from app.core.config import settings
-from app.core.constants import CACHE_TTL_SHOWS_METADATA_SECONDS, DATE_FORMATS, EPGUIDES_BASE_URL, HTTP_TIMEOUT_SECONDS
+from app.core.constants import CACHE_TTL_SHOWS_METADATA_SECONDS, DATE_FORMATS, EPGUIDES_BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -99,13 +99,13 @@ async def _fetch_url(url: str) -> httpx.Response | None:
     """
     try:
         async with httpx.AsyncClient(
-            follow_redirects=True, timeout=HTTP_TIMEOUT_SECONDS, headers=_DEFAULT_HEADERS
+            follow_redirects=True, timeout=settings.HTTP_TIMEOUT_SECONDS, headers=_DEFAULT_HEADERS
         ) as client:
             response = await client.get(url)
             response.raise_for_status()
             return response
     except httpx.TimeoutException:
-        logger.error("Timeout fetching %s after %ss", url, HTTP_TIMEOUT_SECONDS)
+        logger.error("Timeout fetching %s after %ss", url, settings.HTTP_TIMEOUT_SECONDS)
         return None
     except httpx.ConnectError:
         logger.error("Connection failed for %s (host unreachable or DNS failure)", url)
@@ -202,7 +202,7 @@ async def _search_tvmaze_by_title(title: str) -> dict[str, Any] | None:
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
             response = await client.get(
                 f"{_TVMAZE_API_URL}/singlesearch/shows",
                 params={"q": title},
@@ -232,7 +232,7 @@ async def _fetch_tvmaze_episodes(maze_id: str) -> list[dict[str, Any]]:
         List of episode dicts with season, number, title, release_date, summary, poster_url.
     """
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
             response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}/episodes")
             if response.status_code != 200:
                 logger.warning("TVMaze episodes fetch failed: HTTP %d for maze=%s", response.status_code, maze_id)
@@ -529,7 +529,7 @@ async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: st
         Episodes with 'summary' and 'poster_url' fields added where available.
     """
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
             response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}/episodes")
             if response.status_code != 200:
                 return episodes
@@ -598,7 +598,7 @@ async def get_tvmaze_show_data(maze_id: str) -> dict[str, Any] | None:
         TVMaze show data dict or None on error.
     """
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
             response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}")
             if response.status_code != 200:
                 return None
@@ -621,7 +621,7 @@ async def get_tvmaze_seasons(maze_id: str) -> list[dict[str, Any]]:
         List of season data dicts with image URLs.
     """
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
             response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}/seasons")
             if response.status_code != 200:
                 return []

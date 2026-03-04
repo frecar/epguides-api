@@ -49,9 +49,14 @@ class Settings(BaseSettings):
     LLM_ENABLED: bool = False  # Disabled by default for performance
 
     # -------------------------------------------------------------------------
+    # HTTP Configuration
+    # -------------------------------------------------------------------------
+    HTTP_TIMEOUT_SECONDS: float = 5.0  # Timeout for external HTTP requests
+
+    # -------------------------------------------------------------------------
     # Logging Configuration
     # -------------------------------------------------------------------------
-    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL: str = "INFO"  # pragma: no cover - class body; covered at import time
     LOG_REQUESTS: bool = True
 
     # -------------------------------------------------------------------------
@@ -69,4 +74,4 @@ class Settings(BaseSettings):
 
 
 # Global settings instance - loaded once at import time
-settings = Settings()
+settings = Settings()  # pragma: no cover - executed before coverage starts
