@@ -212,7 +212,8 @@ async def _search_tvmaze_by_title(title: str) -> dict[str, Any] | None:
             if response.status_code != 200:
                 logger.warning("TVMaze search failed for '%s': HTTP %d", title, response.status_code)
                 return None
-            return response.json()
+            result: dict[str, Any] = response.json()
+            return result
     except Exception as e:
         logger.warning("TVMaze search error for '%s': %s", title, e)
         return None
