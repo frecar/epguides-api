@@ -2,7 +2,7 @@
 Structured logging configuration.
 
 Provides JSON logging for production and human-readable logging for development.
-Configure via LOG_LEVEL environment variable.
+Configure via LOG_FORMAT env var ("json" or "text") and LOG_LEVEL env var.
 """
 
 import json
@@ -51,6 +51,23 @@ class DevelopmentFormatter(logging.Formatter):
         )
 
 
+def _use_json_format() -> bool:
+    """
+    Determine whether to use JSON log format.
+
+    Uses LOG_FORMAT env var: "json" (default) for structured JSON output,
+    "text" for human-readable development output.
+    Falls back to text format when LOG_LEVEL is DEBUG for convenience.
+    """
+    log_format = settings.LOG_FORMAT.lower()
+    if log_format == "text":
+        return False
+    if log_format == "json":
+        return True
+    # Fallback: DEBUG level defaults to text for dev convenience
+    return settings.LOG_LEVEL.upper() != "DEBUG"
+
+
 def setup_logging() -> logging.Logger:
     """
     Configure application logging based on environment.
@@ -70,11 +87,11 @@ def setup_logging() -> logging.Logger:
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.DEBUG)
 
-    # Use structured formatter in production, simple formatter in development
-    if settings.LOG_LEVEL.upper() == "DEBUG":
-        formatter: logging.Formatter = DevelopmentFormatter()
+    # Select formatter based on LOG_FORMAT setting
+    if _use_json_format():
+        formatter: logging.Formatter = StructuredFormatter()
     else:
-        formatter = StructuredFormatter()
+        formatter = DevelopmentFormatter()
 
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
