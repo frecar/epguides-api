@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     # Logging Configuration
     # -------------------------------------------------------------------------
     LOG_LEVEL: str = "INFO"  # pragma: no cover - class body; covered at import time
+    LOG_FORMAT: str = "json"  # "json" for structured output, "text" for human-readable
     LOG_REQUESTS: bool = True
 
     # -------------------------------------------------------------------------
