@@ -124,3 +124,34 @@ def test_initialize_logging_fallback():
     with patch("app.core.logging_config.setup_logging", side_effect=Exception("Config error")):
         # Should not raise - falls back to basicConfig
         _initialize_logging()
+
+
+# =============================================================================
+# Security Headers Tests
+# =============================================================================
+
+
+def test_security_headers_present():
+    """Test that security headers are added to all responses."""
+    response = client.get("/health")
+    assert response.status_code == 200
+
+    # Verify all security headers
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["X-XSS-Protection"] == "0"
+    assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["Content-Security-Policy"] == "default-src 'none'; frame-ancestors 'none'"
+    assert response.headers["Permissions-Policy"] == "camera=(), microphone=(), geolocation=()"
+    assert response.headers["Strict-Transport-Security"] == "max-age=63072000; includeSubDomains; preload"
+
+
+def test_security_headers_on_error_responses():
+    """Test that security headers are present even on error responses."""
+    response = client.get("/shows/nonexistentshow")
+    assert response.status_code == 404
+
+    # Security headers should still be present
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Strict-Transport-Security"] == "max-age=63072000; includeSubDomains; preload"
