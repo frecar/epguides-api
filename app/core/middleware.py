@@ -1,18 +1,49 @@
 """
-HTTP middleware for request/response logging, timing, and security headers.
+HTTP middleware for request/response logging, timing, security headers, and request ID tracking.
 
 Provides detailed request logging with timing information for monitoring,
-and adds security headers to all responses.
+adds security headers to all responses, and generates a unique request ID
+per request for traceability.
 """
 
 import logging
 import time
+import uuid
 from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to generate a unique request ID for each request.
+
+    - Generates a UUID4 hex string (32 chars) per request
+    - Stores it in request.state.request_id for use by exception handlers
+    - Adds X-Request-ID header to every response
+    """
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Generate request ID and add to response headers."""
+        request_id = uuid.uuid4().hex
+        request.state.request_id = request_id
+
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+def get_request_id(request: Request) -> str:
+    """Extract request ID from request state, with fallback."""
+    return getattr(request.state, "request_id", "unknown")
+
 
 # Security headers applied to every response
 SECURITY_HEADERS: dict[str, str] = {

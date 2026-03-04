@@ -64,7 +64,9 @@ def test_epguides_exception_handler():
 
     response = client.get("/test-epguides-error")
     assert response.status_code == 500
-    assert "internal error" in response.json()["detail"].lower()
+    data = response.json()
+    assert "internal error" in data["detail"].lower()
+    assert "request_id" in data
 
 
 def test_external_service_exception_handler():
@@ -76,7 +78,64 @@ def test_external_service_exception_handler():
 
     response = client.get("/test-external-error")
     assert response.status_code == 503
-    assert "unavailable" in response.json()["detail"].lower()
+    data = response.json()
+    assert "unavailable" in data["detail"].lower()
+    assert "request_id" in data
+
+
+def test_validation_error_includes_request_id():
+    """Test that validation errors include request_id."""
+    response = client.get("/shows/search?query=x")  # Too short (min_length=2)
+    assert response.status_code == 422
+    data = response.json()
+    assert "request_id" in data
+    assert "errors" in data
+
+
+def test_not_found_returns_json_with_request_id():
+    """Test that 404 errors return clean JSON with request_id."""
+    response = client.get("/nonexistent-path")
+    assert response.status_code == 404
+    data = response.json()
+    assert "detail" in data
+    assert "request_id" in data
+
+
+# =============================================================================
+# Request ID Tests
+# =============================================================================
+
+
+def test_request_id_header_present():
+    """Test that X-Request-ID header is present on all responses."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert "X-Request-ID" in response.headers
+    assert len(response.headers["X-Request-ID"]) == 32  # UUID4 hex
+
+
+def test_request_id_unique_per_request():
+    """Test that each request gets a unique request ID."""
+    response1 = client.get("/health")
+    response2 = client.get("/health")
+    assert response1.headers["X-Request-ID"] != response2.headers["X-Request-ID"]
+
+
+def test_request_id_on_error_responses():
+    """Test that X-Request-ID header is present on error responses."""
+    response = client.get("/nonexistent-path")
+    assert "X-Request-ID" in response.headers
+
+
+def test_get_request_id_fallback():
+    """Test get_request_id returns unknown when no request_id in state."""
+    from app.core.middleware import get_request_id
+
+    class FakeRequest:
+        class state:
+            pass
+
+    assert get_request_id(FakeRequest()) == "unknown"
 
 
 # =============================================================================
