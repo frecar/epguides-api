@@ -15,7 +15,7 @@ pytest-cov==7.0.0
 # Code quality
 black==25.12.0
 ruff==0.15.4
-isort==7.0.0
+isort==8.0.1
 
 # Utilities
 python-dateutil==2.9.0.post0
