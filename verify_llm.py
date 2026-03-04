@@ -57,7 +57,7 @@ async def verify_llm():
             print("❌ LLM returned None. Check logs for errors.")
             return False
 
-        print(f"✅ LLM query successful!")
+        print("✅ LLM query successful!")
         print(f"   Query: '{test_query}'")
         print(f"   Input episodes: {len(test_episodes)}")
         print(f"   Filtered episodes: {len(result)}")
@@ -71,6 +71,7 @@ async def verify_llm():
     except Exception as e:
         print(f"❌ Error testing LLM: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -78,4 +79,3 @@ async def verify_llm():
 if __name__ == "__main__":
     success = asyncio.run(verify_llm())
     sys.exit(0 if success else 1)
-
