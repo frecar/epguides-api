@@ -1,4 +1,4 @@
-.PHONY: help setup up down up-prod logs run test lint format format-check fix ci
+.PHONY: help setup up down up-prod logs run test lint format format-check fix check coverage ci
 .PHONY: docs docs-build cache-clear deploy-prod doctor urls open clean
 
 .DEFAULT_GOAL := help
@@ -26,11 +26,13 @@ help:
 	@echo ""
 	@echo "Quality:"
 	@echo "  make ci             Run all checks (format + lint + test)"
+	@echo "  make check          Run format + lint checks (no tests)"
 	@echo "  make fix            Auto-fix format + lint (ruff)"
 	@echo "  make lint           Lint only (ruff check)"
 	@echo "  make format         Format only (ruff format)"
 	@echo "  make format-check   Check formatting without changes"
 	@echo "  make test           Run tests with coverage"
+	@echo "  make coverage       Run tests with HTML coverage report"
 	@echo ""
 	@echo "Production:"
 	@echo "  make up-prod        Start production"
@@ -146,6 +148,13 @@ lint:
 fix:
 	$(PYTHON) -m ruff check --fix app/
 	$(PYTHON) -m ruff format app/
+
+check: format-check lint
+	@echo "All static checks passed"
+
+coverage:
+	PYTHONPATH=. $(PYTHON) -m pytest --cov=app --cov-report=term-missing --cov-report=html
+	@echo "HTML report: htmlcov/index.html"
 
 ci: format-check lint test
 	@echo "All checks passed"
