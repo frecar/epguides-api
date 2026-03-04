@@ -18,7 +18,7 @@ from app.api.endpoints import mcp, shows
 from app.core.cache import close_redis_pool, get_cache_stats
 from app.core.config import settings
 from app.core.constants import VERSION
-from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
+from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware, get_request_id
 from app.exceptions import EpguidesAPIException, ExternalServiceError
 
 # =============================================================================
@@ -157,6 +157,9 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 # Middleware
 # =============================================================================
 
+# Request ID tracking (outermost - runs first, available to all other middleware)
+app.add_middleware(RequestIDMiddleware)
+
 # Request logging (if enabled)
 if settings.LOG_REQUESTS:
     app.add_middleware(RequestLoggingMiddleware)
@@ -185,10 +188,14 @@ async def epguides_exception_handler(
     exc: EpguidesAPIException,
 ) -> JSONResponse:
     """Handle custom API exceptions."""
-    logger.error("API error: %s", exc, exc_info=True)
+    request_id = get_request_id(request)
+    logger.error("API error: %s (request_id=%s)", exc, request_id, exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "An internal error occurred. Please try again later."},
+        content={
+            "detail": "An internal error occurred. Please try again later.",
+            "request_id": request_id,
+        },
     )
 
 
@@ -198,10 +205,14 @@ async def external_service_exception_handler(
     exc: ExternalServiceError,
 ) -> JSONResponse:
     """Handle external service failures."""
-    logger.error("External service error: %s", exc, exc_info=True)
+    request_id = get_request_id(request)
+    logger.error("External service error: %s (request_id=%s)", exc, request_id, exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={"detail": "External service temporarily unavailable."},
+        content={
+            "detail": "External service temporarily unavailable.",
+            "request_id": request_id,
+        },
     )
 
 
@@ -210,10 +221,49 @@ async def validation_exception_handler(
     request: Request,
     exc: RequestValidationError,
 ) -> JSONResponse:
-    """Handle request validation errors with details."""
+    """Handle request validation errors with clean details."""
+    request_id = get_request_id(request)
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content={"detail": "Validation error", "errors": exc.errors()},
+        content={
+            "detail": "Validation error",
+            "errors": exc.errors(),
+            "request_id": request_id,
+        },
+    )
+
+
+@app.exception_handler(404)
+async def not_found_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    """Handle 404 Not Found errors with a clean JSON response."""
+    request_id = get_request_id(request)
+    detail = getattr(exc, "detail", "The requested resource was not found.")
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "detail": detail,
+            "request_id": request_id,
+        },
+    )
+
+
+@app.exception_handler(500)
+async def internal_error_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    """Handle unexpected 500 errors with a clean JSON response."""
+    request_id = get_request_id(request)
+    logger.error("Unhandled error: %s (request_id=%s)", exc, request_id, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "An unexpected error occurred.",
+            "request_id": request_id,
+        },
     )
 
 
