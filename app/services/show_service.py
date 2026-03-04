@@ -105,8 +105,12 @@ async def _get_all_shows_raw() -> list[dict[str, Any]]:
 
     # Fetch and cache (use orjson for faster serialization)
     raw_data = await epguides.get_all_shows_metadata()
+    if not raw_data:
+        logger.warning("No show data returned from epguides — upstream may be down")
+        return []
     shows: list[dict[str, Any]] = [_map_csv_row_to_dict(row) for row in raw_data]
     await cache_set(cache_key, orjson.dumps(shows).decode(), TTL_30_DAYS)
+    logger.debug("Cached %d shows from epguides", len(shows))
     return shows
 
 
@@ -331,10 +335,13 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
     task_keys.append("stats")
 
     # Execute all tasks in parallel
-    results = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Apply results
+    # Apply results (skip tasks that raised exceptions)
     for key, result in zip(task_keys, results, strict=False):
+        if isinstance(result, Exception):
+            logger.warning("Enrichment task '%s' failed for %s: %s", key, normalized_id, result)
+            continue
         if key == "imdb_id" and result:
             updates["imdb_id"] = result
         elif key == "poster_url" and result:
@@ -500,7 +507,8 @@ def _parse_episode(item: dict[str, Any], run_time_min: int | None) -> EpisodeSch
             summary=summary if summary else None,
             poster_url=poster_url if poster_url else None,
         )
-    except (ValueError, KeyError, TypeError):
+    except (ValueError, KeyError, TypeError) as e:
+        logger.debug("Failed to parse episode data: %s — %s: %s", item.get("title", "unknown"), type(e).__name__, e)
         return None
 
 

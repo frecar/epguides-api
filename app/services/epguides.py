@@ -95,7 +95,7 @@ async def _fetch_url(url: str) -> httpx.Response | None:
     """
     Fetch URL with standard timeout and error handling.
 
-    Returns None on any error (logged).
+    Returns None on any error (logged with specific error type).
     """
     try:
         async with httpx.AsyncClient(
@@ -104,8 +104,17 @@ async def _fetch_url(url: str) -> httpx.Response | None:
             response = await client.get(url)
             response.raise_for_status()
             return response
+    except httpx.TimeoutException:
+        logger.error("Timeout fetching %s after %ss", url, HTTP_TIMEOUT_SECONDS)
+        return None
+    except httpx.ConnectError:
+        logger.error("Connection failed for %s (host unreachable or DNS failure)", url)
+        return None
+    except httpx.HTTPStatusError as e:
+        logger.error("HTTP %d from %s: %s", e.response.status_code, url, e)
+        return None
     except Exception as e:
-        logger.error("Error fetching %s: %s", url, e)
+        logger.error("Unexpected error fetching %s: %s: %s", url, type(e).__name__, e)
         return None
 
 
@@ -129,8 +138,12 @@ async def fetch_csv(url: str) -> list[list[str]]:
     if not response:
         return []
 
-    text = _clean_unicode_text(response)
-    return list(csv.reader(io.StringIO(text, newline="")))
+    try:
+        text = _clean_unicode_text(response)
+        return list(csv.reader(io.StringIO(text, newline="")))
+    except csv.Error as e:
+        logger.error("CSV parse error for %s: %s", url, e)
+        return []
 
 
 # =============================================================================
