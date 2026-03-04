@@ -214,3 +214,117 @@ def test_security_headers_on_error_responses():
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["Strict-Transport-Security"] == "max-age=63072000; includeSubDomains; preload"
+
+
+# =============================================================================
+# CORS Tests
+# =============================================================================
+
+
+def test_cors_allows_all_origins():
+    """Test that CORS allows all origins for this public API."""
+    response = client.options(
+        "/health",
+        headers={
+            "Origin": "https://example.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.headers.get("access-control-allow-origin") == "*"
+
+
+def test_cors_only_allows_get_options():
+    """Test that CORS only allows GET and OPTIONS methods."""
+    response = client.options(
+        "/health",
+        headers={
+            "Origin": "https://example.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    allowed = response.headers.get("access-control-allow-methods", "")
+    assert "GET" in allowed
+
+
+# =============================================================================
+# OpenAPI & Documentation Tests
+# =============================================================================
+
+
+def test_openapi_json_accessible():
+    """Test that OpenAPI schema is accessible."""
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    data = response.json()
+    assert "paths" in data
+    assert "info" in data
+    assert data["info"]["title"] == "Epguides API"
+
+
+def test_redoc_accessible():
+    """Test that ReDoc documentation is accessible."""
+    response = client.get("/redoc")
+    assert response.status_code == 200
+
+
+def test_root_redirects_to_docs():
+    """Test that root URL redirects to /docs."""
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/docs"
+
+
+# =============================================================================
+# Health Endpoint Detail Tests
+# =============================================================================
+
+
+def test_health_check_response_structure():
+    """Test health check returns correct structure with version."""
+    response = client.get("/health")
+    data = response.json()
+    assert "status" in data
+    assert "service" in data
+    assert "version" in data
+    assert data["service"] == "epguides-api"
+    assert isinstance(data["version"], str)
+
+
+def test_llm_health_check_response_structure():
+    """Test LLM health check returns expected fields."""
+    response = client.get("/health/llm")
+    data = response.json()
+    assert "enabled" in data
+    assert "configured" in data
+    assert "api_url" in data
+
+
+# =============================================================================
+# Error Handler Edge Cases
+# =============================================================================
+
+
+def test_404_returns_detail_field():
+    """Test that 404 responses always have a detail field."""
+    response = client.get("/completely/unknown/path")
+    assert response.status_code == 404
+    data = response.json()
+    assert "detail" in data
+    assert isinstance(data["detail"], str)
+
+
+def test_404_returns_json_content_type():
+    """Test that 404 responses return JSON content type."""
+    response = client.get("/nonexistent")
+    assert response.status_code == 404
+    assert "application/json" in response.headers["content-type"]
+
+
+def test_validation_error_returns_errors_list():
+    """Test that validation errors include an errors list."""
+    response = client.get("/shows/search?query=x")  # Too short
+    assert response.status_code == 422
+    data = response.json()
+    assert "errors" in data
+    assert isinstance(data["errors"], list)
+    assert len(data["errors"]) > 0
