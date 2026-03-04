@@ -227,7 +227,7 @@ def cache(
                 cached = await cache_get(cache_key)
                 if cached:
                     try:
-                        return orjson.loads(cached)  # type: ignore
+                        return orjson.loads(cached)  # type: ignore[no-any-return]
                     except orjson.JSONDecodeError as e:
                         # Corrupted JSON - log warning (cache cleared on deployment)
                         logger.warning("Corrupted JSON in cache %s: %s", cache_key, e)
@@ -296,9 +296,9 @@ def cached(
                     data = orjson.loads(cached_data)
                     if model:
                         if is_list:
-                            return [model(**item) for item in data]  # type: ignore
-                        return model(**data) if data else None  # type: ignore
-                    return data  # type: ignore
+                            return [model(**item) for item in data]  # type: ignore[return-value]
+                        return model(**data) if data else None  # type: ignore[return-value]
+                    return data  # type: ignore[no-any-return]
                 except orjson.JSONDecodeError as e:
                     # Corrupted JSON - log warning (cache cleared on deployment)
                     logger.warning("Corrupted JSON in cache %s: %s", cache_key, e)
@@ -321,10 +321,10 @@ def cached(
                 # Serialize (use orjson for speed, type: ignore needed as R is generic)
                 if model:
                     if is_list:
-                        items = list(result)  # type: ignore
+                        items = list(result)  # type: ignore[call-overload]
                         serialized = orjson.dumps([i.model_dump(mode="json") for i in items]).decode()
                     else:
-                        serialized = result.model_dump_json()  # type: ignore
+                        serialized = result.model_dump_json()  # type: ignore[attr-defined]
                 else:
                     serialized = orjson.dumps(result).decode()
 
