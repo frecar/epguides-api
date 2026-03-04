@@ -1,21 +1,53 @@
+# Version control
 .git
 .github
-.venv
-venv
+.gitignore
+
+# Python
 __pycache__
 *.pyc
+*.pyo
+*.egg-info
+.eggs
+venv/
+.venv/
 .pytest_cache
 .mypy_cache
 .ruff_cache
+.coverage
+htmlcov/
+
+# Environment and secrets
 .env
 .env.*
 !.env.example
-*.log
-.DS_Store
+
+# IDE/Editor
 .vscode
 .idea
-docs/
+*.swp
+.DS_Store
+
+# Docker
+docker-compose*.yml
+Dockerfile
+
+# CI/CD
 .pre-commit-config.yaml
 .editorconfig
+
+# Documentation
 *.md
-!README.md
+docs/
+
+# Build artifacts
+*.log
+
+# Project config (not needed in image)
+Makefile
+pyproject.toml
+mkdocs.yml
+verify_llm.py
+
+# Claude/AI config
+.claude/
