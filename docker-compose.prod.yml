@@ -19,7 +19,7 @@ services:
       --loop uvloop
       --http httptools
       --timeout-keep-alive 30
-      --timeout-shutdown 30
+      --timeout-graceful-shutdown 30
       --limit-concurrency 500
       --backlog 1024
       --log-level warning
