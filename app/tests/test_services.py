@@ -2437,6 +2437,133 @@ async def test_fetch_tvmaze_episodes_non_200(mock_client_class):
     assert result == []
 
 
+# =============================================================================
+# Error Handling Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_timeout(mock_client_class):
+    """Test _fetch_url logs timeout errors specifically."""
+    import httpx
+
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = httpx.TimeoutException("Request timed out")
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._fetch_url("http://example.com/test")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_connect_error(mock_client_class):
+    """Test _fetch_url logs connection errors specifically."""
+    import httpx
+
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = httpx.ConnectError("Connection refused")
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._fetch_url("http://example.com/test")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_http_status_error(mock_client_class):
+    """Test _fetch_url logs HTTP status errors specifically."""
+    import httpx
+
+    mock_response = MagicMock()
+    mock_response.status_code = 503
+    mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "503 Service Unavailable",
+        request=MagicMock(),
+        response=mock_response,
+    )
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._fetch_url("http://example.com/test")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_unexpected_error(mock_client_class):
+    """Test _fetch_url logs unexpected errors with type info."""
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = RuntimeError("Unexpected internal error")
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._fetch_url("http://example.com/test")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_url")
+async def test_fetch_csv_parse_error(mock_fetch):
+    """Test fetch_csv handles CSV parse errors gracefully."""
+    import csv
+
+    mock_response = MagicMock()
+    mock_response.encoding = "utf-8"
+    mock_response.text = "valid text"
+
+    mock_fetch.return_value = mock_response
+
+    with patch("csv.reader", side_effect=csv.Error("CSV parse error")):
+        result = await epguides.fetch_csv("http://example.com/data.csv")
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)
+@patch("app.services.epguides.get_all_shows_metadata")
+async def test_get_all_shows_raw_empty_upstream(mock_get_metadata, mock_cache_get, mock_cache_set):
+    """Test _get_all_shows_raw returns empty list when upstream returns no data."""
+    mock_get_metadata.return_value = []
+
+    result = await show_service._get_all_shows_raw()
+
+    assert result == []
+    mock_cache_set.assert_not_called()  # Should not cache empty result
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service._fetch_imdb_id")
+@patch("app.services.show_service._get_poster_url")
+@patch("app.services.show_service._calculate_episode_stats")
+async def test_enrich_show_metadata_task_exception(mock_stats, mock_poster, mock_imdb):
+    """Test _enrich_show_metadata handles exceptions from enrichment tasks."""
+    mock_imdb.side_effect = Exception("Network error fetching IMDB")
+    mock_poster.side_effect = Exception("Network error fetching poster")
+    mock_stats.return_value = None
+
+    show = show_service.ShowSchema(epguides_key="test", title="Test Show")
+    result = await show_service._enrich_show_metadata(show, "test")
+
+    # Should still return the show, just without enrichments
+    assert result is not None
+    assert result.title == "Test Show"
+    assert result.imdb_id is None
+    assert result.poster_url is None
+
+
 def test_add_word_boundaries_with_prefix_the():
     """Test _add_word_boundaries handles 'the' prefix via prefix detection."""
     # "thecat" - "cat" is NOT a common word, so prefix detection should kick in
