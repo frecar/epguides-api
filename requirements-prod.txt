@@ -1,7 +1,7 @@
 # Core dependencies
 fastapi==0.135.1
 uvicorn[standard]==0.41.0
-redis==7.2.1
+redis==7.3.0
 pydantic==2.12.5
 pydantic-settings==2.13.1
 python-multipart==0.0.22
@@ -11,7 +11,7 @@ httpx==0.28.1
 python-dateutil==2.9.0.post0
 
 # Observability (optional — only active when SENTRY_DSN is set)
-sentry-sdk==2.52.0
+sentry-sdk==2.54.0
 
 # Security fixes
 setuptools==82.0.0
