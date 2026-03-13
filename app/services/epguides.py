@@ -105,13 +105,13 @@ async def _fetch_url(url: str) -> httpx.Response | None:
             response.raise_for_status()
             return response
     except httpx.TimeoutException:
-        logger.error("Timeout fetching %s after %ss", url, settings.HTTP_TIMEOUT_SECONDS)
+        logger.warning("Timeout fetching %s after %ss", url, settings.HTTP_TIMEOUT_SECONDS)
         return None
     except httpx.ConnectError:
-        logger.error("Connection failed for %s (host unreachable or DNS failure)", url)
+        logger.warning("Connection failed for %s (host unreachable or DNS failure)", url)
         return None
     except httpx.HTTPStatusError as e:
-        logger.error("HTTP %d from %s: %s", e.response.status_code, url, e)
+        logger.warning("HTTP %d from %s: %s", e.response.status_code, url, e)
         return None
     except Exception as e:
         logger.error("Unexpected error fetching %s: %s: %s", url, type(e).__name__, e)
