@@ -52,6 +52,7 @@ if settings.SENTRY_DSN:  # pragma: no cover
         dsn=settings.SENTRY_DSN,
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
         profiles_sample_rate=0.1,
+        trace_propagation_targets=["sentry.carlsen.io", "localhost"],
         release=VERSION,
         environment=settings.SENTRY_ENVIRONMENT,
     )
