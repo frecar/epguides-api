@@ -11,6 +11,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies and audit
+        run: |
+          pip install -r requirements.txt
+          pip install pip-audit
+          pip-audit --strict --desc
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
