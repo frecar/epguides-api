@@ -56,6 +56,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    cap_drop:
+      - ALL
+    pids_limit: 200
     read_only: true
     tmpfs:
       - /tmp:size=64M
@@ -105,6 +108,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 3
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    pids_limit: 100
     read_only: true
     tmpfs:
       - /tmp:size=16M
