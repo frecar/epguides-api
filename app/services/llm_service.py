@@ -9,6 +9,7 @@ Only used when LLM_ENABLED is True in settings.
 
 import json
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -16,6 +17,8 @@ import httpx
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+_THINK_TAG_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
 
 # LLM configuration
 _LLM_TIMEOUT_SECONDS = 30.0  # Longer timeout for processing episode summaries
@@ -173,6 +176,9 @@ def _parse_llm_response(
         Filtered episodes or None on parse error.
     """
     content = result.get("choices", [{}])[0].get("message", {}).get("content", "[]")
+
+    # Strip <think>...</think> blocks from reasoning models before JSON parsing
+    content = _THINK_TAG_RE.sub("", content).strip()
 
     try:
         indices = json.loads(content)
