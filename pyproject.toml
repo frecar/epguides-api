@@ -1,6 +1,6 @@
 [project]
 name = "epguides-api"
-version = "1.0.0"
+version = "1.1.0"
 description = "REST API for TV show metadata, episodes, and air dates"
 readme = "README.md"
 requires-python = ">=3.12"
