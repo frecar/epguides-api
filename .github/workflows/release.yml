@@ -1,0 +1,98 @@
+name: Release
+on:
+  push:
+    branches: [master]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Skip if the push was made by the release bot (prevents infinite loop)
+    if: "!startsWith(github.event.head_commit.message, 'release:')"
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"%s")
+          else
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s")
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            echo "type=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if echo "$COMMITS" | grep -qE "^(feat|fix)(\(.+\))?!:|BREAKING CHANGE"; then
+            echo "type=major" >> "$GITHUB_OUTPUT"
+          elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+            echo "type=minor" >> "$GITHUB_OUTPUT"
+          elif echo "$COMMITS" | grep -qE "^fix(\(.+\))?:"; then
+            echo "type=patch" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump version in pyproject.toml
+        if: steps.bump.outputs.type != 'none'
+        id: version
+        run: |
+          python3 << 'SCRIPT'
+          import re, os
+
+          bump_type = os.environ["BUMP_TYPE"]
+          with open("pyproject.toml") as f:
+              content = f.read()
+
+          match = re.search(r'version\s*=\s*"(\d+)\.(\d+)\.(\d+)"', content)
+          major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+          if bump_type == "major":
+              major, minor, patch = major + 1, 0, 0
+          elif bump_type == "minor":
+              minor, patch = minor + 1, 0
+          else:
+              patch += 1
+
+          new_version = f"{major}.{minor}.{patch}"
+          new_content = re.sub(r'version\s*=\s*"\d+\.\d+\.\d+"', f'version = "{new_version}"', content, count=1)
+
+          with open("pyproject.toml", "w") as f:
+              f.write(new_content)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"version={new_version}\n")
+
+          print(f"Bumped {bump_type}: {match.group(1)}.{match.group(2)}.{match.group(3)} -> {new_version}")
+          SCRIPT
+        env:
+          BUMP_TYPE: ${{ steps.bump.outputs.type }}
+
+      - name: Commit and tag
+        if: steps.bump.outputs.type != 'none'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml
+          git commit -m "release: v${VERSION}"
+          git tag "v${VERSION}"
+          git push origin master --tags
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.type != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "v${{ steps.version.outputs.version }}" --generate-notes
