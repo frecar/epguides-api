@@ -1,7 +1,7 @@
 name: Release
 on:
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   release:
@@ -89,7 +89,7 @@ jobs:
           git add pyproject.toml
           git commit -m "release: v${VERSION}"
           git tag "v${VERSION}"
-          git push origin main --tags
+          git push origin master --tags
 
       - name: Create GitHub Release
         if: steps.bump.outputs.type != 'none'
