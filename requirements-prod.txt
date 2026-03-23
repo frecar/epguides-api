@@ -11,7 +11,7 @@ httpx==0.28.1
 python-dateutil==2.9.0.post0
 
 # Observability (optional — only active when SENTRY_DSN is set)
-sentry-sdk==2.54.0
+sentry-sdk==2.55.0
 
 # Security fixes
 setuptools==82.0.1
