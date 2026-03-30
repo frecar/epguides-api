@@ -1,7 +1,7 @@
 # Core dependencies
-fastapi==0.135.1
+fastapi==0.135.2
 uvicorn[standard]==0.42.0
-redis==7.3.0
+redis==7.4.0
 pydantic==2.12.5
 pydantic-settings==2.13.1
 python-multipart==0.0.22
@@ -14,7 +14,7 @@ pytest-cov==7.1.0
 
 # Code quality
 black==26.3.1
-ruff==0.15.7
+ruff==0.15.8
 isort==8.0.1
 
 # Utilities
@@ -22,7 +22,7 @@ python-dateutil==2.9.0.post0
 pre-commit==4.5.1
 
 # Observability (optional — only active when SENTRY_DSN is set)
-sentry-sdk==2.55.0
+sentry-sdk==2.56.0
 
 # Security fixes
 setuptools==82.0.1
