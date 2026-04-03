@@ -6,6 +6,7 @@ middleware, and exception handlers.
 """
 
 import logging.config
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -53,7 +54,7 @@ if settings.SENTRY_DSN:  # pragma: no cover
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
         profiles_sample_rate=0.1,
         trace_propagation_targets=["sentry.carlsen.io", "localhost"],
-        release=VERSION,
+        release=os.environ.get("GIT_SHA", VERSION),
         environment=settings.SENTRY_ENVIRONMENT,
     )
 
