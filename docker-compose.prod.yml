@@ -39,6 +39,7 @@ services:
       LLM_API_URL: ${LLM_API_URL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      GIT_SHA: ${GIT_SHA:-}
     depends_on:
       redis:
         condition: service_healthy
