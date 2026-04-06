@@ -14,7 +14,7 @@ repos:
       - id: detect-private-key
       - id: debug-statements
       - id: no-commit-to-branch
-        args: ['--branch', 'master']
+        args: ['--branch', 'main']
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.4
