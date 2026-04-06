@@ -41,6 +41,23 @@ repos:
         always_run: true
         stages: [pre-commit]
 
+      - id: conventional-commit
+        name: Check conventional commit format
+        entry: >
+          bash -c '
+          MSG=$(head -1 "$1");
+          if echo "$MSG" | grep -qE "^release"; then exit 0; fi;
+          if echo "$MSG" | grep -qE "^Merge "; then exit 0; fi;
+          if ! echo "$MSG" | grep -qE "^(feat|fix|refactor|chore|docs|test|ci|perf|style|build|revert|deps)(\(.+\))?(![:]|[:])" ; then
+            echo "Commit message must use conventional commit format";
+            echo "  Valid prefixes: feat, fix, refactor, chore, docs, test, ci, perf, style, build, revert, deps";
+            echo "  Got: $MSG";
+            exit 1;
+          fi' --
+        language: system
+        always_run: true
+        stages: [commit-msg]
+
       - id: strip-co-author
         name: Strip Co-Authored-By lines
         entry: bash -c 'sed -i "/^Co-Authored-By:/d" "$1"' --
