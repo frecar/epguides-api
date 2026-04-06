@@ -104,3 +104,14 @@ jobs:
           REDIS_PORT: 6379
           PYTHONPATH: ${{ github.workspace }}
         run: pytest --cov=app --cov-fail-under=100 --cov-report=term-missing -q
+
+  ci-gate:
+    if: always()
+    needs: [audit, lint, typecheck, test]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ]; then
+            echo "CI failed"
+            exit 1
+          fi
