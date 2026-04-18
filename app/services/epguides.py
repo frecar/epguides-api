@@ -568,7 +568,7 @@ async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: st
                     tvmaze_ep = tvmaze_data_map.get(key, {})
                     episode["summary"] = tvmaze_ep.get("summary", "")
                     episode["poster_url"] = tvmaze_ep.get("poster_url", "")
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     episode["summary"] = ""
                     episode["poster_url"] = ""
 

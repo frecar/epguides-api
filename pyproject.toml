@@ -3,14 +3,14 @@ name = "epguides-api"
 version = "1.2.0"
 description = "REST API for TV show metadata, episodes, and air dates"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = {text = "MIT"}
 authors = [{name = "Fredrik Carlsen", email = "frecar@carlsen.io"}]
 keywords = ["tv", "shows", "api", "epguides", "fastapi"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
@@ -66,7 +66,7 @@ skip_covered = false
 precision = 1
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 warn_redundant_casts = true
