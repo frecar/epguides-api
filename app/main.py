@@ -65,7 +65,7 @@ if settings.SENTRY_DSN:  # pragma: no cover
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     Application lifespan context manager.
 

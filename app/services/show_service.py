@@ -545,7 +545,7 @@ def _parse_imdb_id(imdb_id_raw: str) -> str:
         prefix = imdb_id_raw[:2]
         number = int(imdb_id_raw[2:])
         return f"{prefix}{number:07d}"
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         return imdb_id_raw
 
 
@@ -599,7 +599,7 @@ def _parse_date(date_str: str | None) -> date | None:
     # Try ISO format
     try:
         return datetime.strptime(date_str, "%Y-%m-%d").date()
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return None
 
 
