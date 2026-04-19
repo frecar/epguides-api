@@ -8,11 +8,13 @@ repos:
       - id: check-json
       - id: check-toml
       - id: check-ast
+        language_version: python3.14
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-merge-conflict
       - id: detect-private-key
       - id: debug-statements
+        language_version: python3.14
       - id: no-commit-to-branch
         args: ['--branch', 'main']
 
