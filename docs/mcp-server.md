@@ -3,7 +3,7 @@
 The Epguides API includes a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for AI assistant integration.
 
 !!! success "Public MCP Endpoint"
-    **URL:** `https://epguides.frecar.no/mcp`  
+    **URL:** `https://epguides.frecar.no/mcp`
     **Protocol:** JSON-RPC 2.0 over HTTP POST
 
 ---
