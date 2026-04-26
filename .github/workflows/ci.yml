@@ -24,10 +24,11 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies and audit
+        # CVE-2026-3219 — pip itself (concatenated tar+ZIP handling) — no fix available in 26.0.1
         run: |
           pip install -r requirements.txt
           pip install pip-audit
-          pip-audit --strict --desc
+          pip-audit --strict --desc --ignore-vuln CVE-2026-3219
 
   lint:
     name: Lint
