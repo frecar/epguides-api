@@ -57,10 +57,10 @@ Configure the Epguides API using environment variables.
     REDIS_HOST=redis
     REDIS_PORT=6379
     REDIS_PASSWORD=
-    
+
     # API
     API_BASE_URL=http://localhost:3000/
-    
+
     # Logging (verbose for debugging)
     LOG_LEVEL=DEBUG
     LOG_REQUESTS=true
@@ -74,15 +74,15 @@ Configure the Epguides API using environment variables.
     REDIS_PORT=6379
     REDIS_PASSWORD=your-secure-password
     REDIS_MAX_CONNECTIONS=100
-    
+
     # API
     API_BASE_URL=https://your-domain.com/
-    
+
     # LLM (optional)
     LLM_ENABLED=true
     LLM_API_URL=https://api.openai.com/v1
     LLM_API_KEY=sk-your-api-key
-    
+
     # Logging (less verbose)
     LOG_LEVEL=WARNING
     LOG_REQUESTS=false

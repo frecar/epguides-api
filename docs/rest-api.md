@@ -3,7 +3,7 @@
 Complete reference for all REST API endpoints.
 
 !!! tip "Base URL"
-    **Public:** `https://epguides.frecar.no`  
+    **Public:** `https://epguides.frecar.no`
     **Local:** `http://localhost:3000`
 
 ---

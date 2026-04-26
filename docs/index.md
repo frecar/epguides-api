@@ -72,7 +72,7 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
             params={"query": "breaking bad"}
         )
         shows = response.json()
-        
+
         # Get episodes
         response = await client.get(
             "https://epguides.frecar.no/shows/BreakingBad/episodes"
@@ -87,7 +87,7 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
       "https://epguides.frecar.no/shows/search?query=breaking+bad"
     );
     const shows = await response.json();
-    
+
     // Get episodes
     const episodesResponse = await fetch(
       "https://epguides.frecar.no/shows/BreakingBad/episodes"
