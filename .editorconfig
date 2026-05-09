@@ -1,29 +1,18 @@
-# EditorConfig is awesome: https://EditorConfig.org
-
 root = true
 
 [*]
-charset = utf-8
 end_of_line = lf
 insert_final_newline = true
+charset = utf-8
 trim_trailing_whitespace = true
 
-[*.py]
+[*.{py,toml,md,sh,j2}]
 indent_style = space
 indent_size = 4
-max_line_length = 120
 
-[*.{yml,yaml}]
+[*.{yaml,yml,json,html,jinja2,ts,tsx,js,jsx,css,scss}]
 indent_style = space
 indent_size = 2
-
-[*.{json,jsonc}]
-indent_style = space
-indent_size = 2
-
-[*.md]
-trim_trailing_whitespace = false
-max_line_length = off
 
 [Makefile]
 indent_style = tab

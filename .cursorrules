@@ -1,0 +1,37 @@
+# Epguides API — Cursor IDE rules
+
+REST API + MCP server for TV show metadata. FastAPI + Redis cache.
+Python 3.12+, all I/O async.
+
+## Conventions
+
+- **Python 3.12+** — type hints. `dict[str, X]`, `X | None`.
+- **All I/O async.** httpx.AsyncClient.
+- **`@cached(...)` decorator** for service-layer functions. TTLs
+  defined in `app/core/constants.py` (TTL_7_DAYS / TTL_30_DAYS /
+  TTL_1_YEAR).
+- **Schema factory** — use `create_show_schema(...)` not
+  `ShowSchema(...)` direct.
+- **Async parallel** via `asyncio.gather()`.
+- **Mock patterns** — `@patch("app.core.cache.cache_get",
+  return_value=None)` for cache miss; `@patch(
+  "app.services.show_service.get_show")` for service layer.
+- **Performance**: < 50ms hard limit, < 20ms target.
+- **If code can't be tested, remove it.**
+
+## Coverage
+
+100% test coverage enforced by pre-commit. Commits blocked if coverage
+drops.
+
+## Operational rules
+
+- **Pre-commit must pass** — ruff + 100% coverage. Don't `--no-verify`.
+- **All config in git.** SSH edits on VMID 122 are ephemeral.
+- **Docker only** — `make` targets, never host pip/poetry.
+
+## Where things live
+
+- Architecture, caching pattern, mock patterns: CLAUDE.md
+- TTL constants: `app/core/constants.py`
+- Caching decorator: `app/core/cache.py`
