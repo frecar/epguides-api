@@ -12,7 +12,7 @@ import html
 import json
 import logging
 import re
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import orjson
@@ -429,7 +429,7 @@ async def _calculate_episode_stats(normalized_id: str) -> _EpisodeStats | None:
     if not raw_data:
         return None
 
-    threshold = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
+    threshold = datetime.now(UTC) - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
     stats = _EpisodeStats()
 
     for item in raw_data:
@@ -490,7 +490,7 @@ def _parse_episode(item: dict[str, Any], run_time_min: int | None) -> EpisodeSch
         if season_raw is None or number_raw is None or not title_raw:
             return None
 
-        is_released = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS) > release_date
+        is_released = datetime.now(UTC) - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS) > release_date
 
         # Get summary and poster_url if available (from TVMaze)
         summary = item.get("summary", "") or ""
@@ -591,14 +591,14 @@ def _parse_date(date_str: str | None) -> date | None:
     # Try month-year formats
     for fmt in _MONTH_YEAR_FORMATS:
         try:
-            parsed_dt = datetime.strptime(date_str, fmt)
+            parsed_dt = datetime.strptime(date_str, fmt).replace(tzinfo=UTC)
             return parsed_dt.replace(day=1).date()
         except ValueError:
             continue
 
     # Try ISO format
     try:
-        return datetime.strptime(date_str, "%Y-%m-%d").date()
+        return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC).date()
     except ValueError, AttributeError:
         return None
 
