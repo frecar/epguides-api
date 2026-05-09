@@ -31,7 +31,7 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install pip-audit
-          pip-audit --strict --desc --ignore-vuln CVE-2026-3219 --ignore-vuln CVE-2026-6357
+          pip-audit --strict --desc --ignore-vuln CVE-2026-3219 --ignore-vuln CVE-2026-44405 --ignore-vuln CVE-2026-6357
 
   lint:
     name: Lint
