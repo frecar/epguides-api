@@ -21,6 +21,7 @@ select = [
     "B",      # flake8-bugbear
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
+    "DTZ",    # flake8-datetimez — flag naive datetime usage (#590)
 ]
 ignore = [
     "E501",   # line too long (formatter handles this)
@@ -30,7 +31,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"app/tests/*" = ["S101"]  # allow assert in tests
+"app/tests/*" = ["S101", "DTZ"]  # allow assert + literal datetimes in tests
 
 [tool.ruff.format]
 quote-style = "double"

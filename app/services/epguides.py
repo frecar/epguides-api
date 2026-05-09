@@ -16,7 +16,7 @@ import csv
 import io
 import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -58,9 +58,9 @@ def parse_date_string(date_string: str) -> datetime | None:
 
     for fmt in DATE_FORMATS:
         try:
-            parsed = datetime.strptime(date_string, fmt)
+            parsed = datetime.strptime(date_string, fmt).replace(tzinfo=UTC)
             # Fix century for two-digit years that end up in the future
-            if parsed.year > datetime.now().year + 2:
+            if parsed.year > datetime.now(UTC).year + 2:
                 parsed = parsed.replace(year=parsed.year - 100)
             return parsed
         except ValueError:

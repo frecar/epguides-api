@@ -4,7 +4,7 @@ REST API endpoints for TV show operations.
 All endpoints are async and return Pydantic models for automatic validation.
 """
 
-from datetime import date
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -402,7 +402,7 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
 
     # Smart cache: if the "next" episode date has passed, cache might be stale
     # Invalidate and refetch to get updated episode list
-    if next_ep.release_date < date.today():
+    if next_ep.release_date < datetime.now(UTC).date():
         normalized_key = show_service.normalize_show_id(epguides_key)
         await invalidate_cache("episodes", normalized_key)
         episodes = await show_service.get_episodes(epguides_key)
