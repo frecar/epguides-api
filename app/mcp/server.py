@@ -59,14 +59,45 @@ _TOOLS = [
     },
     {
         "name": "get_episodes",
-        "description": "Get all episodes for a TV show",
+        "description": (
+            "Get episodes for a TV show with optional structured filters and "
+            "AI-powered natural language queries. Mirrors REST /shows/{key}/episodes."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "epguides_key": {
                     "type": "string",
                     "description": "Epguides show identifier",
-                }
+                },
+                "season": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Filter by season number",
+                },
+                "episode": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Filter by episode number (requires season)",
+                },
+                "year": {
+                    "type": "integer",
+                    "minimum": 1900,
+                    "maximum": 2100,
+                    "description": "Filter by release year",
+                },
+                "title_search": {
+                    "type": "string",
+                    "description": "Substring match on episode titles",
+                },
+                "nlq": {
+                    "type": "string",
+                    "description": (
+                        "Natural-language query (requires LLM). Examples: 'finale episodes', "
+                        "'pilot', 'most intense episodes'. Falls back to all matching episodes "
+                        "if the LLM is unavailable."
+                    ),
+                },
             },
             "required": ["epguides_key"],
         },
@@ -267,12 +298,45 @@ class MCPServer:
         return self._success(self._text_content(json.dumps(show.model_dump(), indent=2, default=str)))
 
     async def _tool_get_episodes(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get all episodes for a show."""
+        """Get episodes for a show, optionally filtered by season/episode/year/title/nlq.
+
+        Mirrors REST GET /shows/{key}/episodes — same filter precedence:
+        structured filters first, NL query last, no LLM = nlq ignored.
+        """
         epguides_key = args.get("epguides_key", "")
         episodes = await show_service.get_episodes(epguides_key)
 
         if not episodes:
             return self._error(_ERROR_INVALID_PARAMS, f"No episodes found for: {epguides_key}")
+
+        # Structured filters (mirror shows.py:311-321).
+        season = args.get("season")
+        episode = args.get("episode")
+        year = args.get("year")
+        title_search = args.get("title_search")
+
+        if season is not None:
+            episodes = [ep for ep in episodes if ep.season == season]
+            if episode is not None:
+                episodes = [ep for ep in episodes if ep.number == episode]
+
+        if year is not None:
+            episodes = [ep for ep in episodes if ep.release_date.year == year]
+
+        if title_search:
+            search_lower = title_search.lower()
+            episodes = [ep for ep in episodes if search_lower in ep.title.lower()]
+
+        # Natural-language query — graceful degradation when LLM unavailable.
+        nlq = args.get("nlq")
+        if nlq and episodes:
+            from app.models.schemas import EpisodeSchema
+            from app.services import llm_service
+
+            episodes_as_dicts = [ep.model_dump() for ep in episodes]
+            llm_result = await llm_service.parse_natural_language_query(nlq, episodes_as_dicts)
+            if llm_result is not None:
+                episodes = [EpisodeSchema(**ep) for ep in llm_result]
 
         result = [ep.model_dump() for ep in episodes]
         return self._success(self._text_content(json.dumps(result, indent=2, default=str)))

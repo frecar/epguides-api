@@ -75,6 +75,28 @@ app/
 
 **Flow:** Endpoints -> Services -> External APIs, with Redis caching at service layer.
 
+## REST ↔ MCP coverage matrix
+
+Both surfaces share the same service layer; only the wire format differs.
+Last verified 2026-05-10 (#197).
+
+| Capability | REST (`/shows/*`) | MCP tool | Status |
+|---|---|---|---|
+| Search shows | `GET /search?q=` | `search_shows` | ✅ parity |
+| Get show metadata | `GET /{key}` | `get_show` | ✅ parity |
+| List seasons | `GET /{key}/seasons` | `get_seasons` | ✅ parity |
+| Get episodes (with filters) | `GET /{key}/episodes` (season, episode, year, title_search, nlq, refresh) | `get_episodes` (season, episode, year, title_search, nlq) | ✅ parity (refresh deliberately omitted — MCP clients shouldn't need cache busting) |
+| Next unreleased episode | `GET /{key}/episodes/next` | `get_next_episode` | ✅ parity |
+| Latest released episode | `GET /{key}/episodes/latest` | `get_latest_episode` | ✅ parity |
+| List ALL shows | `GET /` | `epguides://shows` resource | 🟨 different surface (resource, not tool — MCP clients should browse this rather than dump-then-filter) |
+| Season-specific episode listing | `GET /{key}/seasons/{n}/episodes` | use `get_episodes` with `season=n` | ✅ folded into `get_episodes` |
+
+### MCP-side conventions
+
+- Tools always return JSON text content via `content: [{type: "text", text: ...}]` per the MCP spec; clients deserialize.
+- `nlq` falls back to all matching episodes when the LLM is unavailable, matching REST behavior.
+- Tool input schemas live in `app/mcp/server.py` `_TOOLS`. CI parity test: every REST endpoint adds a comment naming the corresponding MCP tool (or a deliberate-difference rationale).
+
 ## Code Patterns
 
 ### Caching

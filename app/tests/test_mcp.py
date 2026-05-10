@@ -239,6 +239,140 @@ async def test_tool_get_episodes(mock_get_episodes, mcp_server):
 
 @pytest.mark.asyncio
 @patch("app.mcp.server.show_service.get_episodes")
+async def test_tool_get_episodes_filters(mock_get_episodes, mcp_server):
+    """Filters mirror the REST handler: structured filters first, NLQ last."""
+    from datetime import date
+
+    from app.models.schemas import EpisodeSchema
+
+    mock_episodes = [
+        EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2020, 1, 1), is_released=True),
+        EpisodeSchema(season=1, number=2, title="Aftermath", release_date=date(2020, 1, 8), is_released=True),
+        EpisodeSchema(season=2, number=1, title="Pilot Returns", release_date=date(2021, 1, 1), is_released=True),
+    ]
+    mock_get_episodes.return_value = mock_episodes
+
+    # season filter
+    request = {
+        "jsonrpc": "2.0",
+        "id": "f1",
+        "method": "tools/call",
+        "params": {"name": "get_episodes", "arguments": {"epguides_key": "test", "season": 1}},
+    }
+    response = await mcp_server.handle_request(request)
+    assert "result" in response
+    text = response["result"]["content"][0]["text"]
+    import json as _json
+
+    parsed = _json.loads(text)
+    assert all(ep["season"] == 1 for ep in parsed)
+
+    # season + episode
+    mock_get_episodes.return_value = mock_episodes
+    response = await mcp_server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": "f2",
+            "method": "tools/call",
+            "params": {"name": "get_episodes", "arguments": {"epguides_key": "test", "season": 1, "episode": 2}},
+        }
+    )
+    parsed = _json.loads(response["result"]["content"][0]["text"])
+    assert len(parsed) == 1
+    assert parsed[0]["title"] == "Aftermath"
+
+    # year filter
+    mock_get_episodes.return_value = mock_episodes
+    response = await mcp_server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": "f3",
+            "method": "tools/call",
+            "params": {"name": "get_episodes", "arguments": {"epguides_key": "test", "year": 2021}},
+        }
+    )
+    parsed = _json.loads(response["result"]["content"][0]["text"])
+    assert len(parsed) == 1
+    assert parsed[0]["season"] == 2
+
+    # title_search filter
+    mock_get_episodes.return_value = mock_episodes
+    response = await mcp_server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": "f4",
+            "method": "tools/call",
+            "params": {"name": "get_episodes", "arguments": {"epguides_key": "test", "title_search": "pilot"}},
+        }
+    )
+    parsed = _json.loads(response["result"]["content"][0]["text"])
+    assert len(parsed) == 2  # Pilot + Pilot Returns
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service.parse_natural_language_query")
+@patch("app.mcp.server.show_service.get_episodes")
+async def test_tool_get_episodes_nlq(mock_get_episodes, mock_nlq, mcp_server):
+    """NLQ delegates to llm_service; LLM-result wins when present."""
+    from datetime import date
+
+    from app.models.schemas import EpisodeSchema
+
+    mock_episodes = [
+        EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2020, 1, 1), is_released=True),
+        EpisodeSchema(season=1, number=10, title="Finale", release_date=date(2020, 4, 1), is_released=True),
+    ]
+    mock_get_episodes.return_value = mock_episodes
+    # LLM picks just the finale
+    mock_nlq.return_value = [mock_episodes[1].model_dump()]
+
+    response = await mcp_server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": "n1",
+            "method": "tools/call",
+            "params": {"name": "get_episodes", "arguments": {"epguides_key": "test", "nlq": "finale"}},
+        }
+    )
+    import json as _json
+
+    parsed = _json.loads(response["result"]["content"][0]["text"])
+    assert len(parsed) == 1
+    assert parsed[0]["title"] == "Finale"
+    mock_nlq.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service.parse_natural_language_query")
+@patch("app.mcp.server.show_service.get_episodes")
+async def test_tool_get_episodes_nlq_llm_unavailable(mock_get_episodes, mock_nlq, mcp_server):
+    """When LLM returns None, NLQ silently no-ops; structured-filtered results stay."""
+    from datetime import date
+
+    from app.models.schemas import EpisodeSchema
+
+    mock_episodes = [
+        EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2020, 1, 1), is_released=True),
+    ]
+    mock_get_episodes.return_value = mock_episodes
+    mock_nlq.return_value = None  # LLM unavailable
+
+    response = await mcp_server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": "n2",
+            "method": "tools/call",
+            "params": {"name": "get_episodes", "arguments": {"epguides_key": "test", "nlq": "anything"}},
+        }
+    )
+    import json as _json
+
+    parsed = _json.loads(response["result"]["content"][0]["text"])
+    assert len(parsed) == 1
+
+
+@pytest.mark.asyncio
+@patch("app.mcp.server.show_service.get_episodes")
 async def test_tool_get_episodes_not_found(mock_get_episodes, mcp_server):
     """Test get_episodes tool with no episodes."""
     mock_get_episodes.return_value = []
