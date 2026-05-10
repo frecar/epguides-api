@@ -107,10 +107,41 @@ async def get_show(show_id: str) -> ShowSchema | None:
     ...
 ```
 
-TTL constants (`app/core/constants.py`):
-- `TTL_7_DAYS` - Ongoing shows, episodes
+TTL constants (`app/core/cache.py`):
+- `TTL_7_DAYS` - Ongoing shows, seasons, episodes
 - `TTL_30_DAYS` - Show list, indexes
-- `TTL_1_YEAR` - Finished shows
+- `TTL_1_YEAR` - Finished shows (`show.end_date is not None`) — promoted automatically by `_get_show_ttl()` / `_get_episodes_ttl()`
+
+### Data freshness SLA (#196)
+
+What clients can assume about how recent the data is.
+
+| Resource | Worst case | Why |
+|---|---|---|
+| Show metadata (ongoing series) | 7 days | `TTL_7_DAYS` cache + `?refresh=true` invalidation supported |
+| Show metadata (finished series) | 1 year | `_get_show_ttl()` extends to `TTL_1_YEAR` once `end_date` is set — these don't change |
+| Episode list (ongoing) | 7 days | `TTL_7_DAYS`. Smart-invalidation on `GET /{key}/episodes/next` if the cached "next" date has passed (see `shows.py:405`) — bounds staleness for the most-asked-about episode to ≤24h after release |
+| Episode list (finished) | 1 year | promoted automatically via `_get_episodes_ttl()` when all episodes are released |
+| Show list (master index) | 30 days | rebuilt on demand via `extend_cache_ttl` |
+| Search results | 7 days | derived from the show list |
+
+### Upstream sources (epguides.com primary, TVMaze fallback)
+
+- Primary: `https://epguides.com/` master list + per-show CSVs.
+- Fallback: TVMaze API (used for episode data when epguides parse fails).
+
+The cache hides upstream outages — once warmed, the API serves stale-but-bounded data even if both upstreams are down. Expected downsides:
+
+- A scrape regression (e.g. epguides.com changes their HTML) won't surface as user-visible failures until the cache expires for a given show. Catch this with active probes (#196 fix items 2-4).
+- New episodes for an ongoing series take up to `TTL_7_DAYS` to appear unless a client passes `?refresh=true` or hits `/episodes/next` past the prior cached "next" date.
+
+### Observability gaps (open work — #196 follow-ups)
+
+- No metric for cache hit/miss ratio per type. Add `epguides_cache_hits_total{type}` / `epguides_cache_misses_total{type}` in the `@cached` decorator.
+- No alert if upstream stops responding. Add `epguides_upstream_request_total{source,outcome}` + Grafana `EpguidesUpstreamStale` alert (no successful epguides.com fetch in 24h).
+- No measurement of upstream latency. Add `epguides_upstream_response_age_seconds{source}` histogram.
+
+These are kept intentionally separate from the SLA section above so the docs reflect today's truth — the gaps don't lie about coverage that doesn't exist yet.
 
 ### Schema Factory
 
