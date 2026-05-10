@@ -321,7 +321,7 @@ class MCPServer:
                 episodes = [ep for ep in episodes if ep.number == episode]
 
         if year is not None:
-            episodes = [ep for ep in episodes if ep.release_date and ep.release_date.year == year]
+            episodes = [ep for ep in episodes if ep.release_date.year == year]
 
         if title_search:
             search_lower = title_search.lower()
