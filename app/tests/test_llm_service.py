@@ -55,7 +55,7 @@ async def test_llm_empty_episodes_returns_empty_list(mock_settings):
 async def test_llm_successful_query(mock_client_class, mock_settings):
     """Test successful LLM query parsing."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.local.carlsen.io/v1"
+    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY or "test-key"
 
     # Mock episodes
@@ -99,7 +99,7 @@ async def test_llm_successful_query(mock_client_class, mock_settings):
 async def test_llm_no_api_key(mock_client_class, mock_settings):
     """Test LLM query without API key - should not send Authorization header."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.local.carlsen.io/v1"
+    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
     mock_settings.LLM_API_KEY = None
 
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
@@ -128,7 +128,7 @@ async def test_llm_no_api_key(mock_client_class, mock_settings):
 async def test_llm_api_error(mock_client_class, mock_settings):
     """Test LLM API error handling."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.local.carlsen.io/v1"
+    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
 
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
@@ -152,7 +152,7 @@ async def test_llm_api_error(mock_client_class, mock_settings):
 async def test_llm_invalid_json_response(mock_client_class, mock_settings):
     """Test LLM with invalid JSON response."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.local.carlsen.io/v1"
+    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
 
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
@@ -178,7 +178,7 @@ async def test_llm_invalid_json_response(mock_client_class, mock_settings):
 async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings):
     """Test that LLM limits context to 100 episodes."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.local.carlsen.io/v1"
+    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
 
     # Create 120 episodes
@@ -209,7 +209,7 @@ async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings):
 async def test_llm_http_exception_handling(mock_client_class, mock_settings):
     """Test LLM handles HTTP exceptions gracefully."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.local.carlsen.io/v1"
+    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
 
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
