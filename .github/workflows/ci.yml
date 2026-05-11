@@ -24,14 +24,18 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies and audit
-        # CVE-2026-3219 — pip itself (concatenated tar+ZIP handling) — no fix in 26.0.1
-        # CVE-2026-6357 — pip — fix in 26.1; upgraded pip first so audit sees the fixed
-        #   version. Kept in ignore list belt-and-braces if a runner caches an older pip.
+        # No --ignore-vuln entries. All three previously-ignored CVEs
+        # (CVE-2026-3219, CVE-2026-44405, CVE-2026-6357) now have upstream
+        # fixes that ship with `pip install --upgrade pip` + the pinned
+        # paramiko in requirements. Verified clean against pip 26.1.1 on
+        # 2026-05-11: "No known vulnerabilities found". Anything that
+        # surfaces here from now on is an actual vuln that needs an
+        # upgrade — not silenced with --ignore-vuln.
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install pip-audit
-          pip-audit --strict --desc --ignore-vuln CVE-2026-3219 --ignore-vuln CVE-2026-44405 --ignore-vuln CVE-2026-6357
+          pip-audit --strict --desc
 
   lint:
     name: Lint
