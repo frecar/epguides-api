@@ -56,6 +56,22 @@ SECURITY_HEADERS: dict[str, str] = {
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
 }
 
+# Swagger UI and ReDoc need to load assets from jsdelivr CDN + run inline
+# scripts/styles to initialise the SwaggerUIBundle. The strict CSP above blocks
+# all of that, leaving /docs and /redoc visually blank in the browser (issue
+# #223). Use a relaxed CSP scoped to those paths only; the rest of the API
+# stays on the strict default-src 'none'.
+_DOCS_PATHS: tuple[str, ...] = ("/docs", "/redoc", "/docs/oauth2-redirect")
+_DOCS_CSP = (
+    "default-src 'none'; "
+    "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+    "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+    "img-src 'self' https://fastapi.tiangolo.com data:; "
+    "font-src 'self' https://cdn.jsdelivr.net data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'"
+)
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
@@ -80,6 +96,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         for header, value in SECURITY_HEADERS.items():
             response.headers[header] = value
+        # Docs paths (Swagger UI + ReDoc) need a relaxed CSP — see #223.
+        if request.url.path in _DOCS_PATHS:
+            response.headers["Content-Security-Policy"] = _DOCS_CSP
         return response
 
 
