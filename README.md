@@ -51,6 +51,63 @@ curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
 curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 ```
 
+## MCP (for AI assistants)
+
+The API exposes a Model Context Protocol server at `/mcp` so AI assistants can query TV show data directly. Transport is JSON-RPC 2.0 over HTTP POST — any MCP client that speaks HTTP transports works.
+
+### Available tools
+
+| Tool | What it does |
+|---|---|
+| `search_shows` | Search shows by title |
+| `get_show` | Get show metadata by epguides key (e.g. `BreakingBad`) |
+| `get_seasons` | List seasons with posters + summaries |
+| `get_episodes` | Episodes with filters (`season`, `episode`, `year`, `title_search`, natural-language `nlq`) |
+| `get_next_episode` | Next unreleased episode for a show |
+| `get_latest_episode` | Most recently released episode |
+
+Plus a resource at `epguides://shows` that returns the complete show list.
+
+### Quick test
+
+The endpoint accepts standard JSON-RPC 2.0 — useful for sanity checks before wiring it up:
+
+```bash
+# List available tools
+curl -s -X POST https://epguides.frecar.no/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Call search_shows
+curl -s -X POST https://epguides.frecar.no/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc":"2.0","id":2,
+    "method":"tools/call",
+    "params":{"name":"search_shows","arguments":{"query":"breaking bad"}}
+  }'
+```
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "epguides": {
+      "url": "https://epguides.frecar.no/mcp"
+    }
+  }
+}
+```
+
+Restart Claude Desktop. Tools appear under the 🔌 menu — ask "what's the next Severance episode?" and the assistant will call `get_next_episode` for you.
+
+### Other clients
+
+Any client that speaks MCP over HTTP works. Point it at `https://epguides.frecar.no/mcp` and call `tools/list` to discover what's available. No auth required.
+
 ## Documentation
 
 Full docs at [epguides-api.readthedocs.io](https://epguides-api.readthedocs.io):
