@@ -5,6 +5,7 @@ This module configures the FastAPI application with all routes,
 middleware, and exception handlers.
 """
 
+import asyncio
 import logging.config
 import os
 from collections.abc import AsyncGenerator
@@ -16,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from app.api.endpoints import mcp, shows
-from app.core.cache import close_redis_pool, get_cache_stats
+from app.core.cache import close_redis_pool, get_cache_stats, refresh_cache_age_gauges
 from app.core.config import settings
 from app.core.constants import VERSION
 from app.core.metrics import mark_worker_dead, render_metrics
@@ -70,6 +71,18 @@ if settings.SENTRY_DSN:  # pragma: no cover
 # =============================================================================
 
 
+async def _cache_age_refresh_loop() -> None:
+    """Background task: update the cache-age gauge every 5 minutes.
+
+    Runs in every uvicorn worker but only one worker actually scans Redis
+    per interval (NX lock inside refresh_cache_age_gauges). CancelledError
+    from task.cancel() propagates out of asyncio.sleep naturally.
+    """
+    while True:
+        await refresh_cache_age_gauges()
+        await asyncio.sleep(300)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
@@ -78,7 +91,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     Handles startup and shutdown events.
     """
     logger.info("Application startup")
+    task = asyncio.create_task(_cache_age_refresh_loop())
     yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
     # Clean up multiprocess prometheus state for this worker so the
     # next scrape doesn't double-count dead worker's counters. No-op
     # in single-process mode (env var unset).

@@ -4,7 +4,7 @@ Unit tests for cache module.
 Tests Redis cache operations, decorators, and helpers.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -457,3 +457,155 @@ async def test_cache_decorator_handles_redis_error():
         result = await get_data("mykey")
         # Should fall back to executing function
         assert result == {"result": "fresh"}
+
+
+# =============================================================================
+# Cache Age Gauge Helpers
+# =============================================================================
+
+
+def _agen(*items):
+    """Build a one-shot async generator that yields each item."""
+
+    async def _gen():
+        for item in items:
+            yield item
+
+    return _gen()
+
+
+class TestClassifyTtl:
+    """_classify_ttl infers the original TTL class from remaining seconds."""
+
+    def test_above_30_days_returns_1_year(self) -> None:
+        assert cache._classify_ttl(cache.TTL_30_DAYS + 1) == cache.TTL_1_YEAR
+
+    def test_exactly_1_year_returns_1_year(self) -> None:
+        assert cache._classify_ttl(cache.TTL_1_YEAR) == cache.TTL_1_YEAR
+
+    def test_between_7_and_30_days_returns_30_days(self) -> None:
+        assert cache._classify_ttl(cache.TTL_7_DAYS + 1) == cache.TTL_30_DAYS
+
+    def test_at_30_days_returns_30_days(self) -> None:
+        assert cache._classify_ttl(cache.TTL_30_DAYS) == cache.TTL_30_DAYS
+
+    def test_7_days_or_less_returns_7_days(self) -> None:
+        assert cache._classify_ttl(cache.TTL_7_DAYS) == cache.TTL_7_DAYS
+        assert cache._classify_ttl(1) == cache.TTL_7_DAYS
+
+
+@pytest.mark.asyncio
+async def test_refresh_cache_age_gauges_lock_not_acquired():
+    """When the NX lock is already held, the function returns without scanning."""
+    mock_redis = AsyncMock()
+    mock_redis.set.return_value = None  # lock held by another worker
+    with patch.object(cache, "get_redis", return_value=mock_redis):
+        await cache.refresh_cache_age_gauges()
+    mock_redis.scan_iter.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_refresh_cache_age_gauges_updates_gauge():
+    """Lock acquired and one key found → gauge set to correct age."""
+    mock_redis = AsyncMock()
+    mock_redis.set.return_value = True  # lock acquired
+
+    remaining = cache.TTL_7_DAYS - 86400 * 3  # 4 days remaining → 3 days old
+    expected_age = cache.TTL_7_DAYS - remaining  # 3 days in seconds
+
+    def _scan_iter(pattern):
+        if "show:*" == pattern:
+            return _agen("show:breaking-bad")
+        return _agen()
+
+    # scan_iter and pipeline().ttl() are synchronous in redis-py pipelines;
+    # only pipeline.execute() is async.
+    mock_redis.scan_iter = MagicMock(side_effect=_scan_iter)
+    mock_pipe = MagicMock()
+    mock_pipe.execute = AsyncMock(return_value=[remaining])
+    mock_redis.pipeline = MagicMock(return_value=mock_pipe)
+
+    with (
+        patch.object(cache, "get_redis", return_value=mock_redis),
+        patch.object(cache, "update_cache_age_gauge") as mock_update,
+    ):
+        await cache.refresh_cache_age_gauges()
+        mock_update.assert_called_once_with({"show": float(expected_age)})
+
+
+@pytest.mark.asyncio
+async def test_refresh_cache_age_gauges_skips_expired_keys():
+    """Keys with remaining TTL <= 0 are skipped (expired mid-scan or no TTL)."""
+    mock_redis = AsyncMock()
+    mock_redis.set.return_value = True
+
+    def _scan_iter(pattern):
+        if "show:*" == pattern:
+            return _agen("show:x", "show:y")
+        return _agen()
+
+    mock_redis.scan_iter = MagicMock(side_effect=_scan_iter)
+    mock_pipe = MagicMock()
+    mock_pipe.execute = AsyncMock(return_value=[0, -1])  # both invalid
+    mock_redis.pipeline = MagicMock(return_value=mock_pipe)
+
+    with (
+        patch.object(cache, "get_redis", return_value=mock_redis),
+        patch.object(cache, "update_cache_age_gauge") as mock_update,
+    ):
+        await cache.refresh_cache_age_gauges()
+        # No valid entries → gauge called with empty dict
+        mock_update.assert_called_once_with({})
+
+
+@pytest.mark.asyncio
+async def test_refresh_cache_age_gauges_no_keys_for_prefix():
+    """Prefixes with no matching keys are silently skipped."""
+    mock_redis = AsyncMock()
+    mock_redis.set.return_value = True
+    mock_redis.scan_iter = MagicMock(side_effect=lambda _pattern: _agen())
+
+    with (
+        patch.object(cache, "get_redis", return_value=mock_redis),
+        patch.object(cache, "update_cache_age_gauge") as mock_update,
+    ):
+        await cache.refresh_cache_age_gauges()
+        mock_update.assert_called_once_with({})
+
+
+@pytest.mark.asyncio
+async def test_refresh_cache_age_gauges_oldest_entry_selected():
+    """When multiple keys exist, the one with the smallest remaining TTL is used."""
+    mock_redis = AsyncMock()
+    mock_redis.set.return_value = True
+
+    def _scan_iter(pattern):
+        if "episodes:*" == pattern:
+            return _agen("episodes:a", "episodes:b")
+        return _agen()
+
+    mock_redis.scan_iter = MagicMock(side_effect=_scan_iter)
+    mock_pipe = MagicMock()
+    # episodes:a has 1 day remaining (older), episodes:b has 5 days remaining
+    mock_pipe.execute = AsyncMock(return_value=[86400, 86400 * 5])
+    mock_redis.pipeline = MagicMock(return_value=mock_pipe)
+
+    with (
+        patch.object(cache, "get_redis", return_value=mock_redis),
+        patch.object(cache, "update_cache_age_gauge") as mock_update,
+    ):
+        await cache.refresh_cache_age_gauges()
+        # Oldest entry: 86400 remaining → age = TTL_7_DAYS - 86400 = 518400
+        expected = float(cache.TTL_7_DAYS - 86400)
+        mock_update.assert_called_once_with({"episodes": expected})
+
+
+@pytest.mark.asyncio
+async def test_refresh_cache_age_gauges_exception_logs_warning(caplog):
+    """Redis errors are caught and logged as warnings."""
+    import logging
+
+    with patch.object(cache, "get_redis", side_effect=Exception("redis down")):
+        with caplog.at_level(logging.WARNING, logger="app.core.cache"):
+            await cache.refresh_cache_age_gauges()
+    assert "Failed to refresh cache age gauges" in caplog.text
