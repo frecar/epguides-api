@@ -5,12 +5,26 @@ Tests edge cases and behavior for internal helper functions
 that parse CSV data, extract metadata, and handle TVMaze integration.
 """
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from prometheus_client import Histogram
 
+from app.core.metrics import UPSTREAM_REQUESTS, UPSTREAM_RESPONSE_AGE
 from app.services import epguides
+
+
+def _histo_count(histogram: Histogram, **labels: Any) -> float:
+    """Return the current observation count for a labeled histogram via collect()."""
+    target_name = histogram._name + "_count"
+    for metric in histogram.collect():
+        for sample in metric.samples:
+            if sample.name == target_name and all(sample.labels.get(k) == v for k, v in labels.items()):
+                return sample.value
+    return 0.0
+
 
 # =============================================================================
 # _convert_show_id_to_title Tests
@@ -451,3 +465,300 @@ async def test_get_show_metadata_imdb_but_no_title(mock_fetch):
     assert result is not None
     assert result[0] == "tt1234567"
     assert result[1] == "Unknown"
+
+
+# =============================================================================
+# Upstream Metrics — _fetch_url instrumentation
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_records_epguides_success(mock_client_class):
+    """_fetch_url increments epguides success counter and records latency."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    before_count = UPSTREAM_REQUESTS.labels(source="epguides", outcome="success")._value.get()
+    before_age = _histo_count(UPSTREAM_RESPONSE_AGE, source="epguides")
+
+    result = await epguides._fetch_url("https://epguides.com/test")
+
+    assert result is mock_response
+    assert UPSTREAM_REQUESTS.labels(source="epguides", outcome="success")._value.get() == before_count + 1
+    assert _histo_count(UPSTREAM_RESPONSE_AGE, source="epguides") == before_age + 1
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_records_epguides_timeout(mock_client_class):
+    """_fetch_url increments epguides timeout counter on TimeoutException."""
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
+    mock_client_class.return_value = mock_client
+
+    before = UPSTREAM_REQUESTS.labels(source="epguides", outcome="timeout")._value.get()
+
+    result = await epguides._fetch_url("https://epguides.com/test")
+
+    assert result is None
+    assert UPSTREAM_REQUESTS.labels(source="epguides", outcome="timeout")._value.get() == before + 1
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_records_epguides_http_error(mock_client_class):
+    """_fetch_url increments epguides http_error counter on non-2xx response."""
+    mock_response = MagicMock()
+    mock_response.status_code = 500
+    mock_response.raise_for_status = MagicMock(
+        side_effect=httpx.HTTPStatusError("500", request=MagicMock(), response=mock_response)
+    )
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    before = UPSTREAM_REQUESTS.labels(source="epguides", outcome="http_error")._value.get()
+
+    result = await epguides._fetch_url("https://epguides.com/test")
+
+    assert result is None
+    assert UPSTREAM_REQUESTS.labels(source="epguides", outcome="http_error")._value.get() == before + 1
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_records_epguides_connect_error(mock_client_class):
+    """_fetch_url increments epguides http_error counter on ConnectError."""
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(side_effect=httpx.ConnectError("unreachable"))
+    mock_client_class.return_value = mock_client
+
+    before = UPSTREAM_REQUESTS.labels(source="epguides", outcome="http_error")._value.get()
+
+    result = await epguides._fetch_url("https://epguides.com/test")
+
+    assert result is None
+    assert UPSTREAM_REQUESTS.labels(source="epguides", outcome="http_error")._value.get() == before + 1
+
+
+# =============================================================================
+# Upstream Metrics — _tvmaze_get instrumentation
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_tvmaze_get_records_success(mock_client_class):
+    """_tvmaze_get increments tvmaze success counter and records latency on 200."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    before_count = UPSTREAM_REQUESTS.labels(source="tvmaze", outcome="success")._value.get()
+    before_age = _histo_count(UPSTREAM_RESPONSE_AGE, source="tvmaze")
+
+    result = await epguides._tvmaze_get("https://api.tvmaze.com/shows/123")
+
+    assert result is mock_response
+    assert UPSTREAM_REQUESTS.labels(source="tvmaze", outcome="success")._value.get() == before_count + 1
+    assert _histo_count(UPSTREAM_RESPONSE_AGE, source="tvmaze") == before_age + 1
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_tvmaze_get_records_http_error_on_non_200(mock_client_class):
+    """_tvmaze_get increments tvmaze http_error counter on non-200 status."""
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    before = UPSTREAM_REQUESTS.labels(source="tvmaze", outcome="http_error")._value.get()
+
+    result = await epguides._tvmaze_get("https://api.tvmaze.com/shows/99999")
+
+    assert result is None
+    assert UPSTREAM_REQUESTS.labels(source="tvmaze", outcome="http_error")._value.get() == before + 1
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_tvmaze_get_records_timeout(mock_client_class):
+    """_tvmaze_get increments tvmaze timeout counter on TimeoutException."""
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
+    mock_client_class.return_value = mock_client
+
+    before = UPSTREAM_REQUESTS.labels(source="tvmaze", outcome="timeout")._value.get()
+
+    result = await epguides._tvmaze_get("https://api.tvmaze.com/shows/123")
+
+    assert result is None
+    assert UPSTREAM_REQUESTS.labels(source="tvmaze", outcome="timeout")._value.get() == before + 1
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_tvmaze_get_passes_kwargs_to_client(mock_client_class):
+    """_tvmaze_get forwards **kwargs (e.g. params=) to httpx client.get."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    await epguides._tvmaze_get("https://api.tvmaze.com/singlesearch/shows", params={"q": "test"})
+
+    mock_client.get.assert_called_once_with("https://api.tvmaze.com/singlesearch/shows", params={"q": "test"})
+
+
+# =============================================================================
+# Upstream Metrics — fetch_csv parse_error recording
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_url")
+async def test_fetch_csv_records_parse_error(mock_fetch):
+    """fetch_csv increments epguides parse_error counter when CSV is malformed."""
+    mock_response = MagicMock()
+    mock_response.encoding = "utf-8"
+    mock_response.text = "valid,header\n"
+    mock_response.content = b"valid,header\n"
+
+    import csv
+
+    mock_fetch.return_value = mock_response
+
+    before = UPSTREAM_REQUESTS.labels(source="epguides", outcome="parse_error")._value.get()
+
+    # Patch csv.reader to raise csv.Error to simulate a malformed CSV
+    with patch("csv.reader", side_effect=csv.Error("malformed")):
+        result = await epguides.fetch_csv("https://epguides.com/data.csv")
+
+    assert result == []
+    assert UPSTREAM_REQUESTS.labels(source="epguides", outcome="parse_error")._value.get() == before + 1
+
+
+# =============================================================================
+# TVMaze JSON parse-error branches (defensive — covers each except Exception)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_search_tvmaze_handles_json_parse_error(mock_client_class):
+    """_search_tvmaze_by_title returns None when response.json() raises."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.side_effect = ValueError("invalid json")
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._search_tvmaze_by_title("Broken JSON Show")
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_tvmaze_episodes_handles_json_parse_error(mock_client_class):
+    """_fetch_tvmaze_episodes returns [] when response.json() raises."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.side_effect = ValueError("invalid json")
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    result = await epguides._fetch_tvmaze_episodes("123")
+    assert result == []
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_merge_tvmaze_episode_data_returns_input_on_json_parse_error(mock_client_class):
+    """_merge_tvmaze_episode_data returns input episodes unchanged when TVMaze JSON fails."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.side_effect = ValueError("invalid json")
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    episodes = [{"season": "1", "number": "1", "title": "Pilot", "release_date": "2020-01-01"}]
+    result = await epguides._merge_tvmaze_episode_data(episodes, "123")
+    assert result == episodes
+
+
+@pytest.mark.asyncio
+@patch("app.core.cache.cache_set", new_callable=AsyncMock)
+@patch("app.core.cache.cache_get", new_callable=AsyncMock, return_value=None)
+@patch("httpx.AsyncClient")
+async def test_get_tvmaze_show_data_handles_json_parse_error(mock_client_class, _mock_get, _mock_set):
+    """get_tvmaze_show_data returns None when response.json() raises."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.side_effect = ValueError("invalid json")
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    result = await epguides.get_tvmaze_show_data("badjson_show")
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("app.core.cache.cache_set", new_callable=AsyncMock)
+@patch("app.core.cache.cache_get", new_callable=AsyncMock, return_value=None)
+@patch("httpx.AsyncClient")
+async def test_get_tvmaze_seasons_handles_json_parse_error(mock_client_class, _mock_get, _mock_set):
+    """get_tvmaze_seasons returns [] when response.json() raises."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.side_effect = ValueError("invalid json")
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    result = await epguides.get_tvmaze_seasons("badjson_show")
+    assert result == []
