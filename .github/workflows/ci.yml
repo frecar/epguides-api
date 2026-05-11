@@ -23,20 +23,20 @@ jobs:
           version: "0.11.3"
           enable-cache: true
 
-      - name: Sync dependencies (no-install-project skips epguides-api itself)
-        # epguides-api is not published to PyPI. If `uv sync` includes it
-        # as an editable install, pip-audit errors with "distribution
-        # marked as editable" (even with --skip-editable). --no-install-project
-        # leaves only the third-party deps in the venv, which is what we
-        # want pip-audit to scan.
-        run: uv sync --frozen --no-install-project
+      - name: Export deps to requirements.txt (third-party only)
+        # epguides-api is not published to PyPI, so we can't audit the
+        # venv directly (pip-audit errors on the unpublished first-party
+        # entry). Export ALL transitive deps to a hashed requirements.txt
+        # and audit that file instead — gives us the same third-party
+        # CVE coverage without confusing pip-audit.
+        run: uv export --frozen --no-dev --no-emit-project --output-file=/tmp/requirements-audit.txt
 
       - name: Audit
         # No --ignore-vuln entries. All previously-ignored CVEs now have
         # upstream fixes that ship in the lockfile. Anything surfacing
         # here is an actual vuln that needs an upgrade, not a silenced
         # workaround.
-        run: uv run pip-audit --strict --desc
+        run: uvx pip-audit --strict --desc --require-hashes -r /tmp/requirements-audit.txt
 
   lint:
     name: Lint
