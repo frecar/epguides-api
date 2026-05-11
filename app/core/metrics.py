@@ -69,7 +69,11 @@ UPSTREAM_RESPONSE_AGE = Histogram(
     "epguides_upstream_response_age_seconds",
     "Round-trip time for successful upstream HTTP requests (fetch start → response received)",
     labelnames=["source"],
-    buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
+    # 7.5 added between 5.0 and 10.0 because observed epguides.com p95 sits
+    # in that range — without an intermediate bucket, histogram_quantile()
+    # linearly interpolates across a 5-second-wide gap and reports a p95
+    # with ~50% relative error (asgard PR #677 Grafana panel, issue #211).
+    buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 7.5, 10.0, 30.0),
 )
 
 
