@@ -184,7 +184,7 @@ Runs automatically on commit:
 3. Version update
 4. Tests with 100% coverage
 
-Setup: `make setup` (installs venv + hooks)
+Setup: `make setup` (runs `uv sync` to create `.venv` from `uv.lock`, then installs pre-commit hooks). Requires `uv` — install via https://docs.astral.sh/uv/.
 
 ## Style
 

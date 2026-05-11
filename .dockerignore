@@ -43,9 +43,11 @@ docs/
 # Build artifacts
 *.log
 
-# Project config (not needed in image)
+# Project config — Makefile etc. stays out; pyproject.toml + uv.lock are
+# REQUIRED in the builder stage for `uv sync --frozen --no-dev`, so they
+# must NOT be excluded here. (Previously when the image installed from
+# requirements-prod.txt this whole project config was excluded.)
 Makefile
-pyproject.toml
 mkdocs.yml
 verify_llm.py
 

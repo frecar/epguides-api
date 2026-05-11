@@ -3,7 +3,8 @@
 
 .DEFAULT_GOAL := help
 
-PYTHON := $(shell if [ -d venv ]; then echo venv/bin/python; else echo python3; fi)
+UV := uv
+RUN := $(UV) run
 
 # =============================================================================
 # HELP
@@ -57,8 +58,9 @@ doctor:
 	@echo ""
 	@printf "Docker:       " && (docker --version >/dev/null 2>&1 && echo "OK" || echo "MISSING")
 	@printf "Compose:      " && (docker compose version >/dev/null 2>&1 && echo "OK" || echo "MISSING")
-	@printf "Python:       " && ($(PYTHON) --version 2>&1 | head -1 || echo "MISSING")
-	@printf "Venv:         " && ([ -d venv ] && echo "OK" || echo "MISSING - run: make setup")
+	@printf "uv:           " && ($(UV) --version 2>&1 | head -1 || echo "MISSING - install: https://docs.astral.sh/uv/")
+	@printf "Python:       " && ($(RUN) python --version 2>&1 | head -1 || echo "MISSING - run: make setup")
+	@printf ".venv:        " && ([ -d .venv ] && echo "OK" || echo "MISSING - run: make setup")
 	@printf "Pre-commit:   " && ([ -f .git/hooks/pre-commit ] && echo "OK" || echo "MISSING - run: make setup")
 	@echo ""
 	@echo "Services:"
@@ -85,11 +87,9 @@ open:
 # =============================================================================
 
 setup:
-	python3 -m venv venv
-	venv/bin/pip install --upgrade pip
-	venv/bin/pip install -r requirements.txt
-	venv/bin/pre-commit install
-	venv/bin/pre-commit install --hook-type commit-msg
+	$(UV) sync
+	$(RUN) pre-commit install
+	$(RUN) pre-commit install --hook-type commit-msg
 	@echo ""
 	@echo "Setup complete. Run: make up"
 
@@ -98,7 +98,7 @@ setup:
 # =============================================================================
 
 run:
-	$(PYTHON) -m uvicorn app.main:app --reload --port 3000
+	$(RUN) uvicorn app.main:app --reload --port 3000
 
 up:
 	docker compose up -d
@@ -134,26 +134,26 @@ cache-clear:
 # =============================================================================
 
 test:
-	PYTHONPATH=. $(PYTHON) -m pytest --cov=app --cov-report=term-missing
+	$(RUN) pytest --cov=app --cov-report=term-missing
 
 format:
-	$(PYTHON) -m ruff format app/
+	$(RUN) ruff format app/
 
 format-check:
-	$(PYTHON) -m ruff format --check app/
+	$(RUN) ruff format --check app/
 
 lint:
-	$(PYTHON) -m ruff check app/
+	$(RUN) ruff check app/
 
 fix:
-	$(PYTHON) -m ruff check --fix app/
-	$(PYTHON) -m ruff format app/
+	$(RUN) ruff check --fix app/
+	$(RUN) ruff format app/
 
 check: format-check lint
 	@echo "All static checks passed"
 
 coverage:
-	PYTHONPATH=. $(PYTHON) -m pytest --cov=app --cov-report=term-missing --cov-report=html
+	$(RUN) pytest --cov=app --cov-report=term-missing --cov-report=html
 	@echo "HTML report: htmlcov/index.html"
 
 ci: format-check lint test
@@ -164,10 +164,10 @@ ci: format-check lint test
 # =============================================================================
 
 docs:
-	$(PYTHON) -m mkdocs serve
+	$(RUN) mkdocs serve
 
 docs-build:
-	$(PYTHON) -m mkdocs build
+	$(RUN) mkdocs build
 
 # =============================================================================
 # CLEANUP
