@@ -23,21 +23,20 @@ jobs:
           version: "0.11.3"
           enable-cache: true
 
-      - name: Sync dependencies (including dev for pip-audit)
-        run: uv sync --frozen
+      - name: Sync dependencies (no-install-project skips epguides-api itself)
+        # epguides-api is not published to PyPI. If `uv sync` includes it
+        # as an editable install, pip-audit errors with "distribution
+        # marked as editable" (even with --skip-editable). --no-install-project
+        # leaves only the third-party deps in the venv, which is what we
+        # want pip-audit to scan.
+        run: uv sync --frozen --no-install-project
 
       - name: Audit
         # No --ignore-vuln entries. All previously-ignored CVEs now have
         # upstream fixes that ship in the lockfile. Anything surfacing
         # here is an actual vuln that needs an upgrade, not a silenced
         # workaround.
-        #
-        # --skip-editable: `uv sync` installs this project (epguides-api)
-        # as an editable install in the venv. pip-audit tries to look up
-        # epguides-api on PyPI and fails since it's not published. The
-        # flag tells pip-audit to skip such projects — we want third-
-        # party CVE coverage, not our own first-party package.
-        run: uv run pip-audit --strict --desc --skip-editable
+        run: uv run pip-audit --strict --desc
 
   lint:
     name: Lint
