@@ -105,8 +105,20 @@ up:
 	@echo ""
 	@make urls
 
+# `dev` is the cluster-wide convention (asgard#678). `up` kept as an alias
+# for existing muscle memory.
+dev: up
+
 down:
 	docker compose down 2>/dev/null; docker compose -f docker-compose.prod.yml down 2>/dev/null
+
+# `stop` is the cluster-wide convention (asgard#678).
+stop: down
+
+# `build` is the cluster-wide convention (asgard#678) — produces the
+# production image without starting containers.
+build:
+	docker compose -f docker-compose.prod.yml build
 
 logs:
 	docker compose logs -f
