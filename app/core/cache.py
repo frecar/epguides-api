@@ -15,7 +15,7 @@ import orjson
 from redis.asyncio import ConnectionPool, Redis
 
 from app.core.config import settings
-from app.core.metrics import record_cache_hit, record_cache_miss
+from app.core.metrics import record_cache_hit, record_cache_miss, update_cache_age_gauge
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,16 @@ logger = logging.getLogger(__name__)
 TTL_7_DAYS = 86400 * 7  # Ongoing shows, seasons, episodes
 TTL_30_DAYS = 86400 * 30  # Show list, indexes
 TTL_1_YEAR = 86400 * 365  # Finished shows (data won't change)
+
+# Redis NX lock key / TTL for the cache-age background scanner.
+# One worker holds the lock per scan interval; all others skip that interval.
+# TTL is shorter than the 300s task interval so the next worker can pick up
+# promptly after 260s even if the lock holder crashed mid-scan.
+_CACHE_AGE_LOCK_KEY = "epguides:cache_age_scan:lock"
+_CACHE_AGE_LOCK_TTL = 260
+
+# Prefixes that map directly to resource types in the cache key `<type>:<id>`.
+_SCAN_PREFIXES = ("show", "episodes", "seasons", "search", "shows")
 
 # =============================================================================
 # Type Variables
@@ -415,3 +425,63 @@ async def get_cache_stats() -> dict[str, Any]:
             "status": "error",
             "error": str(e),
         }
+
+
+# =============================================================================
+# Cache Age Gauge Refresh
+# =============================================================================
+
+
+def _classify_ttl(remaining: int) -> int:
+    """Infer the original TTL class from a key's remaining seconds.
+
+    Checks highest-first so longer-lived entries aren't misclassified.
+    Known limitation: a finished-show entry (TTL_1_YEAR) that has burned
+    below the 30-day threshold is misclassified as TTL_30_DAYS, causing
+    its age to be underreported. These are >11-month-old finished shows —
+    the lowest-concern population — so this is acceptable for v1.
+    """
+    if remaining > TTL_30_DAYS:
+        return TTL_1_YEAR
+    if remaining > TTL_7_DAYS:
+        return TTL_30_DAYS
+    return TTL_7_DAYS
+
+
+async def refresh_cache_age_gauges() -> None:
+    """Scan Redis TTLs and update the cache-age Prometheus gauge.
+
+    Uses a Redis NX lock so only one uvicorn worker runs the scan per
+    300-second interval. The lock expires naturally (_CACHE_AGE_LOCK_TTL)
+    rather than being explicitly released, so a crash or long scan does
+    not permanently block subsequent workers.
+
+    Age is derived from TTL math: age = class_ttl - remaining_ttl.
+    The gauge is set to the age of the oldest (smallest remaining TTL)
+    entry per resource type.
+    """
+    try:
+        redis = await get_redis()
+        locked = await redis.set(_CACHE_AGE_LOCK_KEY, "1", nx=True, ex=_CACHE_AGE_LOCK_TTL)
+        if not locked:
+            return
+
+        min_remaining: dict[str, int] = {}
+        for prefix in _SCAN_PREFIXES:
+            keys = [key async for key in redis.scan_iter(f"{prefix}:*")]
+            if not keys:
+                continue
+            pipe = redis.pipeline(transaction=False)
+            for key in keys:
+                pipe.ttl(key)
+            ttls: list[int] = await pipe.execute()
+            for remaining in ttls:
+                if remaining <= 0:
+                    continue
+                if prefix not in min_remaining or remaining < min_remaining[prefix]:
+                    min_remaining[prefix] = remaining
+
+        ages = {t: float(max(0, _classify_ttl(r) - r)) for t, r in min_remaining.items()}
+        update_cache_age_gauge(ages)
+    except Exception as e:
+        logger.warning("Failed to refresh cache age gauges: %s", e)

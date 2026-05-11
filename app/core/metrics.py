@@ -28,6 +28,7 @@ from prometheus_client import (
     REGISTRY,
     CollectorRegistry,
     Counter,
+    Gauge,
     Histogram,
     generate_latest,
     multiprocess,
@@ -76,6 +77,27 @@ UPSTREAM_RESPONSE_AGE = Histogram(
     # See issue #211 for the dashboard interpolation analysis.
     buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 7.5, 10.0, 30.0),
 )
+
+# Age of the oldest live cache entry per resource type. Updated every 5 minutes
+# by a background task that scans Redis TTLs. In multiprocess mode (5 uvicorn
+# workers), each worker independently computes the same value from the same
+# Redis — max collapses all workers to a single representative value.
+# Known limitation: finished-show entries whose remaining TTL has burned below
+# the 30-day threshold are classified as the 30-day class, underreporting age
+# for very old (>11 months) finished shows. Acceptable — these are the
+# lowest-concern population (finished shows don't change).
+CACHE_OLDEST_ENTRY_AGE = Gauge(
+    "epguides_cache_oldest_entry_age_seconds",
+    "Age in seconds of the oldest live cache entry, per resource type (TTL-math derived)",
+    labelnames=["type"],
+    multiprocess_mode="max",
+)
+
+
+def update_cache_age_gauge(type_ages: dict[str, float]) -> None:
+    """Set the cache age gauge for each resource type. Called by the background task."""
+    for cache_type, age_seconds in type_ages.items():
+        CACHE_OLDEST_ENTRY_AGE.labels(type=cache_type).set(age_seconds)
 
 
 def cache_type_from_key(cache_key: str) -> str:

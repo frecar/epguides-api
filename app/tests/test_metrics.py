@@ -9,6 +9,7 @@ from prometheus_client import Histogram
 from app.core.metrics import (
     CACHE_HITS,
     CACHE_MISSES,
+    CACHE_OLDEST_ENTRY_AGE,
     UPSTREAM_REQUESTS,
     UPSTREAM_RESPONSE_AGE,
     cache_type_from_key,
@@ -18,6 +19,7 @@ from app.core.metrics import (
     record_cache_miss,
     record_upstream_request,
     render_metrics,
+    update_cache_age_gauge,
 )
 
 
@@ -259,3 +261,34 @@ class TestUpstreamMetricsInExposition:
         record_upstream_request("tvmaze", "success")
         body, _ = render_metrics()
         assert b'source="tvmaze"' in body
+
+
+class TestCacheOldestEntryAge:
+    """Tests for the cache-age gauge and its update helper."""
+
+    def test_gauge_object_exists(self) -> None:
+        assert CACHE_OLDEST_ENTRY_AGE is not None
+
+    def test_update_sets_value_for_type(self) -> None:
+        update_cache_age_gauge({"show": 3600.0})
+        assert CACHE_OLDEST_ENTRY_AGE.labels(type="show")._value.get() == 3600.0
+
+    def test_update_sets_multiple_types(self) -> None:
+        update_cache_age_gauge({"episodes": 100.0, "seasons": 200.0})
+        assert CACHE_OLDEST_ENTRY_AGE.labels(type="episodes")._value.get() == 100.0
+        assert CACHE_OLDEST_ENTRY_AGE.labels(type="seasons")._value.get() == 200.0
+
+    def test_update_empty_dict_is_noop(self) -> None:
+        before = CACHE_OLDEST_ENTRY_AGE.labels(type="search")._value.get()
+        update_cache_age_gauge({})
+        assert CACHE_OLDEST_ENTRY_AGE.labels(type="search")._value.get() == before
+
+    def test_gauge_name_appears_in_exposition(self) -> None:
+        update_cache_age_gauge({"show": 7200.0})
+        body, _ = render_metrics()
+        assert b"epguides_cache_oldest_entry_age_seconds" in body
+
+    def test_type_label_appears_in_exposition(self) -> None:
+        update_cache_age_gauge({"episodes": 999.0})
+        body, _ = render_metrics()
+        assert b'type="episodes"' in body
