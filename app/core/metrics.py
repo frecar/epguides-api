@@ -23,7 +23,15 @@ default in-process registry — same behavior as before.
 
 import os
 
-from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, Counter, generate_latest, multiprocess
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
+    CollectorRegistry,
+    Counter,
+    Histogram,
+    generate_latest,
+    multiprocess,
+)
 
 
 def _ensure_multiproc_dir() -> None:
@@ -51,6 +59,19 @@ CACHE_MISSES = Counter(
     labelnames=["type"],
 )
 
+UPSTREAM_REQUESTS = Counter(
+    "epguides_upstream_request_total",
+    "Upstream HTTP requests by source (epguides, tvmaze) and outcome (success, http_error, timeout, parse_error)",
+    labelnames=["source", "outcome"],
+)
+
+UPSTREAM_RESPONSE_AGE = Histogram(
+    "epguides_upstream_response_age_seconds",
+    "Round-trip time for successful upstream HTTP requests (fetch start → response received)",
+    labelnames=["source"],
+    buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
+)
+
 
 def cache_type_from_key(cache_key: str) -> str:
     """Extract the resource type from a cache key.
@@ -73,6 +94,16 @@ def record_cache_hit(cache_key: str) -> None:
 def record_cache_miss(cache_key: str) -> None:
     """Increment the cache-miss counter for the resource type in this key."""
     CACHE_MISSES.labels(type=cache_type_from_key(cache_key)).inc()
+
+
+def record_upstream_request(source: str, outcome: str) -> None:
+    """Increment the upstream request counter for the given source and outcome."""
+    UPSTREAM_REQUESTS.labels(source=source, outcome=outcome).inc()
+
+
+def observe_upstream_response_age(source: str, duration_seconds: float) -> None:
+    """Record an upstream response latency observation."""
+    UPSTREAM_RESPONSE_AGE.labels(source=source).observe(duration_seconds)
 
 
 def render_metrics() -> tuple[bytes, str]:

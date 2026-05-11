@@ -1,17 +1,34 @@
 """Tests for prometheus metrics module."""
 
 import os
+from typing import Any
 from unittest.mock import patch
+
+from prometheus_client import Histogram
 
 from app.core.metrics import (
     CACHE_HITS,
     CACHE_MISSES,
+    UPSTREAM_REQUESTS,
+    UPSTREAM_RESPONSE_AGE,
     cache_type_from_key,
     mark_worker_dead,
+    observe_upstream_response_age,
     record_cache_hit,
     record_cache_miss,
+    record_upstream_request,
     render_metrics,
 )
+
+
+def _histo_count(histogram: Histogram, **labels: Any) -> float:
+    """Return the current observation count for a labeled histogram via collect()."""
+    target_name = histogram._name + "_count"
+    for metric in histogram.collect():
+        for sample in metric.samples:
+            if sample.name == target_name and all(sample.labels.get(k) == v for k, v in labels.items()):
+                return sample.value
+    return 0.0
 
 
 class TestCacheTypeFromKey:
@@ -161,3 +178,84 @@ class TestMultiprocessMode:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("PROMETHEUS_MULTIPROC_DIR", None)
             _ensure_multiproc_dir()  # no exception
+
+
+class TestRecordUpstreamRequest:
+    """Upstream request counter increments."""
+
+    def test_success_increments_epguides_counter(self) -> None:
+        before = UPSTREAM_REQUESTS.labels(source="epguides", outcome="success")._value.get()
+        record_upstream_request("epguides", "success")
+        after = UPSTREAM_REQUESTS.labels(source="epguides", outcome="success")._value.get()
+        assert after == before + 1
+
+    def test_timeout_increments_epguides_counter(self) -> None:
+        before = UPSTREAM_REQUESTS.labels(source="epguides", outcome="timeout")._value.get()
+        record_upstream_request("epguides", "timeout")
+        after = UPSTREAM_REQUESTS.labels(source="epguides", outcome="timeout")._value.get()
+        assert after == before + 1
+
+    def test_http_error_increments_tvmaze_counter(self) -> None:
+        before = UPSTREAM_REQUESTS.labels(source="tvmaze", outcome="http_error")._value.get()
+        record_upstream_request("tvmaze", "http_error")
+        after = UPSTREAM_REQUESTS.labels(source="tvmaze", outcome="http_error")._value.get()
+        assert after == before + 1
+
+    def test_parse_error_increments_epguides_counter(self) -> None:
+        before = UPSTREAM_REQUESTS.labels(source="epguides", outcome="parse_error")._value.get()
+        record_upstream_request("epguides", "parse_error")
+        after = UPSTREAM_REQUESTS.labels(source="epguides", outcome="parse_error")._value.get()
+        assert after == before + 1
+
+    def test_different_sources_are_separate_series(self) -> None:
+        before_epguides = UPSTREAM_REQUESTS.labels(source="epguides", outcome="success")._value.get()
+        record_upstream_request("tvmaze", "success")
+        after_epguides = UPSTREAM_REQUESTS.labels(source="epguides", outcome="success")._value.get()
+        assert after_epguides == before_epguides, "tvmaze counter must not bump the epguides counter"
+
+
+class TestObserveUpstreamResponseAge:
+    """Upstream response age histogram observations."""
+
+    def test_observe_increments_epguides_sample_count(self) -> None:
+        before = _histo_count(UPSTREAM_RESPONSE_AGE, source="epguides")
+        observe_upstream_response_age("epguides", 0.5)
+        after = _histo_count(UPSTREAM_RESPONSE_AGE, source="epguides")
+        assert after == before + 1
+
+    def test_observe_increments_tvmaze_sample_count(self) -> None:
+        before = _histo_count(UPSTREAM_RESPONSE_AGE, source="tvmaze")
+        observe_upstream_response_age("tvmaze", 1.2)
+        after = _histo_count(UPSTREAM_RESPONSE_AGE, source="tvmaze")
+        assert after == before + 1
+
+    def test_observe_adds_to_sum(self) -> None:
+        before_sum = UPSTREAM_RESPONSE_AGE.labels(source="epguides")._sum.get()
+        observe_upstream_response_age("epguides", 0.75)
+        after_sum = UPSTREAM_RESPONSE_AGE.labels(source="epguides")._sum.get()
+        assert abs(after_sum - before_sum - 0.75) < 1e-6
+
+    def test_different_sources_are_separate_histograms(self) -> None:
+        before_epguides = _histo_count(UPSTREAM_RESPONSE_AGE, source="epguides")
+        observe_upstream_response_age("tvmaze", 0.3)
+        after_epguides = _histo_count(UPSTREAM_RESPONSE_AGE, source="epguides")
+        assert after_epguides == before_epguides
+
+
+class TestUpstreamMetricsInExposition:
+    """Upstream metric names appear in the /metrics exposition output."""
+
+    def test_upstream_request_total_in_output(self) -> None:
+        record_upstream_request("epguides", "success")
+        body, _ = render_metrics()
+        assert b"epguides_upstream_request_total" in body
+
+    def test_upstream_response_age_in_output(self) -> None:
+        observe_upstream_response_age("epguides", 0.1)
+        body, _ = render_metrics()
+        assert b"epguides_upstream_response_age_seconds" in body
+
+    def test_source_label_in_output(self) -> None:
+        record_upstream_request("tvmaze", "success")
+        body, _ = render_metrics()
+        assert b'source="tvmaze"' in body

@@ -16,6 +16,7 @@ import csv
 import io
 import logging
 import re
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,6 +25,7 @@ import httpx
 from app.core.cache import cache
 from app.core.config import settings
 from app.core.constants import CACHE_TTL_SHOWS_METADATA_SECONDS, DATE_FORMATS, EPGUIDES_BASE_URL
+from app.core.metrics import observe_upstream_response_age, record_upstream_request
 
 logger = logging.getLogger(__name__)
 
@@ -96,25 +98,33 @@ async def _fetch_url(url: str) -> httpx.Response | None:
     Fetch URL with standard timeout and error handling.
 
     Returns None on any error (logged with specific error type).
+    Records epguides upstream metrics on every call.
     """
+    start = time.monotonic()
     try:
         async with httpx.AsyncClient(
             follow_redirects=True, timeout=settings.HTTP_TIMEOUT_SECONDS, headers=_DEFAULT_HEADERS
         ) as client:
             response = await client.get(url)
             response.raise_for_status()
+            observe_upstream_response_age("epguides", time.monotonic() - start)
+            record_upstream_request("epguides", "success")
             return response
     except httpx.TimeoutException:
         logger.warning("Timeout fetching %s after %ss", url, settings.HTTP_TIMEOUT_SECONDS)
+        record_upstream_request("epguides", "timeout")
         return None
     except httpx.ConnectError:
         logger.warning("Connection failed for %s (host unreachable or DNS failure)", url)
+        record_upstream_request("epguides", "http_error")
         return None
     except httpx.HTTPStatusError as e:
         logger.warning("HTTP %d from %s: %s", e.response.status_code, url, e)
+        record_upstream_request("epguides", "http_error")
         return None
     except Exception as e:
         logger.error("Unexpected error fetching %s: %s: %s", url, type(e).__name__, e)
+        record_upstream_request("epguides", "http_error")
         return None
 
 
@@ -143,6 +153,7 @@ async def fetch_csv(url: str) -> list[list[str]]:
         return list(csv.reader(io.StringIO(text, newline="")))
     except csv.Error as e:
         logger.error("CSV parse error for %s: %s", url, e)
+        record_upstream_request("epguides", "parse_error")
         return []
 
 
@@ -182,6 +193,38 @@ _TVMAZE_API_URL = "https://api.tvmaze.com"
 
 
 # =============================================================================
+# TVMaze HTTP helper
+# =============================================================================
+
+
+async def _tvmaze_get(url: str, **kwargs: Any) -> httpx.Response | None:
+    """GET a TVMaze API endpoint with metric recording.
+
+    Returns the response on HTTP 200, None on any error or non-200 status.
+    Records tvmaze upstream request and latency metrics.
+    """
+    start = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
+            response = await client.get(url, **kwargs)
+            if response.status_code != 200:
+                record_upstream_request("tvmaze", "http_error")
+                logger.debug("TVMaze %s returned HTTP %d", url, response.status_code)
+                return None
+            observe_upstream_response_age("tvmaze", time.monotonic() - start)
+            record_upstream_request("tvmaze", "success")
+            return response
+    except httpx.TimeoutException:
+        logger.warning("Timeout fetching TVMaze %s", url)
+        record_upstream_request("tvmaze", "timeout")
+        return None
+    except Exception as e:
+        logger.warning("TVMaze fetch error for %s: %s", url, e)
+        record_upstream_request("tvmaze", "http_error")
+        return None
+
+
+# =============================================================================
 # TVMaze Episode Fetching (Fallback)
 # =============================================================================
 
@@ -201,21 +244,14 @@ async def _search_tvmaze_by_title(title: str) -> dict[str, Any] | None:
     if not title:
         return None
 
+    response = await _tvmaze_get(f"{_TVMAZE_API_URL}/singlesearch/shows", params={"q": title})
+    if not response:
+        return None
     try:
-        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
-            response = await client.get(
-                f"{_TVMAZE_API_URL}/singlesearch/shows",
-                params={"q": title},
-            )
-            if response.status_code == 404:
-                return None
-            if response.status_code != 200:
-                logger.warning("TVMaze search failed for '%s': HTTP %d", title, response.status_code)
-                return None
-            result: dict[str, Any] = response.json()
-            return result
+        result: dict[str, Any] = response.json()
+        return result
     except Exception as e:
-        logger.warning("TVMaze search error for '%s': %s", title, e)
+        logger.warning("TVMaze search parse error for '%s': %s", title, e)
         return None
 
 
@@ -232,52 +268,50 @@ async def _fetch_tvmaze_episodes(maze_id: str) -> list[dict[str, Any]]:
     Returns:
         List of episode dicts with season, number, title, release_date, summary, poster_url.
     """
+    response = await _tvmaze_get(f"{_TVMAZE_API_URL}/shows/{maze_id}/episodes")
+    if not response:
+        return []
+
     try:
-        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
-            response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}/episodes")
-            if response.status_code != 200:
-                logger.warning("TVMaze episodes fetch failed: HTTP %d for maze=%s", response.status_code, maze_id)
-                return []
+        tvmaze_episodes = response.json()
+        episodes: list[dict[str, Any]] = []
 
-            tvmaze_episodes = response.json()
-            episodes: list[dict[str, Any]] = []
+        for ep in tvmaze_episodes:
+            season = ep.get("season")
+            number = ep.get("number")
+            name = ep.get("name")
+            airdate = ep.get("airdate")
 
-            for ep in tvmaze_episodes:
-                season = ep.get("season")
-                number = ep.get("number")
-                name = ep.get("name")
-                airdate = ep.get("airdate")
+            # Skip episodes missing required fields
+            if not all([season, number, name, airdate]):
+                continue
 
-                # Skip episodes missing required fields
-                if not all([season, number, name, airdate]):
-                    continue
+            # Clean HTML from summary
+            summary = ep.get("summary") or ""
+            if summary:
+                summary = re.sub(r"<[^>]+>", "", summary).strip()
 
-                # Clean HTML from summary
-                summary = ep.get("summary") or ""
-                if summary:
-                    summary = re.sub(r"<[^>]+>", "", summary).strip()
+            # Extract poster URL
+            image = ep.get("image")
+            poster_url = ""
+            if image:
+                poster_url = image.get("original") or image.get("medium") or ""
 
-                # Extract poster URL
-                image = ep.get("image")
-                poster_url = ""
-                if image:
-                    poster_url = image.get("original") or image.get("medium") or ""
+            episodes.append(
+                {
+                    "season": str(season),
+                    "number": str(number),
+                    "title": name,
+                    "release_date": airdate,
+                    "summary": summary,
+                    "poster_url": poster_url,
+                }
+            )
 
-                episodes.append(
-                    {
-                        "season": str(season),
-                        "number": str(number),
-                        "title": name,
-                        "release_date": airdate,
-                        "summary": summary,
-                        "poster_url": poster_url,
-                    }
-                )
-
-            return episodes
+        return episodes
 
     except Exception as e:
-        logger.warning("TVMaze episodes fetch error for maze=%s: %s", maze_id, e)
+        logger.warning("TVMaze episodes parse error for maze=%s: %s", maze_id, e)
         return []
 
 
@@ -529,53 +563,52 @@ async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: st
     Returns:
         Episodes with 'summary' and 'poster_url' fields added where available.
     """
+    response = await _tvmaze_get(f"{_TVMAZE_API_URL}/shows/{maze_id}/episodes")
+    if not response:
+        return episodes
+
     try:
-        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
-            response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}/episodes")
-            if response.status_code != 200:
-                return episodes
+        tvmaze_episodes = response.json()
 
-            tvmaze_episodes = response.json()
+        # Build lookup by season/episode for summary and image
+        tvmaze_data_map: dict[tuple[int, int], dict[str, str]] = {}
+        for ep in tvmaze_episodes:
+            season = ep.get("season")
+            number = ep.get("number")
+            if not season or not number:
+                continue
 
-            # Build lookup by season/episode for summary and image
-            tvmaze_data_map: dict[tuple[int, int], dict[str, str]] = {}
-            for ep in tvmaze_episodes:
-                season = ep.get("season")
-                number = ep.get("number")
-                if not season or not number:
-                    continue
+            # Extract summary
+            summary = ep.get("summary") or ""
+            if summary:
+                summary = re.sub(r"<[^>]+>", "", summary).strip()
 
-                # Extract summary
-                summary = ep.get("summary") or ""
-                if summary:
-                    summary = re.sub(r"<[^>]+>", "", summary).strip()
+            # Extract episode image (still from the episode)
+            image = ep.get("image")
+            poster_url = ""
+            if image:
+                poster_url = image.get("original") or image.get("medium") or ""
 
-                # Extract episode image (still from the episode)
-                image = ep.get("image")
-                poster_url = ""
-                if image:
-                    poster_url = image.get("original") or image.get("medium") or ""
+            tvmaze_data_map[(season, number)] = {
+                "summary": summary,
+                "poster_url": poster_url,
+            }
 
-                tvmaze_data_map[(season, number)] = {
-                    "summary": summary,
-                    "poster_url": poster_url,
-                }
+        # Merge TVMaze data into episodes
+        for episode in episodes:
+            try:
+                key = (int(episode.get("season", 0)), int(episode.get("number", 0)))
+                tvmaze_ep = tvmaze_data_map.get(key, {})
+                episode["summary"] = tvmaze_ep.get("summary", "")
+                episode["poster_url"] = tvmaze_ep.get("poster_url", "")
+            except ValueError, TypeError:
+                episode["summary"] = ""
+                episode["poster_url"] = ""
 
-            # Merge TVMaze data into episodes
-            for episode in episodes:
-                try:
-                    key = (int(episode.get("season", 0)), int(episode.get("number", 0)))
-                    tvmaze_ep = tvmaze_data_map.get(key, {})
-                    episode["summary"] = tvmaze_ep.get("summary", "")
-                    episode["poster_url"] = tvmaze_ep.get("poster_url", "")
-                except ValueError, TypeError:
-                    episode["summary"] = ""
-                    episode["poster_url"] = ""
-
-            return episodes
+        return episodes
 
     except Exception as e:
-        logger.warning("Failed to fetch TVMaze episode data for maze=%s: %s", maze_id, e)
+        logger.warning("Failed to merge TVMaze episode data for maze=%s: %s", maze_id, e)
         return episodes
 
 
@@ -598,15 +631,14 @@ async def get_tvmaze_show_data(maze_id: str) -> dict[str, Any] | None:
     Returns:
         TVMaze show data dict or None on error.
     """
+    response = await _tvmaze_get(f"{_TVMAZE_API_URL}/shows/{maze_id}")
+    if not response:
+        return None
     try:
-        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
-            response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}")
-            if response.status_code != 200:
-                return None
-            data: dict[str, Any] = response.json()
-            return data
+        data: dict[str, Any] = response.json()
+        return data
     except Exception as e:
-        logger.warning("Failed to fetch TVMaze show data for maze=%s: %s", maze_id, e)
+        logger.warning("Failed to parse TVMaze show data for maze=%s: %s", maze_id, e)
         return None
 
 
@@ -621,15 +653,14 @@ async def get_tvmaze_seasons(maze_id: str) -> list[dict[str, Any]]:
     Returns:
         List of season data dicts with image URLs.
     """
+    response = await _tvmaze_get(f"{_TVMAZE_API_URL}/shows/{maze_id}/seasons")
+    if not response:
+        return []
     try:
-        async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
-            response = await client.get(f"{_TVMAZE_API_URL}/shows/{maze_id}/seasons")
-            if response.status_code != 200:
-                return []
-            data: list[dict[str, Any]] = response.json()
-            return data
+        data: list[dict[str, Any]] = response.json()
+        return data
     except Exception as e:
-        logger.warning("Failed to fetch TVMaze seasons for maze=%s: %s", maze_id, e)
+        logger.warning("Failed to parse TVMaze seasons for maze=%s: %s", maze_id, e)
         return []
 
 
