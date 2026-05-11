@@ -105,8 +105,19 @@ up:
 	@echo ""
 	@make urls
 
+# `dev` is the conventional target name. `up` kept as an alias for
+# existing muscle memory.
+dev: up
+
 down:
 	docker compose down 2>/dev/null; docker compose -f docker-compose.prod.yml down 2>/dev/null
+
+# `stop` is the conventional target name.
+stop: down
+
+# `build` produces the production image without starting containers.
+build:
+	docker compose -f docker-compose.prod.yml build
 
 logs:
 	docker compose logs -f
