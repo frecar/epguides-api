@@ -4,9 +4,40 @@ Exposes cache hit/miss counters that tools (Grafana, Prometheus, etc.)
 can scrape from the `/metrics` endpoint to monitor cache efficiency.
 
 Documented in CLAUDE.md "Observability gaps" section.
+
+## Multi-worker mode
+
+uvicorn runs with `--workers 5` in production (one process per CPU core).
+Each worker has its own in-memory `prometheus_client` registry — without
+coordination, `/metrics` only returns one worker's view and the cluster-
+wide counters are 5x under-reported.
+
+When `PROMETHEUS_MULTIPROC_DIR` is set in the environment, the
+`prometheus_client` library writes counter state to memory-mapped files
+in that directory, one per process. The `/metrics` endpoint aggregates
+across all files via `MultiProcessCollector` to return the correct sum.
+
+In dev (single-worker), the env var is unset and we fall back to the
+default in-process registry — same behavior as before.
 """
 
-from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, Counter, generate_latest
+import os
+
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, Counter, generate_latest, multiprocess
+
+
+def _ensure_multiproc_dir() -> None:
+    """prometheus_client requires PROMETHEUS_MULTIPROC_DIR to exist before any
+    Counter/Gauge/etc. writes to it — the library opens <dir>/counter_<pid>.db
+    files lazily on the first metric mutation. Create the dir if missing so
+    record_cache_hit/miss don't crash with FileNotFoundError on a fresh
+    container (tmpfs starts empty)."""
+    multiproc_dir = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+    if multiproc_dir:
+        os.makedirs(multiproc_dir, exist_ok=True)
+
+
+_ensure_multiproc_dir()
 
 CACHE_HITS = Counter(
     "epguides_cache_hits_total",
@@ -47,9 +78,24 @@ def record_cache_miss(cache_key: str) -> None:
 def render_metrics() -> tuple[bytes, str]:
     """Return the current metrics in Prometheus exposition format.
 
-    Returns a (body, content_type) pair. The endpoint handler is expected
-    to wrap this in a Response with the content type set to the value
-    returned here (the python prometheus_client library defines the exact
-    media type, which has evolved across versions).
+    Returns a (body, content_type) pair. When `PROMETHEUS_MULTIPROC_DIR`
+    is set, aggregates across all worker processes via
+    `MultiProcessCollector`. Otherwise reads from the default in-process
+    registry (single-worker or test mode).
     """
+    if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+        registry = CollectorRegistry()
+        multiprocess.MultiProcessCollector(registry)
+        return generate_latest(registry), CONTENT_TYPE_LATEST
     return generate_latest(REGISTRY), CONTENT_TYPE_LATEST
+
+
+def mark_worker_dead(pid: int) -> None:
+    """Clean up multiprocess metric files for a terminated worker.
+
+    Called on uvicorn worker shutdown to prevent indefinite accumulation
+    of `gauge_*.db` files in `PROMETHEUS_MULTIPROC_DIR`. No-op when
+    multiproc mode is not active.
+    """
+    if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+        multiprocess.mark_process_dead(pid)

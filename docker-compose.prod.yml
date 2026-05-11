@@ -29,6 +29,12 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
       PYTHONOPTIMIZE: "2"
+      # Multi-worker prometheus metric aggregation. prometheus_client writes
+      # counter state to memory-mapped files in this dir, one per uvicorn
+      # worker. The /metrics endpoint reads all files via MultiProcessCollector
+      # to return cluster-wide sums. tmpfs is mounted at /tmp (read_only: true
+      # on the container's root fs, so an in-image path won't work).
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-3600}
