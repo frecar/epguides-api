@@ -44,8 +44,8 @@ can't test it, remove it.
 
 ## Deploy
 
-`./pm services deploy --service epguides --vmid 122 --yes` from asgard.
-Auto-update at 04:00 UTC daily.
+The public instance auto-rebuilds daily. Contributors don't deploy
+manually — merge a PR and the change goes live within a day.
 
 ## Where things live
 

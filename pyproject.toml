@@ -5,7 +5,7 @@ description = "REST API for TV show metadata, episodes, and air dates"
 readme = "README.md"
 requires-python = ">=3.14"
 license = {text = "MIT"}
-authors = [{name = "Fredrik Carlsen", email = "frecar@carlsen.io"}]
+authors = [{name = "Fredrik Carlsen", email = "fredrik@carlsen.io"}]
 keywords = ["tv", "shows", "api", "epguides", "fastapi"]
 
 # Pinned exact versions matching the previous requirements.txt floor.
