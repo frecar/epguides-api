@@ -36,7 +36,7 @@ REST API for TV show metadata, episodes, air dates, and summaries. Also provides
 
 ## Quality baseline
 
-This repo serves as the canonical implementation of a Python-service quality contract:
+This repo defines and adheres to a Python-service quality baseline:
 
 - **Dependency manager:** `uv` with `uv.lock` committed. Docker builds use `uv sync --frozen --no-dev` so any lockfile drift fails the build instead of silently re-resolving.
 - **Lint + format:** `ruff` (target `py313` — `py314` strips parens around `except (A, B):` clauses, which the formatter shouldn't do).
@@ -47,8 +47,8 @@ This repo serves as the canonical implementation of a Python-service quality con
 - **Observability:** `/metrics` endpoint exposes Prometheus exposition format (cache hits/misses by type, upstream request totals by source/outcome, upstream latency histogram). `/health`, `/health/llm`, `/health/cache` return structured JSON.
 - **Docker hardening:** multi-stage build (compile in builder, ship runtime only), non-root user (UID 1000), `no-new-privileges`, healthcheck, log rotation, pinned `python:3.14-slim` base, pinned `ghcr.io/astral-sh/uv:0.11.3` for the uv binary.
 - **Backup tier:** **N/A.** All persistent state is in upstream APIs (epguides.com, TVMaze); cache is Redis-resident and ephemeral. No DB to back up. Documented as a baseline-contract row even when the answer is "nothing to do here."
-- **Makefile contract:** `make help / dev / stop / lint / fix / test / ci / build` work identically to other Python services in the cluster (aliases `up`/`down`/`deploy-prod` retained for existing muscle memory).
-- **Deploy:** auto-update timer rebuilds container daily; manual deploys via the cluster's services CLI.
+- **Makefile contract:** `make help / dev / stop / lint / fix / test / ci / build` — same surface as other Python services I maintain (aliases `up`/`down`/`deploy-prod` retained for existing muscle memory).
+- **Deploy:** auto-update timer rebuilds the container daily.
 
 ## Commands
 
