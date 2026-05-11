@@ -15,6 +15,7 @@ import orjson
 from redis.asyncio import ConnectionPool, Redis
 
 from app.core.config import settings
+from app.core.metrics import record_cache_hit, record_cache_miss
 
 logger = logging.getLogger(__name__)
 
@@ -227,11 +228,13 @@ def cache(
                 cached = await cache_get(cache_key)
                 if cached:
                     try:
+                        record_cache_hit(cache_key)
                         return orjson.loads(cached)  # type: ignore[no-any-return]
                     except orjson.JSONDecodeError as e:
                         # Corrupted JSON - log warning (cache cleared on deployment)
                         logger.warning("Corrupted JSON in cache %s: %s", cache_key, e)
 
+                record_cache_miss(cache_key)
                 result = await func(*args, **kwargs)
                 if result:
                     await cache_set(cache_key, orjson.dumps(result).decode(), ttl_seconds)
@@ -294,6 +297,7 @@ def cached(
             if cached_data:
                 try:
                     data = orjson.loads(cached_data)
+                    record_cache_hit(cache_key)
                     if model:
                         if is_list:
                             return [model(**item) for item in data]  # type: ignore[return-value]
@@ -306,7 +310,8 @@ def cached(
                     # Pydantic validation error - log and continue to fetch fresh
                     logger.warning("Cache validation error for %s: %s", cache_key, e)
 
-            # Cache miss or error - execute function
+            # Cache miss (or corrupted data that fell through) - execute function
+            record_cache_miss(cache_key)
             result = await func(*args, **kwargs)
 
             # Cache the result

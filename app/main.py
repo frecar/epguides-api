@@ -13,12 +13,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from app.api.endpoints import mcp, shows
 from app.core.cache import close_redis_pool, get_cache_stats
 from app.core.config import settings
 from app.core.constants import VERSION
+from app.core.metrics import render_metrics
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware, get_request_id
 from app.exceptions import EpguidesAPIException, ExternalServiceError
 
@@ -380,3 +381,18 @@ async def cache_health_check() -> dict:
     ```
     """
     return await get_cache_stats()
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics() -> Response:
+    """Prometheus-formatted metrics endpoint.
+
+    Returns the current value of all counters defined in `app.core.metrics`.
+    Scraped by a Prometheus server to monitor cache efficiency and (in
+    follow-up work) upstream health.
+
+    Not part of the public API — hidden from the OpenAPI schema so it
+    doesn't clutter the docs. Stable URL convention for Prometheus tooling.
+    """
+    body, content_type = render_metrics()
+    return Response(content=body, media_type=content_type)

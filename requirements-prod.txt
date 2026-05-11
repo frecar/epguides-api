@@ -10,8 +10,9 @@ httpx==0.28.1
 # Utilities
 python-dateutil==2.9.0.post0
 
-# Observability (optional — only active when SENTRY_DSN is set)
-sentry-sdk==2.58.0
+# Observability
+prometheus-client==0.23.1
+sentry-sdk==2.58.0  # optional — only active when SENTRY_DSN is set
 
 # Security fixes
 setuptools==82.0.1
