@@ -19,7 +19,7 @@ from app.api.endpoints import mcp, shows
 from app.core.cache import close_redis_pool, get_cache_stats
 from app.core.config import settings
 from app.core.constants import VERSION
-from app.core.metrics import render_metrics
+from app.core.metrics import mark_worker_dead, render_metrics
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware, get_request_id
 from app.exceptions import EpguidesAPIException, ExternalServiceError
 
@@ -74,6 +74,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     logger.info("Application startup")
     yield
+    # Clean up multiprocess prometheus state for this worker so the
+    # next scrape doesn't double-count dead worker's counters. No-op
+    # in single-process mode (env var unset).
+    mark_worker_dead(os.getpid())
     await close_redis_pool()
     logger.info("Application shutdown complete")
 
