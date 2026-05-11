@@ -41,6 +41,21 @@ async def test_health_check(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_metrics_endpoint(async_client: AsyncClient):
+    """The /metrics endpoint serves Prometheus exposition format."""
+    response = await async_client.get("/metrics")
+    assert response.status_code == 200
+    # Prometheus content-type starts with "text/plain" but includes version params.
+    assert response.headers["content-type"].startswith("text/plain")
+    body = response.text
+    # HELP/TYPE comments and metric names should be present regardless of
+    # whether any traffic has hit a counter yet (prometheus_client emits the
+    # series definition even at zero).
+    assert "epguides_cache_hits_total" in body
+    assert "epguides_cache_misses_total" in body
+
+
+@pytest.mark.asyncio
 async def test_docs_accessible(async_client: AsyncClient):
     """Test API documentation is accessible."""
     response = await async_client.get("/docs")
