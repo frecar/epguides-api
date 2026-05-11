@@ -31,7 +31,13 @@ jobs:
         # upstream fixes that ship in the lockfile. Anything surfacing
         # here is an actual vuln that needs an upgrade, not a silenced
         # workaround.
-        run: uv run pip-audit --strict --desc
+        #
+        # --skip-editable: `uv sync` installs this project (epguides-api)
+        # as an editable install in the venv. pip-audit tries to look up
+        # epguides-api on PyPI and fails since it's not published. The
+        # flag tells pip-audit to skip such projects — we want third-
+        # party CVE coverage, not our own first-party package.
+        run: uv run pip-audit --strict --desc --skip-editable
 
   lint:
     name: Lint
