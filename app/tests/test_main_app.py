@@ -222,6 +222,27 @@ def test_security_headers_present():
     assert response.headers["Strict-Transport-Security"] == "max-age=63072000; includeSubDomains; preload"
 
 
+def test_docs_paths_get_relaxed_csp():
+    """/docs and /redoc need a CSP that allows the jsdelivr CDN + inline init
+    scripts to load Swagger UI / ReDoc assets. Anything else stays strict (#223)."""
+    for path in ("/docs", "/redoc"):
+        response = client.get(path)
+        csp = response.headers["Content-Security-Policy"]
+        # Must allow jsdelivr CDN (where Swagger UI bundle + ReDoc live)
+        assert "https://cdn.jsdelivr.net" in csp, f"{path}: missing CDN allowance ({csp})"
+        # Must allow inline scripts for SwaggerUIBundle / Redoc init blocks
+        assert "'unsafe-inline'" in csp, f"{path}: missing unsafe-inline ({csp})"
+        # Strict default still applies
+        assert "default-src 'none'" in csp, f"{path}: lost default-src 'none' ({csp})"
+
+
+def test_non_docs_paths_keep_strict_csp():
+    """Verify the docs CSP relaxation is path-scoped — non-docs endpoints
+    keep the strict default-src 'none' CSP."""
+    response = client.get("/health")
+    assert response.headers["Content-Security-Policy"] == "default-src 'none'; frame-ancestors 'none'"
+
+
 def test_security_headers_on_error_responses():
     """Test that security headers are present even on error responses."""
     response = client.get("/shows/nonexistentshow")
