@@ -182,6 +182,94 @@ async def search_shows(query: str) -> list[ShowSchema]:
     return await search_shows_fast(query)
 
 
+async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
+    """
+    Look up a show by its IMDB ID and bridge to the local epguides catalog.
+
+    Title search ambiguity is the gap (#229): "The Office" hits both the
+    UK and US versions; "Breaking Bad" hits a remake or fan edit; etc.
+    IMDB ID is unambiguous, so callers with an IMDB ID upstream (Radarr,
+    Sonarr, a personal media library) can bridge it to an `epguides_key`
+    here without title-match guesswork.
+
+    Two-step lookup:
+    1. TVMaze's `/lookup/shows?imdb=<id>` returns the matching show by
+       IMDB ID directly (no fuzzy match needed — it's an indexed lookup).
+    2. The TVMaze response's title is matched against our local epguides
+       catalog. If a local show matches, we return the merged ShowSchema
+       (epguides_key from local + imdb_id from input + TVMaze metadata).
+
+    Returns None if either step fails — TVMaze has no record OR the
+    matched show isn't in our epguides catalog. The endpoint maps None
+    to a 404 with a message distinguishing the two cases.
+
+    Args:
+        imdb_id: IMDB show identifier (e.g. "tt0903747").
+
+    Returns:
+        ShowSchema bridging IMDB ID → epguides_key, or None if no bridge.
+    """
+    tvmaze = await epguides.lookup_tvmaze_by_imdb(imdb_id)
+    if not tvmaze:
+        return None
+
+    title = tvmaze.get("name") or ""
+    if not title:
+        return None
+
+    # Bridge TVMaze title → local epguides catalog. The catalog is cached
+    # in-memory after first load; this is a list scan, not an upstream call.
+    local = await _find_show_by_title(title)
+    if not local:
+        return None
+
+    # Merge: prefer the operator-validated input imdb_id over whatever
+    # TVMaze echoed (they should agree, but trust the user's input).
+    # Other fields come from the local catalog so semantics match what
+    # the normal `/shows/{key}` endpoint would return.
+    return create_show_schema(
+        epguides_key=local.epguides_key,
+        title=local.title,
+        imdb_id=imdb_id,
+        network=local.network,
+        run_time_min=local.run_time_min,
+        start_date=local.start_date,
+        end_date=local.end_date,
+        country=local.country,
+        total_episodes=local.total_episodes,
+        poster_url=local.poster_url,
+    )
+
+
+async def _find_show_by_title(title: str) -> ShowSchema | None:
+    """Best-effort title match against the local epguides catalog.
+
+    Prefers an exact case-insensitive match. Falls back to a substring
+    match (matching show whose title contains the input or vice versa).
+    Used by `get_show_by_imdb_id` to bridge TVMaze→local; not exported.
+    """
+    shows = await get_all_shows()
+    title_lower = title.lower().strip()
+    if not title_lower:
+        return None
+
+    # Pass 1: exact case-insensitive match — the strong signal
+    for show in shows:
+        if show.title.lower().strip() == title_lower:
+            return show
+
+    # Pass 2: title contains query OR query contains title. Handles cases
+    # like "The Office (US)" vs "The Office" where TVMaze and epguides
+    # disambiguate differently. Substring match is safe here because
+    # we've already narrowed to one TVMaze hit by IMDB ID.
+    for show in shows:
+        local_title = show.title.lower().strip()
+        if title_lower in local_title or local_title in title_lower:
+            return show
+
+    return None
+
+
 def _show_ttl(show: ShowSchema | None) -> int | None:
     """Return 1 year TTL for finished shows, else default."""
     return TTL_1_YEAR if show and show.end_date else None

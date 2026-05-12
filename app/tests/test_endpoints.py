@@ -479,6 +479,42 @@ async def test_search_query_too_short(async_client: AsyncClient):
 
 
 # =============================================================================
+# Look-up by IMDB ID (#229)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_show_by_imdb_id")
+async def test_lookup_by_imdb_happy_path(mock_lookup, async_client: AsyncClient):
+    mock_lookup.return_value = create_show_schema(epguides_key="breakingbad", title="Breaking Bad", imdb_id="tt0903747")
+    response = await async_client.get("/shows/by-imdb/tt0903747")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["epguides_key"] == "breakingbad"
+    assert data["imdb_id"] == "tt0903747"
+
+
+@pytest.mark.asyncio
+async def test_lookup_by_imdb_rejects_malformed_id(async_client: AsyncClient):
+    """Format gate — TVMaze would 404 these anyway, but a 400 here is the
+    better operator/UI signal."""
+    for bad in ["nottt0903747", "tt", "0903747", "tt0903a47"]:
+        response = await async_client.get(f"/shows/by-imdb/{bad}")
+        assert response.status_code == 400, f"Expected 400 for {bad!r}, got {response.status_code}"
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_show_by_imdb_id")
+async def test_lookup_by_imdb_not_found(mock_lookup, async_client: AsyncClient):
+    """Service returns None when TVMaze has no record OR the bridge to
+    the local catalog fails — both surface as a 404 here."""
+    mock_lookup.return_value = None
+    response = await async_client.get("/shows/by-imdb/tt9999999")
+    assert response.status_code == 404
+    assert "tt9999999" in response.json()["detail"]
+
+
+# =============================================================================
 # Seasons Endpoint Tests
 # =============================================================================
 

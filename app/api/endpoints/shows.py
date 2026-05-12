@@ -4,6 +4,7 @@ REST API endpoints for TV show operations.
 All endpoints are async and return Pydantic models for automatic validation.
 """
 
+import re
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -14,6 +15,11 @@ from app.models.schemas import EpisodeSchema, SeasonSchema, ShowDetailsSchema, S
 from app.services import llm_service, show_service
 
 router = APIRouter()
+
+# IMDB IDs are `tt` followed by digits — TVMaze accepts arbitrary digit
+# counts (7 is canonical but old/test entries vary). Rejecting non-matching
+# input here gives a 400 instead of letting TVMaze 404 it.
+_IMDB_ID_RE = re.compile(r"^tt\d+$")
 
 
 # =============================================================================
@@ -101,6 +107,57 @@ async def search_shows(
         )
         for show in shows
     ]
+
+
+# MCP tool: lookup_by_imdb_id
+@router.get(
+    "/by-imdb/{imdb_id}",
+    response_model=ShowSchema,
+    summary="🆔 Look up a show by IMDB ID",
+)
+async def get_show_by_imdb_id(
+    imdb_id: str,
+) -> ShowSchema:
+    """
+    **Look up a show by its IMDB ID.**
+
+    Title search is ambiguous ("The Office" → UK or US?); IMDB ID is not.
+    Useful when bridging from another catalog (Radarr, Sonarr, personal
+    library) that already has the IMDB ID.
+
+    ### Path parameter
+
+    `imdb_id` — IMDB show identifier, format `tt` followed by digits.
+
+    ### Examples
+
+    ```
+    GET /shows/by-imdb/tt0903747   → Breaking Bad
+    GET /shows/by-imdb/tt0386676   → The Office (US)
+    GET /shows/by-imdb/tt0290978   → The Office (UK)
+    ```
+
+    ### Errors
+
+    - **400** if `imdb_id` is malformed (must match `^tt\\d+$`)
+    - **404** if no show found — either TVMaze has no record or the
+      matched show isn't in the epguides catalog
+    """
+    # Format gate: TVMaze rejects garbage anyway, but a 400 here is a
+    # better operator/UI signal than letting the 404 fall through.
+    if not _IMDB_ID_RE.match(imdb_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid IMDB ID format: {imdb_id!r} (expected 'tt' followed by digits)",
+        )
+
+    show = await show_service.get_show_by_imdb_id(imdb_id)
+    if not show:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No show found for IMDB ID: {imdb_id}",
+        )
+    return show
 
 
 # =============================================================================

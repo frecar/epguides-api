@@ -2770,3 +2770,95 @@ def test_parse_date_invalid_format():
     result = show_service._parse_date("not a date")
 
     assert result is None
+
+
+# =============================================================================
+# get_show_by_imdb_id + _find_show_by_title (#229)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)
+@patch("app.services.epguides.get_all_shows_metadata")
+@patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
+async def test_get_show_by_imdb_id_happy_path(mock_lookup, mock_metadata, _mock_get, _mock_set):
+    """TVMaze returns a hit, title bridges to local catalog → merged ShowSchema."""
+    mock_lookup.return_value = {"name": "Breaking Bad"}
+    mock_metadata.return_value = [
+        {"directory": "breakingbad", "title": "Breaking Bad", "network": "AMC", "run time": "60 min"},
+        {"directory": "got", "title": "Game of Thrones", "network": "HBO", "run time": "60 min"},
+    ]
+
+    result = await show_service.get_show_by_imdb_id("tt0903747")
+    assert result is not None
+    assert result.epguides_key == "breakingbad"
+    assert result.imdb_id == "tt0903747"
+    assert result.title == "Breaking Bad"
+    assert result.network == "AMC"
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
+async def test_get_show_by_imdb_id_tvmaze_404(mock_lookup):
+    """TVMaze has no record for this IMDB ID → None."""
+    mock_lookup.return_value = None
+    assert await show_service.get_show_by_imdb_id("tt9999999") is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
+async def test_get_show_by_imdb_id_tvmaze_missing_name(mock_lookup):
+    """TVMaze hit but no `name` field → cannot bridge → None."""
+    mock_lookup.return_value = {"id": 1}
+    assert await show_service.get_show_by_imdb_id("tt0903747") is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)
+@patch("app.services.epguides.get_all_shows_metadata")
+@patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
+async def test_get_show_by_imdb_id_not_in_local_catalog(mock_lookup, mock_metadata, _mock_get, _mock_set):
+    """TVMaze knows the show but the local epguides catalog doesn't → None."""
+    mock_lookup.return_value = {"name": "An Obscure Show That epguides Lacks"}
+    mock_metadata.return_value = [
+        {"directory": "got", "title": "Game of Thrones", "network": "HBO", "run time": "60 min"},
+    ]
+
+    assert await show_service.get_show_by_imdb_id("tt7777777") is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)
+@patch("app.services.epguides.get_all_shows_metadata")
+async def test_find_show_by_title_substring_fallback(mock_metadata, _mock_get, _mock_set):
+    """The local catalog title may be 'The Office (US)' while TVMaze returns
+    'The Office'. Substring fallback should still bridge — that's the
+    disambiguation TVMaze already did for us by indexing on IMDB ID."""
+    mock_metadata.return_value = [
+        {"directory": "theofficeus", "title": "The Office (US)", "network": "NBC", "run time": "30 min"},
+    ]
+
+    result = await show_service._find_show_by_title("The Office")
+    assert result is not None
+    assert result.epguides_key == "theofficeus"
+
+
+@pytest.mark.asyncio
+async def test_find_show_by_title_empty_input_returns_none():
+    """Empty / whitespace title → None without scanning the catalog."""
+    assert await show_service._find_show_by_title("") is None
+    assert await show_service._find_show_by_title("   ") is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)
+@patch("app.services.epguides.get_all_shows_metadata")
+async def test_find_show_by_title_no_match(mock_metadata, _mock_get, _mock_set):
+    mock_metadata.return_value = [
+        {"directory": "got", "title": "Game of Thrones", "network": "HBO", "run time": "60 min"},
+    ]
+    assert await show_service._find_show_by_title("Completely Unrelated Title") is None

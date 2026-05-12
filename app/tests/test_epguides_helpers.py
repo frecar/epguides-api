@@ -762,3 +762,64 @@ async def test_get_tvmaze_seasons_handles_json_parse_error(mock_client_class, _m
 
     result = await epguides.get_tvmaze_seasons("badjson_show")
     assert result == []
+
+
+# =============================================================================
+# lookup_tvmaze_by_imdb (#229)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_lookup_tvmaze_by_imdb_empty_input_short_circuits():
+    """No upstream call for empty imdb_id — saves a known-bad request."""
+    assert await epguides.lookup_tvmaze_by_imdb("") is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_lookup_tvmaze_by_imdb_happy_path(mock_client_class):
+    """TVMaze lookup returns the parsed JSON on 200."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"name": "Breaking Bad", "externals": {"imdb": "tt0903747"}}
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    result = await epguides.lookup_tvmaze_by_imdb("tt0903747")
+    assert result == {"name": "Breaking Bad", "externals": {"imdb": "tt0903747"}}
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_lookup_tvmaze_by_imdb_returns_none_on_non_200(mock_client_class):
+    """404 / 500 / etc → None. The wrapper _tvmaze_get already returns None
+    on non-200; this checks the helper composes correctly."""
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    assert await epguides.lookup_tvmaze_by_imdb("tt9999999") is None
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_lookup_tvmaze_by_imdb_returns_none_on_parse_error(mock_client_class):
+    """response.json() raising should be caught — defensive against weird
+    upstream payloads."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.side_effect = ValueError("not json")
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+
+    assert await epguides.lookup_tvmaze_by_imdb("tt0903747") is None
