@@ -2799,17 +2799,24 @@ async def test_get_show_by_imdb_id_happy_path(mock_lookup, mock_metadata, _mock_
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.cache_get", return_value=None)  # Stage 1 (reverse index) miss
 @patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
-async def test_get_show_by_imdb_id_tvmaze_404(mock_lookup):
+async def test_get_show_by_imdb_id_tvmaze_404(mock_lookup, _mock_cache_get):
     """TVMaze has no record for this IMDB ID → None."""
     mock_lookup.return_value = None
     assert await show_service.get_show_by_imdb_id("tt9999999") is None
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.cache_get", return_value=None)  # Stage 1 (reverse index) miss
 @patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
-async def test_get_show_by_imdb_id_tvmaze_missing_name(mock_lookup):
-    """TVMaze hit but no `name` field → cannot bridge → None."""
+async def test_get_show_by_imdb_id_tvmaze_missing_name(mock_lookup, _mock_cache_get):
+    """TVMaze hit but no `name` field → cannot bridge → None.
+
+    Explicitly patches cache_get so Stage 1 (reverse index) misses and
+    we fall through to TVMaze. CI has a real Redis that other tests
+    populate during their runs; without this patch the test depended
+    on test ordering."""
     mock_lookup.return_value = {"id": 1}
     assert await show_service.get_show_by_imdb_id("tt0903747") is None
 
