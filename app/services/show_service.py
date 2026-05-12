@@ -182,6 +182,27 @@ async def search_shows(query: str) -> list[ShowSchema]:
     return await search_shows_fast(query)
 
 
+# Reverse index `imdb_id → epguides_key`. Populated lazily by `get_show`
+# (every time a show is enriched with its imdb_id, we record the mapping).
+# Long TTL because an imdb_id ↔ epguides_key binding is essentially static.
+_IMDB_INDEX_KEY = "imdb_to_key:{imdb_id}"
+
+
+async def _index_show_by_imdb(epguides_key: str, imdb_id: str | None) -> None:
+    """Record `imdb_id → epguides_key` mapping in cache for reverse lookups."""
+    if not imdb_id or not epguides_key:
+        return
+    await cache_set(_IMDB_INDEX_KEY.format(imdb_id=imdb_id), epguides_key, TTL_1_YEAR)
+
+
+async def _lookup_local_by_imdb(imdb_id: str) -> ShowSchema | None:
+    """Read the imdb_to_key reverse index, then load the full show."""
+    epguides_key = await cache_get(_IMDB_INDEX_KEY.format(imdb_id=imdb_id))
+    if not epguides_key:
+        return None
+    return await get_show(epguides_key)
+
+
 async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
     """
     Look up a show by its IMDB ID and bridge to the local epguides catalog.
@@ -189,19 +210,28 @@ async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
     Title search ambiguity is the gap (#229): "The Office" hits both the
     UK and US versions; "Breaking Bad" hits a remake or fan edit; etc.
     IMDB ID is unambiguous, so callers with an IMDB ID upstream (Radarr,
-    Sonarr, a personal media library) can bridge it to an `epguides_key`
-    here without title-match guesswork.
+    Sonarr, a personal media library) can bridge it to an `epguides_key`.
 
-    Two-step lookup:
-    1. TVMaze's `/lookup/shows?imdb=<id>` returns the matching show by
-       IMDB ID directly (no fuzzy match needed — it's an indexed lookup).
-    2. The TVMaze response's title is matched against our local epguides
-       catalog. If a local show matches, we return the merged ShowSchema
-       (epguides_key from local + imdb_id from input + TVMaze metadata).
+    Two-stage lookup:
 
-    Returns None if either step fails — TVMaze has no record OR the
-    matched show isn't in our epguides catalog. The endpoint maps None
-    to a 404 with a message distinguishing the two cases.
+    1. **Local reverse index first** — `imdb_to_key:{imdb_id}` cache lookup,
+       populated lazily by `get_show` every time a show is enriched with
+       its imdb_id. Covers any show that's been visited at least once via
+       `/shows/{key}`. Fast: single Redis GET + cached `get_show` call.
+
+    2. **TVMaze fallback** — `/lookup/shows?imdb=<id>` returns the matching
+       show by IMDB ID directly, then bridges via title to the local
+       catalog. Covers shows the reverse index hasn't seen yet, IF
+       TVMaze has them indexed by IMDB.
+
+    Why two stages: TVMaze doesn't index every IMDB ID. #229 follow-up
+    (Chicago Fire, tt2261391) exposed this — the show is in our local
+    catalog WITH the correct imdb_id, but TVMaze returns null on the
+    /lookup/shows?imdb= query. The reverse index closes this gap for
+    any show that's been visited via the standard /shows/{key} endpoint.
+
+    Returns None only when both stages fail. The endpoint maps None to
+    a 404.
 
     Args:
         imdb_id: IMDB show identifier (e.g. "tt0903747").
@@ -209,6 +239,28 @@ async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
     Returns:
         ShowSchema bridging IMDB ID → epguides_key, or None if no bridge.
     """
+    # Stage 1: local reverse index (warm shows we've already enriched)
+    local = await _lookup_local_by_imdb(imdb_id)
+    if local:
+        # The index says this imdb_id maps to local.epguides_key; trust
+        # the binding. Use the input imdb_id verbatim in case the local
+        # record's imdb_id is stale or missing.
+        if local.imdb_id != imdb_id:
+            local = create_show_schema(
+                epguides_key=local.epguides_key,
+                title=local.title,
+                imdb_id=imdb_id,
+                network=local.network,
+                run_time_min=local.run_time_min,
+                start_date=local.start_date,
+                end_date=local.end_date,
+                country=local.country,
+                total_episodes=local.total_episodes,
+                poster_url=local.poster_url,
+            )
+        return local
+
+    # Stage 2: TVMaze fallback for shows the index hasn't seen yet
     tvmaze = await epguides.lookup_tvmaze_by_imdb(imdb_id)
     if not tvmaze:
         return None
@@ -217,27 +269,26 @@ async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
     if not title:
         return None
 
-    # Bridge TVMaze title → local epguides catalog. The catalog is cached
-    # in-memory after first load; this is a list scan, not an upstream call.
-    local = await _find_show_by_title(title)
-    if not local:
+    # Bridge TVMaze title → local epguides catalog
+    by_title = await _find_show_by_title(title)
+    if not by_title:
         return None
 
-    # Merge: prefer the operator-validated input imdb_id over whatever
-    # TVMaze echoed (they should agree, but trust the user's input).
-    # Other fields come from the local catalog so semantics match what
-    # the normal `/shows/{key}` endpoint would return.
+    # Populate the reverse index opportunistically so future lookups for
+    # this imdb_id hit Stage 1 directly.
+    await _index_show_by_imdb(by_title.epguides_key, imdb_id)
+
     return create_show_schema(
-        epguides_key=local.epguides_key,
-        title=local.title,
+        epguides_key=by_title.epguides_key,
+        title=by_title.title,
         imdb_id=imdb_id,
-        network=local.network,
-        run_time_min=local.run_time_min,
-        start_date=local.start_date,
-        end_date=local.end_date,
-        country=local.country,
-        total_episodes=local.total_episodes,
-        poster_url=local.poster_url,
+        network=by_title.network,
+        run_time_min=by_title.run_time_min,
+        start_date=by_title.start_date,
+        end_date=by_title.end_date,
+        country=by_title.country,
+        total_episodes=by_title.total_episodes,
+        poster_url=by_title.poster_url,
     )
 
 
@@ -292,7 +343,16 @@ async def get_show(show_id: str) -> ShowSchema | None:
     if not show:
         return None
 
-    return await _enrich_show_metadata(show, normalized_id)
+    enriched = await _enrich_show_metadata(show, normalized_id)
+
+    # Populate the imdb_id → epguides_key reverse index so `get_show_by_imdb_id`
+    # can find this show by its IMDB ID without depending on TVMaze having
+    # indexed it. Asgard issue #229 (Chicago Fire) — TVMaze didn't have the
+    # show indexed by tt2261391; this index closes that gap.
+    if enriched and enriched.imdb_id:
+        await _index_show_by_imdb(enriched.epguides_key, enriched.imdb_id)
+
+    return enriched
 
 
 def _episodes_ttl(episodes: list[EpisodeSchema]) -> int | None:

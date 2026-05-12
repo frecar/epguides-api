@@ -2831,9 +2831,134 @@ async def test_get_show_by_imdb_id_not_in_local_catalog(mock_lookup, mock_metada
 
 @pytest.mark.asyncio
 @patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.get_show", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_get")
+async def test_get_show_by_imdb_id_local_index_hit(mock_cache_get, mock_get_show, _mock_set):
+    """Stage 1: reverse index hit → return get_show(key) result without TVMaze.
+
+    Closes the Chicago Fire gap (#229) where TVMaze doesn't index the
+    IMDB ID but the local catalog has it.
+    """
+    mock_cache_get.return_value = "chicagofire"
+    from app.models.schemas import create_show_schema as _make
+
+    mock_get_show.return_value = _make(
+        epguides_key="chicagofire",
+        title="Chicago Fire",
+        imdb_id="tt2261391",
+        network="NBC",
+    )
+
+    result = await show_service.get_show_by_imdb_id("tt2261391")
+    assert result is not None
+    assert result.epguides_key == "chicagofire"
+    assert result.imdb_id == "tt2261391"
+    mock_cache_get.assert_called_once_with("imdb_to_key:tt2261391")
+    mock_get_show.assert_called_once_with("chicagofire")
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.get_show", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_get")
+async def test_get_show_by_imdb_id_local_index_hit_stale_imdb(mock_cache_get, mock_get_show, _mock_set):
+    """Stage 1 hit, but the cached show's imdb_id differs from input — trust
+    the input + repopulate the merged schema. Edge case where the index was
+    populated for a different imdb_id alias before the local imdb_id was set.
+    """
+    mock_cache_get.return_value = "chicagofire"
+    from app.models.schemas import create_show_schema as _make
+
+    mock_get_show.return_value = _make(
+        epguides_key="chicagofire",
+        title="Chicago Fire",
+        imdb_id=None,  # stale local record without imdb_id
+        network="NBC",
+    )
+
+    result = await show_service.get_show_by_imdb_id("tt2261391")
+    assert result is not None
+    assert result.imdb_id == "tt2261391"  # trusted the input
+    assert result.epguides_key == "chicagofire"
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.get_show", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_get")
+async def test_get_show_by_imdb_id_local_index_stale_key_returns_none(mock_cache_get, mock_get_show, _mock_set):
+    """Reverse index points to an epguides_key whose show was deleted from
+    the catalog — fall through to TVMaze, not crash. cache_get returns the
+    key but get_show returns None."""
+    mock_cache_get.side_effect = lambda k: "deletedshow" if "imdb_to_key" in k else None
+    mock_get_show.return_value = None
+
+    with patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock) as mock_lookup:
+        mock_lookup.return_value = None
+        result = await show_service.get_show_by_imdb_id("tt2261391")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+async def test_index_show_by_imdb_no_op_on_empty(mock_cache_set):
+    """_index_show_by_imdb skips empty / None inputs (defensive)."""
+    await show_service._index_show_by_imdb("", "tt1234567")
+    await show_service._index_show_by_imdb("breakingbad", None)
+    await show_service._index_show_by_imdb("", None)
+    mock_cache_set.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+async def test_index_show_by_imdb_writes_when_both_present(mock_cache_set):
+    """_index_show_by_imdb writes the index entry when both inputs are set."""
+    await show_service._index_show_by_imdb("breakingbad", "tt0903747")
+    mock_cache_set.assert_called_once()
+    args = mock_cache_set.call_args[0]
+    assert args[0] == "imdb_to_key:tt0903747"
+    assert args[1] == "breakingbad"
+
+
+@pytest.mark.asyncio
 @patch("app.services.show_service.cache_get", return_value=None)
+async def test_lookup_local_by_imdb_miss(_mock_get):
+    """_lookup_local_by_imdb returns None when reverse index has no entry."""
+    result = await show_service._lookup_local_by_imdb("tt0000000")
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
 @patch("app.services.epguides.get_all_shows_metadata")
-async def test_find_show_by_title_substring_fallback(mock_metadata, _mock_get, _mock_set):
+@patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_get")
+async def test_get_show_by_imdb_id_tvmaze_path_populates_reverse_index(
+    mock_cache_get, mock_lookup, mock_metadata, mock_cache_set
+):
+    """When TVMaze stage succeeds and bridges to a local show, the reverse
+    index is populated so future lookups skip TVMaze."""
+    mock_cache_get.return_value = None  # reverse index miss
+    mock_lookup.return_value = {"name": "Breaking Bad"}
+    mock_metadata.return_value = [
+        {"directory": "breakingbad", "title": "Breaking Bad", "network": "AMC", "run time": "60 min"},
+    ]
+
+    result = await show_service.get_show_by_imdb_id("tt0903747")
+    assert result is not None
+    # Verify the index was written
+    write_calls = [c for c in mock_cache_set.call_args_list if c.args[0].startswith("imdb_to_key:")]
+    assert len(write_calls) == 1
+    assert write_calls[0].args[0] == "imdb_to_key:tt0903747"
+    assert write_calls[0].args[1] == "breakingbad"
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.cache_set")
+@patch("app.services.epguides.get_all_shows_metadata")
+@patch("app.services.show_service.cache_get", return_value=None)
+async def test_find_show_by_title_substring_fallback(mock_get, mock_metadata, _mock_set):
     """The local catalog title may be 'The Office (US)' while TVMaze returns
     'The Office'. Substring fallback should still bridge — that's the
     disambiguation TVMaze already did for us by indexing on IMDB ID."""
