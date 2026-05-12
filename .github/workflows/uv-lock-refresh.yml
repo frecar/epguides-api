@@ -1,0 +1,68 @@
+name: uv lock refresh
+
+# Closes the systemic gap from asgard#693: Dependabot widens pyproject.toml
+# constraints, but uv.lock isn't regenerated. `uv sync --frozen` then keeps
+# installing the OLD locked version even though pyproject permits newer.
+# This workflow runs `uv lock --upgrade` weekly and opens a PR if anything
+# changed — bringing lock state in line with pyproject ceilings.
+#
+# Scheduled 06:30 UTC Monday — 2.5h after dependabot's 04:00 weekly run
+# (defined in .github/dependabot.yml) so the constraint-widening PRs land
+# first. The auto-merge workflow approves them on the same cycle; by 06:30
+# main has the new pyproject and this workflow opens a follow-up to
+# refresh the lock.
+
+on:
+  schedule:
+    - cron: "30 6 * * 1"   # Monday 06:30 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Need full history so create-pull-request can compute the diff
+          # against main correctly when re-running on an existing PR.
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Refresh lock against current pyproject
+        run: uv lock --upgrade
+
+      - name: Open or update PR if lock changed
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/uv-lock-refresh
+          delete-branch: true
+          commit-message: "chore(deps): refresh uv.lock against current constraints"
+          title: "chore(deps): refresh uv.lock"
+          body: |
+            Automated weekly refresh of `uv.lock` to catch up with constraint
+            widenings landed by Dependabot since the last run. Opened by
+            `.github/workflows/uv-lock-refresh.yml`.
+
+            If this PR is empty (no lock changes), the workflow won't open it
+            at all — `create-pull-request` is a no-op when the working tree
+            matches main.
+
+            Review notes:
+            - Lock-only changes are safe to merge on green CI.
+            - If a transitive bump tightens type-stub generics (e.g.
+              django-stubs 6.0.3 → 6.0.4 surfaced the `AdminSite.register`
+              regression in portal#276), the type-check job will catch it.
+              Fix at the source rather than reverting the bump.
+
+            Refs asgard#693.
+          labels: |
+            dependencies
+            automated
