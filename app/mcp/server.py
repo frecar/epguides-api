@@ -44,6 +44,25 @@ _TOOLS = [
         },
     },
     {
+        "name": "lookup_by_imdb_id",
+        "description": (
+            "Look up a show by its IMDB ID. Bridges an IMDB identifier "
+            "(e.g. 'tt0903747') to the show's epguides_key, removing the "
+            "title-search ambiguity between remakes/originals."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "imdb_id": {
+                    "type": "string",
+                    "description": "IMDB show identifier (format: 'tt' followed by digits)",
+                    "pattern": "^tt\\d+$",
+                }
+            },
+            "required": ["imdb_id"],
+        },
+    },
+    {
         "name": "get_show",
         "description": "Get detailed information about a specific TV show",
         "inputSchema": {
@@ -259,6 +278,7 @@ class MCPServer:
         # Route to tool handler
         tool_handlers = {
             "search_shows": self._tool_search_shows,
+            "lookup_by_imdb_id": self._tool_lookup_by_imdb_id,
             "get_show": self._tool_get_show,
             "get_episodes": self._tool_get_episodes,
             "get_next_episode": self._tool_get_next_episode,
@@ -286,6 +306,16 @@ class MCPServer:
         shows = await show_service.search_shows(query)
         result = [show.model_dump() for show in shows[:50]]
         return self._success(self._text_content(json.dumps(result, indent=2, default=str)))
+
+    async def _tool_lookup_by_imdb_id(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Bridge an IMDB ID to the show's epguides_key (mirrors REST /shows/by-imdb/{imdb_id})."""
+        imdb_id = args.get("imdb_id", "").strip()
+        if not imdb_id:
+            return self._error(_ERROR_INVALID_PARAMS, "imdb_id is required")
+        show = await show_service.get_show_by_imdb_id(imdb_id)
+        if not show:
+            return self._error(_ERROR_INVALID_PARAMS, f"No show found for IMDB ID: {imdb_id}")
+        return self._success(self._text_content(json.dumps(show.model_dump(), indent=2, default=str)))
 
     async def _tool_get_show(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get show details."""

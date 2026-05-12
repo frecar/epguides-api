@@ -81,6 +81,67 @@ async def test_mcp_endpoint_search_shows(mock_search_shows, async_client: AsyncC
 
 
 @pytest.mark.asyncio
+@patch("app.mcp.server.show_service.get_show_by_imdb_id")
+async def test_mcp_endpoint_lookup_by_imdb_id(mock_lookup, async_client: AsyncClient):
+    """MCP tool `lookup_by_imdb_id` returns the bridged ShowSchema."""
+    mock_lookup.return_value = create_show_schema(epguides_key="breakingbad", title="Breaking Bad", imdb_id="tt0903747")
+    request = {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "lookup_by_imdb_id",
+            "arguments": {"imdb_id": "tt0903747"},
+        },
+    }
+    response = await async_client.post("/mcp", json=request)
+    assert response.status_code == 200
+    data = response.json()
+    assert "result" in data
+    assert "content" in data["result"]
+    # Round-trip the JSON in the text content to confirm the bridge succeeded
+    import json as _json
+
+    payload = _json.loads(data["result"]["content"][0]["text"])
+    assert payload["epguides_key"] == "breakingbad"
+    assert payload["imdb_id"] == "tt0903747"
+
+
+@pytest.mark.asyncio
+async def test_mcp_endpoint_lookup_by_imdb_id_missing_arg(async_client: AsyncClient):
+    """Empty imdb_id → invalid_params, NOT a bare exception."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {"name": "lookup_by_imdb_id", "arguments": {}},
+    }
+    response = await async_client.post("/mcp", json=request)
+    assert response.status_code == 200
+    data = response.json()
+    assert "error" in data
+    assert "imdb_id" in data["error"]["message"]
+
+
+@pytest.mark.asyncio
+@patch("app.mcp.server.show_service.get_show_by_imdb_id")
+async def test_mcp_endpoint_lookup_by_imdb_id_not_found(mock_lookup, async_client: AsyncClient):
+    """Service returns None → MCP returns an error (mirrors REST's 404)."""
+    mock_lookup.return_value = None
+    request = {
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {"name": "lookup_by_imdb_id", "arguments": {"imdb_id": "tt9999999"}},
+    }
+    response = await async_client.post("/mcp", json=request)
+    assert response.status_code == 200
+    data = response.json()
+    assert "error" in data
+    assert "tt9999999" in data["error"]["message"]
+
+
+@pytest.mark.asyncio
 async def test_mcp_endpoint_invalid_json(async_client: AsyncClient):
     """Test MCP endpoint with invalid JSON."""
     response = await async_client.post(

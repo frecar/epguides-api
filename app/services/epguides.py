@@ -255,6 +255,37 @@ async def _search_tvmaze_by_title(title: str) -> dict[str, Any] | None:
         return None
 
 
+async def lookup_tvmaze_by_imdb(imdb_id: str) -> dict[str, Any] | None:
+    """
+    Look up a TVMaze show by its IMDB ID.
+
+    Uses the documented TVMaze /lookup/shows?imdb=<id> endpoint, which is
+    indexed and returns the matching show directly — no fuzzy title match.
+    Closes the user-reported gap (#229): title search can hit the remake
+    instead of the original; IMDB ID is unambiguous.
+
+    Args:
+        imdb_id: IMDB show identifier, e.g. "tt0903747" (Breaking Bad).
+            Format is validated upstream of this helper.
+
+    Returns:
+        TVMaze show data dict on a hit, or None if TVMaze has no match
+        (404) or the lookup failed (timeout, parse, etc).
+    """
+    if not imdb_id:
+        return None
+
+    response = await _tvmaze_get(f"{_TVMAZE_API_URL}/lookup/shows", params={"imdb": imdb_id})
+    if not response:
+        return None
+    try:
+        result: dict[str, Any] = response.json()
+        return result
+    except Exception as e:
+        logger.warning("TVMaze imdb lookup parse error for '%s': %s", imdb_id, e)
+        return None
+
+
 async def _fetch_tvmaze_episodes(maze_id: str) -> list[dict[str, Any]]:
     """
     Fetch all episodes for a show from TVMaze.
