@@ -333,8 +333,8 @@ def _show_ttl(show: ShowSchema | None) -> int | None:
     key_transform=normalize_show_id,
     ttl_if=_show_ttl,
 )
-async def get_show(show_id: str) -> ShowSchema | None:
-    """Get enriched show metadata. TTL: 7 days (ongoing) or 1 year (finished)."""
+async def _get_show_cached(show_id: str) -> ShowSchema | None:
+    """Cached inner: fetch + enrich. Wrapped by `get_show` for index hygiene."""
     normalized_id = normalize_show_id(show_id)
 
     show = await _get_show_by_key(normalized_id)
@@ -343,16 +343,29 @@ async def get_show(show_id: str) -> ShowSchema | None:
     if not show:
         return None
 
-    enriched = await _enrich_show_metadata(show, normalized_id)
+    return await _enrich_show_metadata(show, normalized_id)
 
-    # Populate the imdb_id → epguides_key reverse index so `get_show_by_imdb_id`
-    # can find this show by its IMDB ID without depending on TVMaze having
-    # indexed it. Asgard issue #229 (Chicago Fire) — TVMaze didn't have the
-    # show indexed by tt2261391; this index closes that gap.
-    if enriched and enriched.imdb_id:
-        await _index_show_by_imdb(enriched.epguides_key, enriched.imdb_id)
 
-    return enriched
+async def get_show(show_id: str) -> ShowSchema | None:
+    """
+    Get enriched show metadata. TTL: 7 days (ongoing) or 1 year (finished).
+
+    Wraps `_get_show_cached` to ensure the `imdb_id → epguides_key` reverse
+    index stays populated even on cache HITS. The previous implementation
+    indexed inside the cached function body, which only ran on cache miss —
+    so any show whose data was already cached had no index entry, breaking
+    `/shows/by-imdb/<imdb_id>` for that show until the cache TTL expired.
+
+    Check-first pattern avoids a redundant Redis SET on every hot call: read
+    the index, write only if missing. Single Redis GET per call is cheap;
+    SET only happens once per (imdb_id, epguides_key) binding lifetime.
+    """
+    show = await _get_show_cached(show_id)
+    if show and show.imdb_id:
+        existing = await cache_get(_IMDB_INDEX_KEY.format(imdb_id=show.imdb_id))
+        if not existing:
+            await _index_show_by_imdb(show.epguides_key, show.imdb_id)
+    return show
 
 
 def _episodes_ttl(episodes: list[EpisodeSchema]) -> int | None:
