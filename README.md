@@ -49,7 +49,23 @@ curl "https://epguides.frecar.no/shows/BreakingBad/episodes?season=5"
 
 # Get next episode
 curl "https://epguides.frecar.no/shows/Severance/episodes/next"
+
+# Look up a show by IMDB ID (stable, immutable identifier)
+curl "https://epguides.frecar.no/shows/by-imdb/tt0903747"
 ```
+
+## Stable identifiers for downstream services
+
+The API has two identifiers per show — pick deliberately based on what you're doing.
+
+| Identifier | Example | Stability | When to use |
+|---|---|---|---|
+| `epguides_key` | `BreakingBad` | Tied to epguides.com directory name. If they rename the directory, references silently 404 with no signal. | Display in URLs, human-readable IDs, one-shot lookups. |
+| `imdb_id` | `tt0903747` | IMDB IDs are immutable. Once assigned, they don't change. | **Persisting references in another service's database.** Cross-source bridges (TMDB ↔ TVDB ↔ this API). Anywhere a stored reference outlives a single request. |
+
+**Recommendation**: if your service stores show references that need to survive across releases (user watchlists, notification subscriptions, scraper indexes), persist `imdb_id` and resolve to `epguides_key` at read time via `GET /shows/by-imdb/{imdb_id}`.
+
+The reverse index is populated lazily — the first `/shows/{key}` lookup that resolves an IMDB ID writes the index entry, and subsequent `/shows/by-imdb/{imdb_id}` calls hit it directly. New shows you've never queried by key won't have an index entry yet; the endpoint falls back to a search on cache miss.
 
 ## MCP (for AI assistants)
 
