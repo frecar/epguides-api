@@ -39,7 +39,7 @@ jobs:
         run: uv lock --upgrade
 
       - name: Open or update PR if lock changed
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: chore/uv-lock-refresh
