@@ -348,7 +348,7 @@ def llm_health_check() -> dict[str, str | bool]:
     {
       "enabled": true,
       "configured": true,
-      "api_url": "https://api.openai.com/v1"
+      "api_url": "https://your-llm-endpoint.example/v1"
     }
     ```
 
