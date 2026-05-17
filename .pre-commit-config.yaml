@@ -69,3 +69,10 @@ repos:
         language: system
         always_run: true
         stages: [commit-msg]
+
+      - id: no-external-llm
+        name: "Cluster LLM policy lint"  # llm-policy: ignore
+        entry: python3 scripts/check_no_external_llm.py
+        language: system
+        pass_filenames: true
+        stages: [pre-commit]
