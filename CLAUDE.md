@@ -7,6 +7,10 @@ REST API for TV show metadata, episodes, air dates, and summaries. Also provides
 - **Branching:** Work primarily on `main`. Always pull latest before starting.
 - **Pre-commit:** Ensure pre-commit hooks pass before pushing.
 
+## LLM Policy
+- Route model-assisted features through `llm.carlsen.io`.
+- Do not add Claude/OpenAI/Anthropic external API endpoints or runtime fallbacks. `scripts/check_no_external_llm.py` enforces this in pre-commit and CI (asgard#833).
+
 ## Deployment
 
 All changes flow through git. Deployment automation is operator-side and
