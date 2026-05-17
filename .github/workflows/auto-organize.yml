@@ -1,0 +1,63 @@
+# auto-organize — enforce issue-hygiene on every new/edited issue.
+#
+# Documented in ~/.claude/CLAUDE.md "Filing checklist". Fellowship-designed
+# 2026-05-17 (asgard#836). One workflow per repo (installed via the asgard
+# sync workflow #840 once that lands).
+#
+# Does, in order:
+#   1. Three-axis label check. Missing → pin-comment warns + adds
+#      `status:triage` + fails the check (HARD FAIL — reporter-fixable).
+#   2. Add to the right project. Project routed via `shortDescription`
+#      `scope: <owner>/<repo>` token — not hardcoded.
+#   3. Default Priority (severity→P0..P3) + Effort=M if those fields
+#      are empty on the project item. Operator overrides preserved.
+#   4. Native sub-issue parent link if body has `Parent: <repo>#N`.
+#
+# Soft-fails project + field ops if PROJECT_PAT is missing/expired —
+# emits ::warning:: annotation. The label check stays hard. Sentinel
+# rule on workflow_run annotations covers detection of silent rot.
+#
+# Idempotency: every action checks current state and only writes on
+# diff. Comment-pin uses HTML marker. Self-edit loop guarded by
+# bot-sender short-circuit + state-hash skip.
+
+name: auto-organize
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled]
+
+# Serialize per-issue runs. `cancel-in-progress: false` because each
+# label-add event still needs to commit its routing logic; dropping
+# the in-flight run on a later trigger loses state.
+concurrency:
+  group: auto-organize-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  organize:
+    runs-on: ubuntu-latest
+    # Bot-sender short-circuit. Avoids self-loop when the workflow's
+    # own edit re-triggers the workflow. github-actions[bot] is the
+    # default actor for GITHUB_TOKEN-authored writes.
+    if: github.event.sender.login != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run auto-organize
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PROJECT_PAT must be a user-scoped PAT with `project` + `repo`
+          # scopes. Stored as a repo secret. Missing → project + field
+          # steps soft-fail with ::warning::; labels still hard-fail.
+          PROJECT_PAT: ${{ secrets.PROJECT_PAT }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_LABELS: ${{ toJson(github.event.issue.labels) }}
+        run: python3 .github/scripts/auto_organize.py
