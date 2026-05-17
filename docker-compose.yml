@@ -2,6 +2,8 @@
 # Development Configuration
 # Usage: make up  (or: docker compose up)
 # =============================================================================
+# Hardening posture mirrors docker-compose.prod.yml (see #242) while keeping
+# dev ergonomics: code bind mount, --reload, debug logging.
 
 services:
   epguides-api:
@@ -36,6 +38,18 @@ services:
       resources:
         limits:
           memory: 512M
+        reservations:
+          memory: 128M
+    # read_only:false in dev — the bind mount at /app is writable for
+    # --reload to pick up edits, and the .pytest_cache / __pycache__ that
+    # uvicorn writes back into /app would fight a read-only root fs.
+    # Other hardening flags still apply.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 35s
     logging:
       driver: "json-file"
       options:
@@ -61,6 +75,20 @@ services:
       resources:
         limits:
           memory: 300M
+        reservations:
+          memory: 64M
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    read_only: true
+    tmpfs:
+      - /tmp:size=16M
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 10s
     logging:
       driver: "json-file"
       options:
