@@ -11,6 +11,7 @@ import json
 import logging
 import re
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -23,6 +24,7 @@ _THINK_TAG_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
 # LLM configuration
 _LLM_TIMEOUT_SECONDS = 30.0  # Longer timeout for processing episode summaries
 _MAX_EPISODES_FOR_CONTEXT = 100  # Include more episodes since we have summaries
+_ALLOWED_LLM_HOSTS = frozenset({"llm.carlsen.io", "llm.home.carlsen.io"})
 
 
 async def parse_natural_language_query(
@@ -56,20 +58,57 @@ async def parse_natural_language_query(
         return []
 
     # Check LLM configuration
-    if not settings.LLM_ENABLED or not settings.LLM_API_URL:
+    if not settings.LLM_ENABLED:
         logger.debug("LLM not enabled, skipping natural language parsing")
         return None
 
+    base_url = _get_llm_base_url()
+    if base_url is None:
+        return None
+
     try:
-        return await _query_llm(query, episodes)
+        return await _query_llm(query, episodes, base_url=base_url)
     except Exception as e:
         logger.error("Error using LLM for query parsing: %s", e, exc_info=True)
         return None
 
 
+def _get_llm_base_url() -> str | None:
+    """Return the configured LLM base URL if it satisfies cluster policy."""
+    base_url = _normalize_base_url(settings.LLM_API_URL)
+    if base_url is None:
+        logger.debug("LLM API URL not configured, skipping natural language parsing")
+        return None
+
+    if settings.LLM_ALLOW_EXTERNAL:
+        return base_url
+
+    host = (urlsplit(base_url).hostname or "").lower()
+    if host in _ALLOWED_LLM_HOSTS:
+        return base_url
+
+    logger.warning("Ignoring external LLM API URL %s; set LLM_ALLOW_EXTERNAL=true for experiments", base_url)
+    return None
+
+
+def _normalize_base_url(url: str | None) -> str | None:
+    """Normalize an LLM gateway base URL without accepting empty values."""
+    if url is None:
+        return None
+    stripped = url.strip().rstrip("/")
+    if not stripped:
+        return None
+    parsed = urlsplit(stripped)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
+
+
 async def _query_llm(
     query: str,
     episodes: list[dict[str, Any]],
+    *,
+    base_url: str | None = None,
 ) -> list[dict[str, Any]] | None:
     """
     Make actual LLM API call to filter episodes.
@@ -100,11 +139,16 @@ async def _query_llm(
 
     prompt = _build_prompt(query, episode_summaries)
 
+    llm_base_url = base_url or _get_llm_base_url()
+    if llm_base_url is None:
+        return None
+
     async with httpx.AsyncClient(timeout=_LLM_TIMEOUT_SECONDS) as client:
         response = await client.post(
-            f"{settings.LLM_API_URL}/chat/completions",
+            f"{llm_base_url}/chat/completions",
             headers=_build_headers(),
             json={
+                "model": settings.LLM_MODEL_NAME,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.1,
                 "max_tokens": 100,

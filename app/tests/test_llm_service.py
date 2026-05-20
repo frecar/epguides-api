@@ -14,6 +14,8 @@ import pytest
 from app.core.config import settings
 from app.services import llm_service
 
+_TEST_LLM_URL = "https://llm.carlsen.io/v1"
+
 
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
@@ -21,6 +23,8 @@ async def test_llm_disabled_returns_none(mock_settings):
     """Test that LLM returns None when disabled."""
     mock_settings.LLM_ENABLED = False
     mock_settings.LLM_API_URL = settings.LLM_API_URL
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
 
     result = await llm_service.parse_natural_language_query("test query", [{"title": "Test"}])
     assert result is None
@@ -32,8 +36,87 @@ async def test_llm_no_api_url_returns_none(mock_settings):
     """Test that LLM returns None when API URL is not configured."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = None
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
 
     result = await llm_service.parse_natural_language_query("test query", [{"title": "Test"}])
+    assert result is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service._query_llm", new_callable=AsyncMock)
+@patch("app.services.llm_service.settings")
+async def test_llm_external_api_url_blocked_by_default(mock_settings, mock_query_llm):
+    """External LLM endpoints are ignored unless explicitly enabled."""
+    mock_settings.LLM_ENABLED = True
+    mock_settings.LLM_API_URL = "https://llm.example.test/v1"
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
+
+    result = await llm_service.parse_natural_language_query("test query", [{"title": "Test"}])
+
+    assert result is None
+    mock_query_llm.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service._query_llm", new_callable=AsyncMock)
+@patch("app.services.llm_service.settings")
+async def test_llm_external_api_url_can_be_explicitly_enabled(mock_settings, mock_query_llm):
+    """External endpoints remain available for deliberate experiments."""
+    mock_settings.LLM_ENABLED = True
+    mock_settings.LLM_API_URL = "https://llm.example.test/v1/"
+    mock_settings.LLM_ALLOW_EXTERNAL = True
+    mock_settings.LLM_MODEL_NAME = "auto"
+    mock_query_llm.return_value = [{"title": "Test"}]
+
+    result = await llm_service.parse_natural_language_query("test query", [{"title": "Test"}])
+
+    assert result == [{"title": "Test"}]
+    mock_query_llm.assert_awaited_once_with(
+        "test query",
+        [{"title": "Test"}],
+        base_url="https://llm.example.test/v1",
+    )
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service._query_llm", new_callable=AsyncMock)
+@patch("app.services.llm_service.settings")
+async def test_llm_gateway_url_normalized(mock_settings, mock_query_llm):
+    """Allowed gateway URLs are normalized before requests are built."""
+    mock_settings.LLM_ENABLED = True
+    mock_settings.LLM_API_URL = " https://llm.carlsen.io/v1/ "
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
+    mock_query_llm.return_value = [{"title": "Test"}]
+
+    result = await llm_service.parse_natural_language_query("test query", [{"title": "Test"}])
+
+    assert result == [{"title": "Test"}]
+    mock_query_llm.assert_awaited_once_with(
+        "test query",
+        [{"title": "Test"}],
+        base_url="https://llm.carlsen.io/v1",
+    )
+
+
+def test_normalize_base_url_rejects_blank_and_relative_urls():
+    """Blank and relative LLM URLs are treated as unconfigured."""
+    assert llm_service._normalize_base_url("   ") is None
+    assert llm_service._normalize_base_url("llm.carlsen.io/v1") is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service.settings")
+async def test_query_llm_returns_none_when_policy_rejects_url(mock_settings):
+    """The lower-level query helper also enforces URL policy."""
+    mock_settings.LLM_API_URL = "llm.carlsen.io/v1"
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
+
+    result = await llm_service._query_llm("test query", [{"title": "Test"}])
+
     assert result is None
 
 
@@ -44,6 +127,8 @@ async def test_llm_empty_episodes_returns_empty_list(mock_settings):
     # Test with LLM disabled (should still return [] for empty episodes)
     mock_settings.LLM_ENABLED = False
     mock_settings.LLM_API_URL = None
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
 
     result = await llm_service.parse_natural_language_query("test query", [])
     assert result == []
@@ -55,8 +140,10 @@ async def test_llm_empty_episodes_returns_empty_list(mock_settings):
 async def test_llm_successful_query(mock_client_class, mock_settings):
     """Test successful LLM query parsing."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
+    mock_settings.LLM_API_URL = _TEST_LLM_URL
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY or "test-key"
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
 
     # Mock episodes
     episodes = [
@@ -91,6 +178,7 @@ async def test_llm_successful_query(mock_client_class, mock_settings):
     expected_auth = f"Bearer {mock_settings.LLM_API_KEY}" if mock_settings.LLM_API_KEY else ""
     assert call_args[1]["headers"]["Authorization"] == expected_auth
     assert "messages" in call_args[1]["json"]
+    assert call_args[1]["json"]["model"] == "auto"
 
 
 @pytest.mark.asyncio
@@ -99,8 +187,10 @@ async def test_llm_successful_query(mock_client_class, mock_settings):
 async def test_llm_no_api_key(mock_client_class, mock_settings):
     """Test LLM query without API key - should not send Authorization header."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
+    mock_settings.LLM_API_URL = _TEST_LLM_URL
     mock_settings.LLM_API_KEY = None
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
 
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
 
@@ -128,8 +218,10 @@ async def test_llm_no_api_key(mock_client_class, mock_settings):
 async def test_llm_api_error(mock_client_class, mock_settings):
     """Test LLM API error handling."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
+    mock_settings.LLM_API_URL = _TEST_LLM_URL
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
 
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
 
@@ -152,8 +244,10 @@ async def test_llm_api_error(mock_client_class, mock_settings):
 async def test_llm_invalid_json_response(mock_client_class, mock_settings):
     """Test LLM with invalid JSON response."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
+    mock_settings.LLM_API_URL = _TEST_LLM_URL
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
 
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
 
@@ -178,8 +272,10 @@ async def test_llm_invalid_json_response(mock_client_class, mock_settings):
 async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings):
     """Test that LLM limits context to 100 episodes."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
+    mock_settings.LLM_API_URL = _TEST_LLM_URL
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
 
     # Create 120 episodes
     episodes = [{"season": 1, "number": i, "title": f"Episode {i}", "release_date": "2008-01-20"} for i in range(120)]
@@ -209,8 +305,10 @@ async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings):
 async def test_llm_http_exception_handling(mock_client_class, mock_settings):
     """Test LLM handles HTTP exceptions gracefully."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = settings.LLM_API_URL or "https://llm.example.test/v1"
+    mock_settings.LLM_API_URL = _TEST_LLM_URL
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
 
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
 
