@@ -31,7 +31,10 @@ def test_health_check():
 def test_health_llm_without_config():
     """Test LLM health check without API key configured."""
     with patch("app.main.settings") as mock_settings:
-        mock_settings.OPENAI_API_KEY = None
+        mock_settings.LLM_ENABLED = False
+        mock_settings.LLM_API_URL = None
+        mock_settings.LLM_MODEL_NAME = "auto"
+        mock_settings.LLM_ALLOW_EXTERNAL = False
         response = client.get("/health/llm")
         assert response.status_code == 200
 
@@ -335,6 +338,8 @@ def test_llm_health_check_response_structure():
     assert "enabled" in data
     assert "configured" in data
     assert "api_url" in data
+    assert "model" in data
+    assert "allow_external" in data
 
 
 # =============================================================================

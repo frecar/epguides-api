@@ -348,7 +348,7 @@ def llm_health_check() -> dict[str, str | bool]:
     {
       "enabled": true,
       "configured": true,
-      "api_url": "https://your-llm-endpoint.example/v1"
+      "api_url": "https://llm.carlsen.io/v1"
     }
     ```
 
@@ -367,6 +367,8 @@ def llm_health_check() -> dict[str, str | bool]:
         "enabled": settings.LLM_ENABLED,
         "configured": bool(settings.LLM_API_URL),
         "api_url": settings.LLM_API_URL or "not configured",
+        "model": settings.LLM_MODEL_NAME,
+        "allow_external": settings.LLM_ALLOW_EXTERNAL,
     }
 
 

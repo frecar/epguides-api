@@ -387,6 +387,8 @@ async def test_llm_health_endpoint(async_client: AsyncClient):
     assert "enabled" in data
     assert "configured" in data
     assert "api_url" in data
+    assert "model" in data
+    assert "allow_external" in data
     assert isinstance(data["enabled"], bool)
 
 
@@ -637,7 +639,7 @@ async def test_llm_live_api_health():
     # Try to reach the LLM API
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
-            # Most OpenAI-compatible APIs have a /models endpoint
+            # The configured gateway exposes a /models endpoint.
             response = await client.get(
                 f"{settings.LLM_API_URL}/models",
                 headers={"Authorization": f"Bearer {settings.LLM_API_KEY}"} if settings.LLM_API_KEY else {},

@@ -41,9 +41,11 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       API_BASE_URL: ${API_BASE_URL:-https://epguides.frecar.no}
       LOG_REQUESTS: ${LOG_REQUESTS:-true}
-      LLM_ENABLED: ${LLM_ENABLED:-true}
-      LLM_API_URL: ${LLM_API_URL:-}
+      LLM_ENABLED: ${LLM_ENABLED:-false}
+      LLM_API_URL: ${LLM_API_URL:-https://llm.carlsen.io/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-auto}
+      LLM_ALLOW_EXTERNAL: ${LLM_ALLOW_EXTERNAL:-false}
       SENTRY_DSN: ${SENTRY_DSN:-}
       GIT_SHA: ${GIT_SHA:-}
     depends_on:

@@ -36,8 +36,10 @@ Configure the Epguides API using environment variables.
 | Variable | Required | Description |
 |----------|:--------:|-------------|
 | `LLM_ENABLED` | ⚪ | Set to `true` to enable NLQ |
-| `LLM_API_URL` | If enabled | OpenAI-compatible API endpoint |
+| `LLM_API_URL` | If enabled | LLM gateway base URL |
 | `LLM_API_KEY` | If needed | API key for authentication |
+| `LLM_MODEL_NAME` | ⚪ | Model name sent to the gateway (`auto` by default) |
+| `LLM_ALLOW_EXTERNAL` | ⚪ | Set to `true` only for deliberate non-default endpoint experiments |
 
 ### 📝 Logging
 
@@ -80,8 +82,9 @@ Configure the Epguides API using environment variables.
 
     # LLM (optional)
     LLM_ENABLED=true
-    LLM_API_URL=https://api.openai.com/v1
-    LLM_API_KEY=sk-your-api-key
+    LLM_API_URL=https://llm.carlsen.io/v1
+    LLM_MODEL_NAME=auto
+    LLM_API_KEY=your-gateway-token
 
     # Logging (less verbose)
     LOG_LEVEL=WARNING
@@ -90,39 +93,17 @@ Configure the Epguides API using environment variables.
 
 ---
 
-## 🤖 LLM Provider Examples
+## 🤖 LLM Endpoint Policy
 
-!!! abstract "OpenAI-Compatible APIs"
-    The LLM feature works with any OpenAI-compatible API.
+!!! abstract "Gateway-first"
+    Natural-language episode filtering is routed through the configured LLM gateway. External base URLs are ignored by default; set `LLM_ALLOW_EXTERNAL=true` only for intentional local experiments.
 
-=== "OpenAI"
-
-    ```bash
-    LLM_API_URL=https://api.openai.com/v1
-    LLM_API_KEY=sk-...
-    ```
-
-=== "Azure OpenAI"
-
-    ```bash
-    LLM_API_URL=https://your-resource.openai.azure.com/openai/deployments/your-deployment
-    LLM_API_KEY=your-azure-key
-    ```
-
-=== "Ollama (Local)"
-
-    ```bash
-    LLM_API_URL=http://localhost:11434/v1
-    LLM_API_KEY=  # Not required
-    ```
-
-=== "Self-hosted"
-
-    ```bash
-    # vLLM, text-generation-inference, etc.
-    LLM_API_URL=https://your-llm-server.com/v1
-    LLM_API_KEY=your-key
-    ```
+```bash
+LLM_ENABLED=true
+LLM_API_URL=https://llm.carlsen.io/v1
+LLM_MODEL_NAME=auto
+LLM_API_KEY=your-gateway-token
+```
 
 ---
 
@@ -202,6 +183,8 @@ Expected response when configured:
 {
   "enabled": true,
   "configured": true,
-  "api_url": "https://api.openai.com/v1"
+  "api_url": "https://llm.carlsen.io/v1",
+  "model": "auto",
+  "allow_external": false
 }
 ```

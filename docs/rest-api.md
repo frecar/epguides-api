@@ -301,7 +301,7 @@ curl "https://epguides.frecar.no/shows/BreakingBad/episodes/latest"
 
 ### How It Works
 
-1. Your query is sent to an OpenAI-compatible LLM
+1. Your query is sent to the configured LLM gateway
 2. The LLM analyzes episode titles, summaries, and metadata
 3. Matching episodes are returned based on semantic understanding
 
@@ -375,6 +375,8 @@ curl "https://epguides.frecar.no/health/llm"
 {
   "enabled": true,
   "configured": true,
-  "api_url": "https://api.openai.com/v1"
+  "api_url": "https://llm.carlsen.io/v1",
+  "model": "auto",
+  "allow_external": false
 }
 ```

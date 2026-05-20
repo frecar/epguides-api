@@ -2687,7 +2687,9 @@ async def test_parse_natural_language_query_exception(mock_settings, mock_query)
     from app.services import llm_service
 
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = "http://example.com/llm"
+    mock_settings.LLM_API_URL = "https://llm.carlsen.io/v1"
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
     mock_query.side_effect = Exception("LLM service error")
 
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2020-01-01"}]

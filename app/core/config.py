@@ -44,9 +44,11 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # LLM Configuration (Optional - for smart natural language queries)
     # -------------------------------------------------------------------------
-    LLM_API_URL: str | None = None  # e.g., "https://localhost/v1"
+    LLM_API_URL: str | None = "https://llm.carlsen.io/v1"
     LLM_API_KEY: str | None = None
     LLM_ENABLED: bool = False  # Disabled by default for performance
+    LLM_MODEL_NAME: str = "auto"
+    LLM_ALLOW_EXTERNAL: bool = False
 
     # -------------------------------------------------------------------------
     # HTTP Configuration
