@@ -1,0 +1,43 @@
+name: Dockerfile hygiene
+
+# Lints the production Dockerfile via hadolint
+# (https://github.com/hadolint/hadolint) to catch common anti-patterns
+# (unpinned `:latest` bases, mutable apt installs without
+# `--no-install-recommends`, missing healthcheck, running as root,
+# `ADD` vs `COPY`, etc.).
+#
+# `failure-threshold: error` keeps CI red only on real problems. Style
+# / info / warning findings show up as PR annotations without blocking
+# merges - the right friction tier for an established Dockerfile.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hadolint:
+    name: hadolint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run hadolint
+        # Pinned to a specific version for supply-chain safety; bump
+        # deliberately when upstream releases security-relevant patches.
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ./Dockerfile
+          recursive: false
+          failure-threshold: error
+          format: json
+          no-fail: false
