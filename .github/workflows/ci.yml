@@ -17,6 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Private reference check
+        run: bash scripts/check-no-internal-refs.sh
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
