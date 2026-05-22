@@ -76,3 +76,10 @@ repos:
         language: system
         pass_filenames: true
         stages: [pre-commit]
+
+      - id: no-private-refs
+        name: Private reference check
+        entry: bash scripts/check-no-internal-refs.sh
+        language: system
+        pass_filenames: true
+        stages: [pre-commit]

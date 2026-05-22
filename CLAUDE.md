@@ -37,6 +37,7 @@ This repo defines and adheres to a Python-service quality baseline:
 - **Type-check:** `mypy` with `check_untyped_defs` + `warn_unused_ignores` + `strict_optional` floor; strict mode opt-in per module.
 - **Tests:** `pytest` + `pytest-cov`. **100% coverage enforced** at the pre-commit + CI gate (`fail_under = 100.0` in `pyproject.toml`). Commits below the floor are rejected.
 - **Security:** OSV-Scanner runs on `uv.lock` in CI. Unfixable transitive CVEs land in `.osv-scanner.toml` with a fix-by date and a tracking issue — never silenced silently.
+- **Public surface:** `scripts/check-no-internal-refs.sh` runs in pre-commit and CI. Keep source, docs, and examples standalone; use runtime configuration for private deployment values.
 - **Error tracking:** `sentry-sdk[fastapi]` initialised in `app/main.py` only when `SENTRY_DSN` env var is set (prod-only by convention; dev/test stays no-op).
 - **Observability:** `/metrics` endpoint exposes Prometheus exposition format (cache hits/misses by type, upstream request totals by source/outcome, upstream latency histogram). `/health`, `/health/llm`, `/health/cache` return structured JSON.
 - **Docker hardening:** multi-stage build (compile in builder, ship runtime only), non-root user (UID 1000), `no-new-privileges`, healthcheck, log rotation, pinned `python:3.14-slim` base, pinned `ghcr.io/astral-sh/uv:0.11.3` for the uv binary.
