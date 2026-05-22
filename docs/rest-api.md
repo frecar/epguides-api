@@ -375,7 +375,7 @@ curl "https://epguides.frecar.no/health/llm"
 {
   "enabled": true,
   "configured": true,
-  "api_url": "https://llm.carlsen.io/v1",
+  "api_url": "https://your-llm-server.example.com/v1",
   "model": "auto",
   "allow_external": false
 }

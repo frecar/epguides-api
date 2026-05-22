@@ -8,8 +8,9 @@ REST API for TV show metadata, episodes, air dates, and summaries. Also provides
 - **Pre-commit:** Ensure pre-commit hooks pass before pushing.
 
 ## LLM Policy
-- Route model-assisted features through `llm.carlsen.io`.
-- Do not add Claude/OpenAI/Anthropic external API endpoints or runtime fallbacks. `scripts/check_no_external_llm.py` enforces this in pre-commit and CI (asgard#833).
+- Natural-language queries are routed through whatever OpenAI-compatible gateway is set in `LLM_API_URL` (local Ollama, vLLM, llama.cpp server, hosted endpoint, ...).
+- Do not add Claude/OpenAI/Anthropic external API endpoints or runtime fallbacks to committed code paths. `scripts/check_no_external_llm.py` enforces this in pre-commit and CI.
+- Optional `ALLOWED_LLM_HOSTS` env var (comma-separated hostnames) gates which hosts the gateway URL may resolve to. Empty/unset (default) means no host enforcement — any configured URL is accepted.
 
 ## Deployment
 

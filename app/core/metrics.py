@@ -9,8 +9,8 @@ Documented in CLAUDE.md "Observability gaps" section.
 
 uvicorn runs with `--workers 5` in production (one process per CPU core).
 Each worker has its own in-memory `prometheus_client` registry — without
-coordination, `/metrics` only returns one worker's view and the cluster-
-wide counters are 5x under-reported.
+coordination, `/metrics` only returns one worker's view and the
+aggregated counters are 5x under-reported.
 
 When `PROMETHEUS_MULTIPROC_DIR` is set in the environment, the
 `prometheus_client` library writes counter state to memory-mapped files

@@ -82,7 +82,7 @@ Configure the Epguides API using environment variables.
 
     # LLM (optional)
     LLM_ENABLED=true
-    LLM_API_URL=https://llm.carlsen.io/v1
+    LLM_API_URL=https://your-llm-server.example.com/v1
     LLM_MODEL_NAME=auto
     LLM_API_KEY=your-gateway-token
 
@@ -100,7 +100,7 @@ Configure the Epguides API using environment variables.
 
 ```bash
 LLM_ENABLED=true
-LLM_API_URL=https://llm.carlsen.io/v1
+LLM_API_URL=https://your-llm-server.example.com/v1
 LLM_MODEL_NAME=auto
 LLM_API_KEY=your-gateway-token
 ```
@@ -183,7 +183,7 @@ Expected response when configured:
 {
   "enabled": true,
   "configured": true,
-  "api_url": "https://llm.carlsen.io/v1",
+  "api_url": "https://your-llm-server.example.com/v1",
   "model": "auto",
   "allow_external": false
 }

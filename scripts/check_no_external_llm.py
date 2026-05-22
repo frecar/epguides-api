@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Enforce the cluster LLM policy (asgard#801): no pay-per-token external
+"""Enforce a configured LLM endpoint policy: no pay-per-token external
 LLM API endpoints in committed code.
 
-The cluster's design target is `llm.carlsen.io` for all LLM calls. External
-pay-per-token APIs (`api.anthropic.com`, `api.openai.com`, etc.) add cost,
-privacy exposure, and third-party dependency. Documented in
-`feedback_llm_local.md` and the policy issue.
+This project is designed to be pointed at any OpenAI-compatible LLM
+gateway (local Ollama, vLLM, llama.cpp server, hosted endpoint, ...).
+Pay-per-token external APIs (`api.anthropic.com`, `api.openai.com`, etc.)
+are forbidden in committed code paths to keep cost, privacy exposure,
+and third-party dependency out of the runtime hot path.
 
 This script flags any reference to those endpoints in committed files.
 Test fixtures and benchmark scripts are exempt (they may legitimately
@@ -128,14 +129,15 @@ def main(argv: list[str]) -> int:
 
     if violation_count:
         print()
-        print(f"FAIL: {violation_count} violation(s) of cluster LLM policy (asgard#801).")
+        print(f"FAIL: {violation_count} violation(s) of configured LLM endpoint policy.")
         print()
-        print("Cluster policy: route all LLM calls through llm.carlsen.io.")
-        print("Pay-per-token external APIs (api.anthropic.com, api.openai.com,")
-        print("etc.) are forbidden in committed code.")
+        print("Project policy: route LLM calls through your configured gateway")
+        print("(set via LLM_API_URL). Pay-per-token external APIs")
+        print("(api.anthropic.com, api.openai.com, etc.) are forbidden in")
+        print("committed code paths.")
         print()
         print("Fix options:")
-        print("  - Replace the endpoint with https://llm.carlsen.io/v1 (or env-driven default)")
+        print("  - Replace the endpoint with an env-driven default (LLM_API_URL)")
         print("  - If the line is documentation that needs to name the forbidden")
         print(f"    pattern, append a trailing comment: `# {IGNORE_MARKER}`")
         print("  - If it's a test fixture, move the file under tests/ (allowlisted)")
