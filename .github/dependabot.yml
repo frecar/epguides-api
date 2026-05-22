@@ -10,9 +10,7 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "deps"
-    # Include transitive deps so CVEs in indirect packages (like the urllib3
-    # 2.6.3 → 2.7.0 incident in sentinel on 2026-05-11) get auto-PRs. Wave 3
-    # of asgard #683 rollout; sentinel #371 is the canary.
+    # Include transitive deps so CVEs in indirect packages also get auto-PRs.
     allow:
       - dependency-type: "all"
     groups:

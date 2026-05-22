@@ -9,6 +9,7 @@ Only used when LLM_ENABLED is True in settings.
 
 import json
 import logging
+import os
 import re
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -24,7 +25,18 @@ _THINK_TAG_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
 # LLM configuration
 _LLM_TIMEOUT_SECONDS = 30.0  # Longer timeout for processing episode summaries
 _MAX_EPISODES_FOR_CONTEXT = 100  # Include more episodes since we have summaries
-_ALLOWED_LLM_HOSTS = frozenset({"llm.carlsen.io", "llm.home.carlsen.io"})
+
+
+def _parse_allowed_hosts(value: str) -> frozenset[str]:
+    """Parse comma-separated host allow-list into a frozenset of lowercase hostnames."""
+    return frozenset(h.strip().lower() for h in value.split(",") if h.strip())
+
+
+# Optional host allow-list. When set (comma-separated hostnames), only matching
+# hosts are accepted for the LLM gateway URL. Empty/unset means no host
+# enforcement — any configured `LLM_API_URL` is accepted. Override per-deployment
+# by setting `ALLOWED_LLM_HOSTS` in the environment.
+_ALLOWED_LLM_HOSTS = _parse_allowed_hosts(os.environ.get("ALLOWED_LLM_HOSTS", ""))
 
 
 async def parse_natural_language_query(
@@ -74,11 +86,20 @@ async def parse_natural_language_query(
 
 
 def _get_llm_base_url() -> str | None:
-    """Return the configured LLM base URL if it satisfies cluster policy."""
+    """Return the configured LLM base URL if it satisfies endpoint policy.
+
+    When `ALLOWED_LLM_HOSTS` is empty (default), any configured URL is accepted.
+    When set, only listed hosts pass — unless `LLM_ALLOW_EXTERNAL=true` is set
+    for deliberate experiments with a non-listed endpoint.
+    """
     base_url = _normalize_base_url(settings.LLM_API_URL)
     if base_url is None:
         logger.debug("LLM API URL not configured, skipping natural language parsing")
         return None
+
+    # No allow-list configured -> no host enforcement.
+    if not _ALLOWED_LLM_HOSTS:
+        return base_url
 
     if settings.LLM_ALLOW_EXTERNAL:
         return base_url
@@ -87,7 +108,9 @@ def _get_llm_base_url() -> str | None:
     if host in _ALLOWED_LLM_HOSTS:
         return base_url
 
-    logger.warning("Ignoring external LLM API URL %s; set LLM_ALLOW_EXTERNAL=true for experiments", base_url)
+    logger.warning(
+        "Ignoring LLM API URL %s; not in ALLOWED_LLM_HOSTS (set LLM_ALLOW_EXTERNAL=true to override)", base_url
+    )
     return None
 
 

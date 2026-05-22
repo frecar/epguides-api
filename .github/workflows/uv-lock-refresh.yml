@@ -1,10 +1,10 @@
 name: uv lock refresh
 
-# Closes the systemic gap from asgard#693: Dependabot widens pyproject.toml
-# constraints, but uv.lock isn't regenerated. `uv sync --frozen` then keeps
-# installing the OLD locked version even though pyproject permits newer.
-# This workflow runs `uv lock --upgrade` weekly and opens a PR if anything
-# changed — bringing lock state in line with pyproject ceilings.
+# Dependabot widens pyproject.toml constraints, but uv.lock isn't regenerated.
+# `uv sync --frozen` then keeps installing the OLD locked version even though
+# pyproject permits newer. This workflow runs `uv lock --upgrade` weekly and
+# opens a PR if anything changed — bringing lock state in line with pyproject
+# ceilings.
 #
 # Scheduled 06:30 UTC Monday — 2.5h after dependabot's 04:00 weekly run
 # (defined in .github/dependabot.yml) so the constraint-widening PRs land
@@ -57,12 +57,9 @@ jobs:
 
             Review notes:
             - Lock-only changes are safe to merge on green CI.
-            - If a transitive bump tightens type-stub generics (e.g.
-              django-stubs 6.0.3 → 6.0.4 surfaced the `AdminSite.register`
-              regression in portal#276), the type-check job will catch it.
-              Fix at the source rather than reverting the bump.
-
-            Refs asgard#693.
+            - If a transitive bump tightens type-stub generics, the
+              type-check job will catch it. Fix at the source rather
+              than reverting the bump.
           labels: |
             dependencies
             automated

@@ -71,7 +71,7 @@ repos:
         stages: [commit-msg]
 
       - id: no-external-llm
-        name: "Cluster LLM policy lint"  # llm-policy: ignore
+        name: "Configured LLM endpoint check"  # llm-policy: ignore
         entry: python3 scripts/check_no_external_llm.py
         language: system
         pass_filenames: true

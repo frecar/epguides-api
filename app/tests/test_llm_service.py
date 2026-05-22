@@ -14,12 +14,29 @@ import pytest
 from app.core.config import settings
 from app.services import llm_service
 
-_TEST_LLM_URL = "https://llm.carlsen.io/v1"
+_TEST_LLM_URL = "https://llm.example.com/v1"
+_ALT_LLM_URL = "https://llm.alt.example.com/v1"
+
+
+@pytest.fixture
+def allow_listed_hosts(monkeypatch):
+    """Configure the module's host allow-list to `llm.example.com` for one test."""
+    monkeypatch.setattr(
+        llm_service,
+        "_ALLOWED_LLM_HOSTS",
+        llm_service._parse_allowed_hosts("llm.example.com"),
+    )
+
+
+@pytest.fixture
+def no_host_enforcement(monkeypatch):
+    """Default state: empty allow-list -> no host enforcement."""
+    monkeypatch.setattr(llm_service, "_ALLOWED_LLM_HOSTS", frozenset())
 
 
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
-async def test_llm_disabled_returns_none(mock_settings):
+async def test_llm_disabled_returns_none(mock_settings, no_host_enforcement):
     """Test that LLM returns None when disabled."""
     mock_settings.LLM_ENABLED = False
     mock_settings.LLM_API_URL = settings.LLM_API_URL
@@ -32,7 +49,7 @@ async def test_llm_disabled_returns_none(mock_settings):
 
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
-async def test_llm_no_api_url_returns_none(mock_settings):
+async def test_llm_no_api_url_returns_none(mock_settings, no_host_enforcement):
     """Test that LLM returns None when API URL is not configured."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = None
@@ -46,10 +63,10 @@ async def test_llm_no_api_url_returns_none(mock_settings):
 @pytest.mark.asyncio
 @patch("app.services.llm_service._query_llm", new_callable=AsyncMock)
 @patch("app.services.llm_service.settings")
-async def test_llm_external_api_url_blocked_by_default(mock_settings, mock_query_llm):
-    """External LLM endpoints are ignored unless explicitly enabled."""
+async def test_llm_url_outside_allow_list_is_blocked(mock_settings, mock_query_llm, allow_listed_hosts):
+    """When ALLOWED_LLM_HOSTS is set, non-listed hosts are ignored by default."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = "https://llm.example.test/v1"
+    mock_settings.LLM_API_URL = _ALT_LLM_URL  # not in allow-list
     mock_settings.LLM_ALLOW_EXTERNAL = False
     mock_settings.LLM_MODEL_NAME = "auto"
 
@@ -62,10 +79,10 @@ async def test_llm_external_api_url_blocked_by_default(mock_settings, mock_query
 @pytest.mark.asyncio
 @patch("app.services.llm_service._query_llm", new_callable=AsyncMock)
 @patch("app.services.llm_service.settings")
-async def test_llm_external_api_url_can_be_explicitly_enabled(mock_settings, mock_query_llm):
-    """External endpoints remain available for deliberate experiments."""
+async def test_llm_allow_external_overrides_allow_list(mock_settings, mock_query_llm, allow_listed_hosts):
+    """LLM_ALLOW_EXTERNAL=true bypasses the host allow-list for deliberate experiments."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = "https://llm.example.test/v1/"
+    mock_settings.LLM_API_URL = _ALT_LLM_URL + "/"
     mock_settings.LLM_ALLOW_EXTERNAL = True
     mock_settings.LLM_MODEL_NAME = "auto"
     mock_query_llm.return_value = [{"title": "Test"}]
@@ -76,17 +93,17 @@ async def test_llm_external_api_url_can_be_explicitly_enabled(mock_settings, moc
     mock_query_llm.assert_awaited_once_with(
         "test query",
         [{"title": "Test"}],
-        base_url="https://llm.example.test/v1",
+        base_url=_ALT_LLM_URL,
     )
 
 
 @pytest.mark.asyncio
 @patch("app.services.llm_service._query_llm", new_callable=AsyncMock)
 @patch("app.services.llm_service.settings")
-async def test_llm_gateway_url_normalized(mock_settings, mock_query_llm):
-    """Allowed gateway URLs are normalized before requests are built."""
+async def test_llm_no_allow_list_accepts_any_host(mock_settings, mock_query_llm, no_host_enforcement):
+    """Default behavior: empty allow-list -> any configured URL is accepted."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = " https://llm.carlsen.io/v1/ "
+    mock_settings.LLM_API_URL = _ALT_LLM_URL + "/"
     mock_settings.LLM_ALLOW_EXTERNAL = False
     mock_settings.LLM_MODEL_NAME = "auto"
     mock_query_llm.return_value = [{"title": "Test"}]
@@ -97,21 +114,52 @@ async def test_llm_gateway_url_normalized(mock_settings, mock_query_llm):
     mock_query_llm.assert_awaited_once_with(
         "test query",
         [{"title": "Test"}],
-        base_url="https://llm.carlsen.io/v1",
+        base_url=_ALT_LLM_URL,
+    )
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service._query_llm", new_callable=AsyncMock)
+@patch("app.services.llm_service.settings")
+async def test_llm_gateway_url_normalized(mock_settings, mock_query_llm, allow_listed_hosts):
+    """Allow-listed gateway URLs are normalized before requests are built."""
+    mock_settings.LLM_ENABLED = True
+    mock_settings.LLM_API_URL = f" {_TEST_LLM_URL}/ "
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
+    mock_query_llm.return_value = [{"title": "Test"}]
+
+    result = await llm_service.parse_natural_language_query("test query", [{"title": "Test"}])
+
+    assert result == [{"title": "Test"}]
+    mock_query_llm.assert_awaited_once_with(
+        "test query",
+        [{"title": "Test"}],
+        base_url=_TEST_LLM_URL,
     )
 
 
 def test_normalize_base_url_rejects_blank_and_relative_urls():
     """Blank and relative LLM URLs are treated as unconfigured."""
     assert llm_service._normalize_base_url("   ") is None
-    assert llm_service._normalize_base_url("llm.carlsen.io/v1") is None
+    assert llm_service._normalize_base_url("llm.example.com/v1") is None
+
+
+def test_parse_allowed_hosts_handles_whitespace_and_case():
+    """`_parse_allowed_hosts` strips whitespace, lowercases, and drops empties."""
+    assert llm_service._parse_allowed_hosts("") == frozenset()
+    assert llm_service._parse_allowed_hosts(" , ") == frozenset()
+    assert llm_service._parse_allowed_hosts("LLM.Example.Com") == frozenset({"llm.example.com"})
+    assert llm_service._parse_allowed_hosts("a.example.com, B.Example.Com ,") == frozenset(
+        {"a.example.com", "b.example.com"}
+    )
 
 
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
-async def test_query_llm_returns_none_when_policy_rejects_url(mock_settings):
+async def test_query_llm_returns_none_when_policy_rejects_url(mock_settings, allow_listed_hosts):
     """The lower-level query helper also enforces URL policy."""
-    mock_settings.LLM_API_URL = "llm.carlsen.io/v1"
+    mock_settings.LLM_API_URL = "llm.example.com/v1"  # missing scheme -> normalizer rejects
     mock_settings.LLM_ALLOW_EXTERNAL = False
     mock_settings.LLM_MODEL_NAME = "auto"
 
@@ -122,7 +170,7 @@ async def test_query_llm_returns_none_when_policy_rejects_url(mock_settings):
 
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
-async def test_llm_empty_episodes_returns_empty_list(mock_settings):
+async def test_llm_empty_episodes_returns_empty_list(mock_settings, no_host_enforcement):
     """Test that LLM returns empty list when no episodes provided, even if LLM is disabled."""
     # Test with LLM disabled (should still return [] for empty episodes)
     mock_settings.LLM_ENABLED = False
@@ -137,7 +185,7 @@ async def test_llm_empty_episodes_returns_empty_list(mock_settings):
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_llm_successful_query(mock_client_class, mock_settings):
+async def test_llm_successful_query(mock_client_class, mock_settings, no_host_enforcement):
     """Test successful LLM query parsing."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = _TEST_LLM_URL
@@ -184,7 +232,7 @@ async def test_llm_successful_query(mock_client_class, mock_settings):
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_llm_no_api_key(mock_client_class, mock_settings):
+async def test_llm_no_api_key(mock_client_class, mock_settings, no_host_enforcement):
     """Test LLM query without API key - should not send Authorization header."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = _TEST_LLM_URL
@@ -215,7 +263,7 @@ async def test_llm_no_api_key(mock_client_class, mock_settings):
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_llm_api_error(mock_client_class, mock_settings):
+async def test_llm_api_error(mock_client_class, mock_settings, no_host_enforcement):
     """Test LLM API error handling."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = _TEST_LLM_URL
@@ -241,7 +289,7 @@ async def test_llm_api_error(mock_client_class, mock_settings):
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_llm_invalid_json_response(mock_client_class, mock_settings):
+async def test_llm_invalid_json_response(mock_client_class, mock_settings, no_host_enforcement):
     """Test LLM with invalid JSON response."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = _TEST_LLM_URL
@@ -269,7 +317,7 @@ async def test_llm_invalid_json_response(mock_client_class, mock_settings):
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings):
+async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings, no_host_enforcement):
     """Test that LLM limits context to 100 episodes."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = _TEST_LLM_URL
@@ -302,7 +350,7 @@ async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings):
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_llm_http_exception_handling(mock_client_class, mock_settings):
+async def test_llm_http_exception_handling(mock_client_class, mock_settings, no_host_enforcement):
     """Test LLM handles HTTP exceptions gracefully."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = _TEST_LLM_URL

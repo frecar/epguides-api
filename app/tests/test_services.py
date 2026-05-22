@@ -2214,10 +2214,16 @@ async def test_get_tvmaze_seasons_non_200(mock_client_class, mock_cache_get, moc
 
 
 @pytest.mark.asyncio
+@patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_query_llm_with_summary_truncation(mock_client_class):
+async def test_query_llm_with_summary_truncation(mock_client_class, mock_settings):
     """Test _query_llm truncates long summaries."""
     from app.services import llm_service
+
+    mock_settings.LLM_API_URL = "https://llm.example.com/v1"
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
+    mock_settings.LLM_API_KEY = None
 
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -2246,10 +2252,16 @@ async def test_query_llm_with_summary_truncation(mock_client_class):
 
 
 @pytest.mark.asyncio
+@patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_query_llm_invalid_indices_type(mock_client_class):
+async def test_query_llm_invalid_indices_type(mock_client_class, mock_settings):
     """Test _query_llm handles non-list response."""
     from app.services import llm_service
+
+    mock_settings.LLM_API_URL = "https://llm.example.com/v1"
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
+    mock_settings.LLM_API_KEY = None
 
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -2687,7 +2699,7 @@ async def test_parse_natural_language_query_exception(mock_settings, mock_query)
     from app.services import llm_service
 
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = "https://llm.carlsen.io/v1"
+    mock_settings.LLM_API_URL = "https://llm.example.com/v1"
     mock_settings.LLM_ALLOW_EXTERNAL = False
     mock_settings.LLM_MODEL_NAME = "auto"
     mock_query.side_effect = Exception("LLM service error")
@@ -2996,3 +3008,60 @@ async def test_find_show_by_title_no_match(mock_metadata, _mock_get, _mock_set):
         {"directory": "got", "title": "Game of Thrones", "network": "HBO", "run time": "60 min"},
     ]
     assert await show_service._find_show_by_title("Completely Unrelated Title") is None
+
+
+# =============================================================================
+# get_show — imdb_id reverse-index keep-warm path
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service._index_show_by_imdb", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_get", new_callable=AsyncMock)
+@patch("app.services.show_service._get_show_cached", new_callable=AsyncMock)
+async def test_get_show_indexes_when_imdb_mapping_missing(mock_cached, mock_cache_get, mock_index):
+    """Cache miss on imdb→key index should trigger _index_show_by_imdb."""
+    from app.models.schemas import ShowSchema
+
+    mock_cached.return_value = ShowSchema(epguides_key="bb", title="Breaking Bad", imdb_id="tt0903747")
+    mock_cache_get.return_value = None  # No existing index entry
+
+    result = await show_service.get_show("breakingbad")
+
+    assert result is not None
+    assert result.epguides_key == "bb"
+    mock_index.assert_awaited_once_with("bb", "tt0903747")
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service._index_show_by_imdb", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_get", new_callable=AsyncMock)
+@patch("app.services.show_service._get_show_cached", new_callable=AsyncMock)
+async def test_get_show_skips_index_when_imdb_mapping_present(mock_cached, mock_cache_get, mock_index):
+    """Existing index entry should NOT trigger another _index_show_by_imdb write."""
+    from app.models.schemas import ShowSchema
+
+    mock_cached.return_value = ShowSchema(epguides_key="bb", title="Breaking Bad", imdb_id="tt0903747")
+    mock_cache_get.return_value = "bb"  # Index already populated
+
+    result = await show_service.get_show("breakingbad")
+
+    assert result is not None
+    mock_index.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service._index_show_by_imdb", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_get", new_callable=AsyncMock)
+@patch("app.services.show_service._get_show_cached", new_callable=AsyncMock)
+async def test_get_show_skips_index_when_no_imdb_id(mock_cached, mock_cache_get, mock_index):
+    """Shows without imdb_id should not attempt any indexing."""
+    from app.models.schemas import ShowSchema
+
+    mock_cached.return_value = ShowSchema(epguides_key="x", title="No IMDB", imdb_id=None)
+
+    result = await show_service.get_show("x")
+
+    assert result is not None
+    mock_cache_get.assert_not_awaited()
+    mock_index.assert_not_awaited()

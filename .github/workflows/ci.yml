@@ -59,7 +59,7 @@ jobs:
       - name: Run ruff format check
         run: uv run ruff format --check app/
 
-      - name: Cluster LLM policy lint
+      - name: Configured LLM endpoint check
         run: python3 scripts/check_no_external_llm.py
 
   typecheck:
