@@ -23,47 +23,33 @@ from app.core.constants import VERSION
 from app.core.metrics import mark_worker_dead, render_metrics
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware, get_request_id
 from app.exceptions import EpguidesAPIException, ExternalServiceError
+from asgard_observability import setup_observability
 
 # =============================================================================
-# Logging Setup
+# Observability (logging + Sentry) — vendored shared module
 # =============================================================================
-
-
-def _initialize_logging() -> None:
-    """Initialize logging with fallback to basic config."""
-    try:
-        from app.core.logging_config import setup_logging
-
-        setup_logging()
-    except Exception:
-        # Fallback to basic config if custom setup fails
-        logging.basicConfig(level=logging.INFO)
-
-
-_initialize_logging()
+#
+# Replaces the previous inline `sentry_sdk.init(...)` + local
+# `app.core.logging_config.setup_logging()` with the shared
+# `asgard_observability.setup_observability(...)` (vendored at
+# `asgard_observability/`; see VENDORED.md). Behavior-equivalent — the
+# vendored module's defaults match this service's prior settings, except
+# the custom `trace_propagation_targets` + `SENTRY_ENVIRONMENT` are passed
+# through via kwargs. Sentry init is internally guarded on `SENTRY_DSN`
+# being set (was: `if settings.SENTRY_DSN:`).
+setup_observability(
+    service_name="epguides-api",
+    environment=settings.SENTRY_ENVIRONMENT,
+    traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+    # epguides-api propagates traces to its upstream HTTP services rather
+    # than the cluster default. Sentry itself isn't in this list — traces
+    # reach Sentry via the DSN HTTP endpoint, not as a downstream call.
+    trace_propagation_targets=["epguides.com", "api.tvmaze.com", "localhost"],
+    sentry_dsn=settings.SENTRY_DSN,
+    release=os.environ.get("GIT_SHA", VERSION),
+)
 
 logger = logging.getLogger(__name__)
-
-# =============================================================================
-# Sentry Error Tracking (opt-in via SENTRY_DSN env var)
-# =============================================================================
-
-if settings.SENTRY_DSN:  # pragma: no cover
-    import sentry_sdk
-
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
-        profiles_sample_rate=0.1,
-        # Propagate Sentry traces to the upstream HTTP services this API
-        # talks to so distributed traces span the API → upstream boundary
-        # cleanly. Sentry itself receives traces via the DSN HTTP endpoint;
-        # it does NOT belong in this list (it's not a downstream service
-        # the API calls in the request path).
-        trace_propagation_targets=["epguides.com", "api.tvmaze.com", "localhost"],
-        release=os.environ.get("GIT_SHA", VERSION),
-        environment=settings.SENTRY_ENVIRONMENT,
-    )
 
 
 # =============================================================================

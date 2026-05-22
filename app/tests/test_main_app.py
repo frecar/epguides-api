@@ -192,19 +192,6 @@ def test_middleware_exception_handling():
         client.get("/test-middleware-error")
 
 
-def test_initialize_logging_fallback():
-    """Test logging initialization fallback."""
-    from app.main import _initialize_logging
-
-    # Test that it works with normal setup
-    _initialize_logging()
-
-    # Test fallback when setup_logging fails
-    with patch("app.core.logging_config.setup_logging", side_effect=Exception("Config error")):
-        # Should not raise - falls back to basicConfig
-        _initialize_logging()
-
-
 # =============================================================================
 # Security Headers Tests
 # =============================================================================

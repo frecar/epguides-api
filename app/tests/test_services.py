@@ -1769,27 +1769,6 @@ async def test_get_poster_url_no_maze(mock_maze):
 
 
 # =============================================================================
-# Logging Config Tests
-# =============================================================================
-
-
-def test_development_formatter():
-    """Test DevelopmentFormatter formats log records."""
-    from app.core.logging_config import DevelopmentFormatter
-
-    formatter = DevelopmentFormatter()
-    assert formatter is not None
-
-
-def test_setup_logging_returns_logger():
-    """Test setup_logging returns a logger."""
-    from app.core.logging_config import setup_logging
-
-    logger = setup_logging()
-    assert logger is not None
-
-
-# =============================================================================
 # LLM Service Additional Tests
 # =============================================================================
 
@@ -2265,68 +2244,6 @@ async def test_query_llm_invalid_indices_type(mock_client_class):
     result = await llm_service._query_llm("test query", episodes)
 
     assert result is None  # Should return None for invalid response
-
-
-# =============================================================================
-# Logging Config Tests
-# =============================================================================
-
-
-def test_setup_logging_debug_mode(monkeypatch):
-    """Test setup_logging uses DevelopmentFormatter in debug mode."""
-    from app.core import logging_config
-
-    monkeypatch.setattr(logging_config.settings, "LOG_LEVEL", "DEBUG")
-    monkeypatch.setattr(logging_config.settings, "LOG_FORMAT", "text")
-
-    # Should not raise
-    logger = logging_config.setup_logging()
-    assert logger is not None
-
-
-def test_use_json_format_explicit_json(monkeypatch):
-    """Test _use_json_format returns True when LOG_FORMAT is json."""
-    from app.core import logging_config
-
-    monkeypatch.setattr(logging_config.settings, "LOG_FORMAT", "json")
-    assert logging_config._use_json_format() is True
-
-
-def test_use_json_format_explicit_text(monkeypatch):
-    """Test _use_json_format returns False when LOG_FORMAT is text."""
-    from app.core import logging_config
-
-    monkeypatch.setattr(logging_config.settings, "LOG_FORMAT", "text")
-    assert logging_config._use_json_format() is False
-
-
-def test_use_json_format_fallback_debug(monkeypatch):
-    """Test _use_json_format falls back to text for DEBUG level with unknown format."""
-    from app.core import logging_config
-
-    monkeypatch.setattr(logging_config.settings, "LOG_FORMAT", "auto")
-    monkeypatch.setattr(logging_config.settings, "LOG_LEVEL", "DEBUG")
-    assert logging_config._use_json_format() is False
-
-
-def test_use_json_format_fallback_info(monkeypatch):
-    """Test _use_json_format falls back to json for INFO level with unknown format."""
-    from app.core import logging_config
-
-    monkeypatch.setattr(logging_config.settings, "LOG_FORMAT", "auto")
-    monkeypatch.setattr(logging_config.settings, "LOG_LEVEL", "INFO")
-    assert logging_config._use_json_format() is True
-
-
-def test_setup_logging_json_format(monkeypatch):
-    """Test setup_logging uses StructuredFormatter when LOG_FORMAT is json."""
-    from app.core import logging_config
-
-    monkeypatch.setattr(logging_config.settings, "LOG_FORMAT", "json")
-    monkeypatch.setattr(logging_config.settings, "LOG_LEVEL", "INFO")
-
-    logger = logging_config.setup_logging()
-    assert logger is not None
 
 
 # =============================================================================
