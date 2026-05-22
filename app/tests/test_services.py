@@ -2913,3 +2913,44 @@ async def test_find_show_by_title_no_match(mock_metadata, _mock_get, _mock_set):
         {"directory": "got", "title": "Game of Thrones", "network": "HBO", "run time": "60 min"},
     ]
     assert await show_service._find_show_by_title("Completely Unrelated Title") is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service._index_show_by_imdb", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_get")
+@patch("app.services.show_service._get_show_cached")
+async def test_get_show_populates_reverse_index_on_cache_hit_when_missing(mock_get_cached, mock_cache_get, mock_index):
+    """get_show writes the imdb→key reverse index when the cached show has
+    an imdb_id but the index entry doesn't exist yet. Guards against the
+    regression where indexing only ran on cache miss, leaving cache-hit
+    shows unreachable via /shows/by-imdb/<imdb_id> until TTL expiry."""
+    mock_get_cached.return_value = show_service.ShowSchema(
+        epguides_key="breakingbad", title="Breaking Bad", imdb_id="tt0903747"
+    )
+    mock_cache_get.return_value = None  # reverse index miss
+
+    result = await show_service.get_show("breakingbad")
+
+    assert result is not None
+    assert result.epguides_key == "breakingbad"
+    mock_cache_get.assert_awaited_once_with("imdb_to_key:tt0903747")
+    mock_index.assert_awaited_once_with("breakingbad", "tt0903747")
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service._index_show_by_imdb", new_callable=AsyncMock)
+@patch("app.services.show_service.cache_get")
+@patch("app.services.show_service._get_show_cached")
+async def test_get_show_skips_reverse_index_when_already_present(mock_get_cached, mock_cache_get, mock_index):
+    """get_show skips the redundant index write when the reverse index
+    entry is already present — single Redis GET per call, no SET."""
+    mock_get_cached.return_value = show_service.ShowSchema(
+        epguides_key="breakingbad", title="Breaking Bad", imdb_id="tt0903747"
+    )
+    mock_cache_get.return_value = "breakingbad"  # reverse index already populated
+
+    result = await show_service.get_show("breakingbad")
+
+    assert result is not None
+    mock_cache_get.assert_awaited_once_with("imdb_to_key:tt0903747")
+    mock_index.assert_not_called()
