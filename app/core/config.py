@@ -72,7 +72,8 @@ class Settings(BaseSettings):
     # Observability (Optional)
     # -------------------------------------------------------------------------
     SENTRY_DSN: str | None = None
-    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+    SENTRY_PROFILES_SAMPLE_RATE: float = 0.0
     SENTRY_ENVIRONMENT: str = "production"
 
     model_config = SettingsConfigDict(

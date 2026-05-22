@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.constants import VERSION
 from app.core.metrics import mark_worker_dead, render_metrics
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware, get_request_id
+from app.core.observability import init_observability
 from app.exceptions import EpguidesAPIException, ExternalServiceError
 
 # =============================================================================
@@ -45,25 +46,10 @@ _initialize_logging()
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# Sentry Error Tracking (opt-in via SENTRY_DSN env var)
+# Observability (opt-in via env vars)
 # =============================================================================
 
-if settings.SENTRY_DSN:  # pragma: no cover
-    import sentry_sdk
-
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
-        profiles_sample_rate=0.1,
-        # Propagate Sentry traces to the upstream HTTP services this API
-        # talks to so distributed traces span the API → upstream boundary
-        # cleanly. Sentry itself receives traces via the DSN HTTP endpoint;
-        # it does NOT belong in this list (it's not a downstream service
-        # the API calls in the request path).
-        trace_propagation_targets=["epguides.com", "api.tvmaze.com", "localhost"],
-        release=os.environ.get("GIT_SHA", VERSION),
-        environment=settings.SENTRY_ENVIRONMENT,
-    )
+init_observability(release=os.environ.get("GIT_SHA", VERSION))
 
 
 # =============================================================================
