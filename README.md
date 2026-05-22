@@ -157,6 +157,18 @@ make up-prod
 
 See [Development Guide](https://epguides-api.readthedocs.io/en/latest/development/) for details.
 
+### Observability
+
+Error reporting and tracing are disabled unless you opt in with environment
+variables:
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `SENTRY_DSN` | empty | Enables Sentry error reporting when set |
+| `SENTRY_TRACES_SAMPLE_RATE` | `0.0` | Trace sample rate, `0.0` to `1.0` |
+| `SENTRY_PROFILES_SAMPLE_RATE` | `0.0` | Profile sample rate, `0.0` to `1.0` |
+| `SENTRY_ENVIRONMENT` | `production` | Environment tag sent with events |
+
 ## Contributing
 
 ```bash
