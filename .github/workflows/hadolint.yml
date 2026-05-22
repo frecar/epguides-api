@@ -34,7 +34,7 @@ jobs:
       - name: Run hadolint
         # Pinned to a specific version for supply-chain safety; bump
         # deliberately when upstream releases security-relevant patches.
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: ./Dockerfile
           recursive: false
