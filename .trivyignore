@@ -1,0 +1,24 @@
+# Trivy filesystem scan allowlist.
+#
+# Format: one CVE/GHSA per line. Comments via `#`. See
+#   https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
+#
+# Policy (mirrors `.osv-scanner.toml` CVSS tiers):
+#   Critical (>= 9.0)   ignored max 14 days
+#   High (7.0 - 8.9)    ignored max 30 days
+#   Medium (4.0 - 6.9)  ignored max 90 days
+#
+# When adding an ignore, document it with these inline comments
+# above the line:
+#   # type: <upstream-not-fixed | false-positive | accepted-risk>
+#   # reviewer: <name>
+#   # expires: <YYYY-MM-DD>
+#   # reason: <one-line>
+#   <CVE-ID-or-GHSA-ID>
+#
+# What does NOT belong here: upstream-fixed CVEs (bump the dep
+# instead — `ignore-unfixed: true` in the workflow already filters
+# unfixed findings to suppress the noise class).
+#
+# Empty by default. Land allowlists with the same scrutiny as any
+# code change — no silent bypass.

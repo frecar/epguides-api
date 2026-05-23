@@ -1,0 +1,40 @@
+name: Trivy fs nightly sweep
+# Nightly Trivy fs sweep — catches CVEs published against pinned
+# versions since the last PR. Companion to the `trivy-fs` job in
+# ci.yml (which gates PR/push). Identical scan, different trigger.
+#
+# Runs at 03:30 UTC — findings land in the Actions log and (on
+# failure) surface via GitHub's default workflow-failure
+# notifications without blocking any PR.
+#
+# `ignore-unfixed: true` suppresses upstream-not-yet-patched noise
+# (bumping the dep is the only real remediation, and there is
+# nothing to bump to yet).
+
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  # Manual dispatch for ad-hoc re-scans (e.g. after editing
+  # .trivyignore to verify the allowlist behaves as intended).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trivy-fs-nightly:
+    name: Trivy fs scan (nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+          ignore-unfixed: true
+          format: "table"
+          trivyignores: ".trivyignore"
+        env:
+          TRIVY_DISABLE_VEX_NOTICE: "true"

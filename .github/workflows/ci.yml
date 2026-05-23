@@ -115,9 +115,38 @@ jobs:
           REDIS_PORT: 6379
         run: uv run pytest --cov=app --cov-fail-under=100 --cov-report=term-missing -q
 
+  # Trivy fs scan. Standalone job here so PR/push runs gate on it via
+  # ci-gate. The companion .github/workflows/trivy-fs-nightly.yml owns
+  # the 03:30 UTC schedule trigger independently so scheduled sweeps
+  # do not conflate with PR signal.
+  trivy-fs:
+    name: Trivy fs scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          # CRITICAL + HIGH gate PR. Tightens over time as we drain
+          # the allowlist; widen severity if we want lower tiers in
+          # the gate later.
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+          # Suppress findings with no upstream fix available — those
+          # are noise we cannot act on (`bump the dep` is the only
+          # real remediation, and there is nothing to bump to).
+          ignore-unfixed: true
+          format: "table"
+          trivyignores: ".trivyignore"
+        env:
+          TRIVY_DISABLE_VEX_NOTICE: "true"
+
   ci-gate:
     if: always()
-    needs: [audit, lint, typecheck, test]
+    needs: [audit, lint, typecheck, test, trivy-fs]
     runs-on: ubuntu-latest
     steps:
       - run: |
