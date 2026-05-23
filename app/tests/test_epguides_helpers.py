@@ -897,6 +897,8 @@ async def test_fetch_csv_records_timeout_only_via_fetch_url(mock_fetch):
 
 
 @pytest.mark.asyncio
+@patch("app.core.cache.cache_set", new_callable=AsyncMock)
+@patch("app.core.cache.cache_get", new_callable=AsyncMock, return_value=None)
 @patch("app.services.epguides._fetch_tvmaze_episodes")
 @patch("app.services.epguides._search_tvmaze_by_title")
 @patch("app.services.epguides._get_show_title")
@@ -908,6 +910,8 @@ async def test_get_episodes_data_silent_hang_falls_back_via_show_page_maze_id(
     mock_get_title,
     mock_search,
     mock_episodes,
+    _mock_cache_get,
+    _mock_cache_set,
 ):
     """Reproduces issue #253: show page returns HTML with a usable
     maze_id, but the CSV endpoint silently hangs (httpx times out →
@@ -935,7 +939,7 @@ async def test_get_episodes_data_silent_hang_falls_back_via_show_page_maze_id(
         }
     ]
 
-    result = await epguides.get_episodes_data("testshow")
+    result = await epguides.get_episodes_data("silent_hang_maze_show")
 
     assert len(result) == 1
     assert result[0]["title"] == "Pilot"
@@ -946,6 +950,8 @@ async def test_get_episodes_data_silent_hang_falls_back_via_show_page_maze_id(
 
 
 @pytest.mark.asyncio
+@patch("app.core.cache.cache_set", new_callable=AsyncMock)
+@patch("app.core.cache.cache_get", new_callable=AsyncMock, return_value=None)
 @patch("app.services.epguides._fetch_tvmaze_episodes")
 @patch("app.services.epguides._search_tvmaze_by_title")
 @patch("app.services.epguides._get_show_title")
@@ -957,6 +963,8 @@ async def test_get_episodes_data_silent_hang_falls_back_via_title_when_no_maze_i
     mock_get_title,
     mock_search,
     mock_episodes,
+    _mock_cache_get,
+    _mock_cache_set,
 ):
     """If the show page is reachable but offers no maze_id (legacy TVRage
     format), and the TVRage CSV endpoint hangs, the fallback must still
@@ -981,7 +989,7 @@ async def test_get_episodes_data_silent_hang_falls_back_via_title_when_no_maze_i
         }
     ]
 
-    result = await epguides.get_episodes_data("legacy_show")
+    result = await epguides.get_episodes_data("silent_hang_legacy_show")
 
     assert len(result) == 1
     mock_search.assert_called_once_with("Test Show")
