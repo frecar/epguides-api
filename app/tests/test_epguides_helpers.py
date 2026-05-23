@@ -823,3 +823,166 @@ async def test_lookup_tvmaze_by_imdb_returns_none_on_parse_error(mock_client_cla
     mock_client_class.return_value = mock_client
 
     assert await epguides.lookup_tvmaze_by_imdb("tt0903747") is None
+
+
+# =============================================================================
+# fetch_csv — empty-body detection (#253)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_url")
+async def test_fetch_csv_treats_empty_body_as_upstream_unavailable(mock_fetch):
+    """HTTP 200 with a zero-byte body — the epguides CSV endpoint's
+    documented sick-mode (issue #253) — must return [] and record an
+    ``empty_response`` outcome so we can dashboard it. Returning [] is
+    what makes the caller fall through to the TVMaze fallback."""
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_response.encoding = "utf-8"
+    mock_response.text = ""
+    mock_response.content = b""
+    mock_fetch.return_value = mock_response
+
+    before = UPSTREAM_REQUESTS.labels(source="epguides", outcome="empty_response")._value.get()
+
+    result = await epguides.fetch_csv("https://epguides.com/common/exportToCSVmaze.asp?maze=999")
+
+    assert result == []
+    assert UPSTREAM_REQUESTS.labels(source="epguides", outcome="empty_response")._value.get() == before + 1
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_url")
+async def test_fetch_csv_treats_whitespace_only_body_as_empty(mock_fetch):
+    """Whitespace-only body (e.g. just a trailing newline) is also treated
+    as empty — csv.reader would otherwise return [] with no signal that
+    the upstream is actually sick."""
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_response.encoding = "utf-8"
+    mock_response.text = "\n   \n\t"
+    mock_response.content = b"\n   \n\t"
+    mock_fetch.return_value = mock_response
+
+    before = UPSTREAM_REQUESTS.labels(source="epguides", outcome="empty_response")._value.get()
+
+    result = await epguides.fetch_csv("https://epguides.com/common/exportToCSVmaze.asp?maze=999")
+
+    assert result == []
+    assert UPSTREAM_REQUESTS.labels(source="epguides", outcome="empty_response")._value.get() == before + 1
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_url")
+async def test_fetch_csv_records_timeout_only_via_fetch_url(mock_fetch):
+    """The 'silent hang' upstream behaviour shows up as an httpx
+    TimeoutException inside `_fetch_url`, which then returns None.
+    fetch_csv must not record an additional empty_response in that path —
+    the timeout counter is already incremented by `_fetch_url`. This pins
+    the contract so we don't double-count."""
+    mock_fetch.return_value = None  # simulates the timeout path
+
+    before_empty = UPSTREAM_REQUESTS.labels(source="epguides", outcome="empty_response")._value.get()
+
+    result = await epguides.fetch_csv("https://epguides.com/common/exportToCSVmaze.asp?maze=999")
+
+    assert result == []
+    assert UPSTREAM_REQUESTS.labels(source="epguides", outcome="empty_response")._value.get() == before_empty
+
+
+# =============================================================================
+# get_episodes_data — sick-CSV fallback paths (#253)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_tvmaze_episodes")
+@patch("app.services.epguides._search_tvmaze_by_title")
+@patch("app.services.epguides._get_show_title")
+@patch("app.services.epguides.fetch_csv")
+@patch("app.services.epguides._fetch_url")
+async def test_get_episodes_data_silent_hang_falls_back_via_show_page_maze_id(
+    mock_fetch_url,
+    mock_fetch_csv,
+    mock_get_title,
+    mock_search,
+    mock_episodes,
+):
+    """Reproduces issue #253: show page returns HTML with a usable
+    maze_id, but the CSV endpoint silently hangs (httpx times out →
+    _fetch_url returns None → fetch_csv returns []). The fallback must
+    engage and prefer the maze_id we already scraped from the show page
+    over the fuzzy title-based TVMaze search."""
+    # Show page itself succeeds — returns HTML with a TVMaze export link
+    show_page_resp = MagicMock()
+    show_page_resp.status_code = 200
+    show_page_resp.text = '<html><body><a href="exportToCSVmaze.asp?maze=12345">Export CSV</a></body></html>'
+    mock_fetch_url.return_value = show_page_resp
+
+    # CSV fetch hangs / times out / returns empty — simulates #253
+    mock_fetch_csv.return_value = []
+
+    # TVMaze fallback succeeds via the maze_id scraped from the show page
+    mock_episodes.return_value = [
+        {
+            "season": "1",
+            "number": "1",
+            "title": "Pilot",
+            "release_date": "2020-01-01",
+            "summary": "",
+            "poster_url": "",
+        }
+    ]
+
+    result = await epguides.get_episodes_data("testshow")
+
+    assert len(result) == 1
+    assert result[0]["title"] == "Pilot"
+    # The maze_id was scraped from the show page — no title-based search needed.
+    mock_episodes.assert_called_once_with("12345")
+    mock_search.assert_not_called()
+    mock_get_title.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_tvmaze_episodes")
+@patch("app.services.epguides._search_tvmaze_by_title")
+@patch("app.services.epguides._get_show_title")
+@patch("app.services.epguides.fetch_csv")
+@patch("app.services.epguides._fetch_url")
+async def test_get_episodes_data_silent_hang_falls_back_via_title_when_no_maze_id(
+    mock_fetch_url,
+    mock_fetch_csv,
+    mock_get_title,
+    mock_search,
+    mock_episodes,
+):
+    """If the show page is reachable but offers no maze_id (legacy TVRage
+    format), and the TVRage CSV endpoint hangs, the fallback must still
+    engage via the title-based TVMaze search."""
+    show_page_resp = MagicMock()
+    show_page_resp.status_code = 200
+    show_page_resp.text = '<html><body><a href="exportToCSV.asp?rage=99">Export CSV</a></body></html>'
+    mock_fetch_url.return_value = show_page_resp
+
+    mock_fetch_csv.return_value = []  # CSV hangs / empty body
+
+    mock_get_title.return_value = "Test Show"
+    mock_search.return_value = {"id": 67890, "name": "Test Show"}
+    mock_episodes.return_value = [
+        {
+            "season": "1",
+            "number": "1",
+            "title": "Pilot",
+            "release_date": "2020-01-01",
+            "summary": "",
+            "poster_url": "",
+        }
+    ]
+
+    result = await epguides.get_episodes_data("legacy_show")
+
+    assert len(result) == 1
+    mock_search.assert_called_once_with("Test Show")
+    mock_episodes.assert_called_once_with("67890")

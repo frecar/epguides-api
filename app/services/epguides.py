@@ -143,13 +143,30 @@ async def fetch_csv(url: str) -> list[list[str]]:
     Returns:
         List of rows (each row is a list of strings).
         Returns empty list on error.
+
+    Empty / whitespace-only response bodies are treated as upstream-unavailable:
+    when epguides.com's CSV export endpoint is sick it sometimes returns HTTP 200
+    with a zero-byte body instead of a proper error status. Detect that here so
+    the caller falls through to the TVMaze fallback rather than treating an
+    empty CSV as a valid (zero-episodes) result. Recorded as the
+    ``empty_response`` outcome on the upstream-request counter for observability.
     """
     response = await _fetch_url(url)
     if not response:
         return []
 
+    text = _clean_unicode_text(response)
+
+    if not text.strip():
+        logger.warning(
+            "Empty CSV body from %s (HTTP %d) — treating as upstream-unavailable",
+            url,
+            response.status_code,
+        )
+        record_upstream_request("epguides", "empty_response")
+        return []
+
     try:
-        text = _clean_unicode_text(response)
         return list(csv.reader(io.StringIO(text, newline="")))
     except csv.Error as e:
         logger.error("CSV parse error for %s: %s", url, e)
@@ -524,9 +541,16 @@ async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
     url = f"{EPGUIDES_BASE_URL}/{show_id}"
     response = await _fetch_url(url)
 
+    # maze_id learned from the show page (if any) — used by the TVMaze fallback
+    # to skip the imperfect title-based search when we already know the
+    # canonical TVMaze ID. This matters when the CSV endpoint is sick (timeout
+    # / 5xx / empty body) but the show-page scrape succeeded.
+    show_page_maze_id: str | None = None
+
     if response and response.status_code == 200:
         text = response.text
         csv_url, column_map, maze_id = _extract_csv_url_and_maze_id(text)
+        show_page_maze_id = maze_id
 
         if csv_url:
             rows = await fetch_csv(csv_url)
@@ -539,8 +563,31 @@ async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
                 logger.debug("Fetched %d episodes from epguides for %s", len(episodes), show_id)
                 return episodes
 
+            # CSV fetch succeeded structurally but produced no episodes
+            # (timeout, empty body, parse error, malformed rows). Surface the
+            # signal — the cache hides repeated upstream sickness otherwise.
+            logger.warning(
+                "epguides CSV returned no episodes for %s (csv_url=%s) — falling back to TVMaze",
+                show_id,
+                csv_url,
+            )
+
     # Strategy 2: TVMaze fallback
-    # Get the proper show title from our metadata for accurate search
+    # Prefer the maze_id we already scraped from the show page — it's the
+    # canonical ID, no fuzzy-title-search ambiguity (see #229 for the class
+    # of bugs the title search creates). Fall back to title-search only when
+    # the show page didn't yield a maze_id (e.g. show-page fetch failed too).
+    if show_page_maze_id:
+        episodes = await _fetch_tvmaze_episodes(show_page_maze_id)
+        if episodes:
+            logger.info(
+                "Fetched %d episodes from TVMaze for %s (maze=%s, via show-page id)",
+                len(episodes),
+                show_id,
+                show_page_maze_id,
+            )
+            return episodes
+
     show_title = await _get_show_title(show_id)
     if show_title:
         tvmaze_show = await _search_tvmaze_by_title(show_title)
