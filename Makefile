@@ -1,4 +1,4 @@
-.PHONY: help setup up down up-prod logs run test lint format format-check fix check coverage ci
+.PHONY: help setup up dev down stop build up-prod logs run test lint format format-check fix check coverage ci
 .PHONY: docs docs-build cache-clear deploy-prod doctor urls open clean
 
 .DEFAULT_GOAL := help
@@ -21,7 +21,10 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make up             Start dev (Docker + hot reload)"
+	@echo "  make dev            Alias for 'up'"
 	@echo "  make down           Stop all services"
+	@echo "  make stop           Alias for 'down'"
+	@echo "  make build          Build production image without starting"
 	@echo "  make logs           View logs"
 	@echo "  make run            Run locally without Docker"
 	@echo ""
