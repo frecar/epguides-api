@@ -27,12 +27,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: aquasecurity/trivy-action@v0.36.0
+      # Two-step gating mirrors the PR-gating job in ci.yml. Unified
+      # policy across PR + nightly: CRITICAL gates the workflow run
+      # (fails the scheduled job → GitHub notification); HIGH surfaces
+      # in log only. Same split keeps the meaning of "the trivy-fs
+      # policy" uniform across triggers.
+      - name: Trivy fs scan — CRITICAL (gates run)
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: "fs"
           scan-ref: "."
-          severity: "CRITICAL,HIGH"
+          severity: "CRITICAL"
           exit-code: "1"
+          ignore-unfixed: true
+          format: "table"
+          trivyignores: ".trivyignore"
+        env:
+          TRIVY_DISABLE_VEX_NOTICE: "true"
+      - name: Trivy fs scan — HIGH (annotation only)
+        # if: always() ensures a CRITICAL fail above does not hide
+        # HIGH findings — see ci.yml comment for the rationale.
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "HIGH"
+          exit-code: "0"
           ignore-unfixed: true
           format: "table"
           trivyignores: ".trivyignore"

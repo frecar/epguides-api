@@ -119,6 +119,18 @@ jobs:
   # ci-gate. The companion .github/workflows/trivy-fs-nightly.yml owns
   # the 03:30 UTC schedule trigger independently so scheduled sweeps
   # do not conflate with PR signal.
+  #
+  # Two-step gating: a single step with `severity: "CRITICAL,HIGH"` +
+  # `exit-code: "1"` gates on BOTH severities (the `exit-code` applies
+  # to ANY finding matching the `severity` filter). Splitting into two
+  # steps lets CRITICAL hard-gate and HIGH stay annotation-only:
+  #   step 1: severity=CRITICAL, exit-code=1                  → blocks merge
+  #   step 2: severity=HIGH, exit-code=0, if: always()        → surfaces findings only
+  #
+  # `if: always()` on the HIGH step is load-bearing: without it, a
+  # CRITICAL failure skips the HIGH-annotation step entirely, which
+  # would actually weaken HIGH visibility compared to the previous
+  # single-step form.
   trivy-fs:
     name: Trivy fs scan
     runs-on: ubuntu-latest
@@ -126,18 +138,34 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
-      - uses: aquasecurity/trivy-action@v0.36.0
+      - name: Trivy fs scan — CRITICAL (gates merge)
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: "fs"
           scan-ref: "."
-          # CRITICAL + HIGH gate PR. Tightens over time as we drain
-          # the allowlist; widen severity if we want lower tiers in
-          # the gate later.
-          severity: "CRITICAL,HIGH"
+          severity: "CRITICAL"
           exit-code: "1"
           # Suppress findings with no upstream fix available — those
           # are noise we cannot act on (`bump the dep` is the only
           # real remediation, and there is nothing to bump to).
+          ignore-unfixed: true
+          format: "table"
+          trivyignores: ".trivyignore"
+        env:
+          TRIVY_DISABLE_VEX_NOTICE: "true"
+      - name: Trivy fs scan — HIGH (annotation only)
+        # `if: always()` so a CRITICAL failure above does not suppress
+        # HIGH visibility — policy is "CRITICAL gates, HIGH informs",
+        # not "CRITICAL gates, HIGH only-shown-when-clean".
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          # exit-code=0 — HIGH surfaces in the run log but does NOT
+          # gate. Avoids base-image noise creating bypass culture.
+          severity: "HIGH"
+          exit-code: "0"
           ignore-unfixed: true
           format: "table"
           trivyignores: ".trivyignore"
