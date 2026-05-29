@@ -23,13 +23,18 @@ permissions:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
     steps:
       - uses: actions/checkout@v6
         with:
           # Need full history so create-pull-request can compute the diff
           # against main correctly when re-running on an existing PR.
           fetch-depth: 0
+
+      - name: Isolate uv cache
+        run: |
+          echo "UV_CACHE_DIR=${RUNNER_TEMP}/uv-cache" >> "$GITHUB_ENV"
+          echo "UV_PYTHON_INSTALL_DIR=${RUNNER_TEMP}/uv-python" >> "$GITHUB_ENV"
 
       - uses: astral-sh/setup-uv@v7
         with:

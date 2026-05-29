@@ -13,12 +13,17 @@ concurrency:
 jobs:
   audit:
     name: Security Audit
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
     steps:
       - uses: actions/checkout@v6
 
       - name: Private reference check
         run: bash scripts/check-no-internal-refs.sh
+
+      - name: Isolate uv cache
+        run: |
+          echo "UV_CACHE_DIR=${RUNNER_TEMP}/uv-cache" >> "$GITHUB_ENV"
+          echo "UV_PYTHON_INSTALL_DIR=${RUNNER_TEMP}/uv-python" >> "$GITHUB_ENV"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -43,9 +48,14 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
     steps:
       - uses: actions/checkout@v6
+
+      - name: Isolate uv cache
+        run: |
+          echo "UV_CACHE_DIR=${RUNNER_TEMP}/uv-cache" >> "$GITHUB_ENV"
+          echo "UV_PYTHON_INSTALL_DIR=${RUNNER_TEMP}/uv-python" >> "$GITHUB_ENV"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -67,9 +77,14 @@ jobs:
 
   typecheck:
     name: Type Check
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
     steps:
       - uses: actions/checkout@v6
+
+      - name: Isolate uv cache
+        run: |
+          echo "UV_CACHE_DIR=${RUNNER_TEMP}/uv-cache" >> "$GITHUB_ENV"
+          echo "UV_PYTHON_INSTALL_DIR=${RUNNER_TEMP}/uv-python" >> "$GITHUB_ENV"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -85,7 +100,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
     services:
       redis:
         image: redis:7-alpine
@@ -99,6 +114,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Isolate uv cache
+        run: |
+          echo "UV_CACHE_DIR=${RUNNER_TEMP}/uv-cache" >> "$GITHUB_ENV"
+          echo "UV_PYTHON_INSTALL_DIR=${RUNNER_TEMP}/uv-python" >> "$GITHUB_ENV"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -133,7 +153,7 @@ jobs:
   # single-step form.
   trivy-fs:
     name: Trivy fs scan
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
     permissions:
       contents: read
     steps:
@@ -175,7 +195,7 @@ jobs:
   ci-gate:
     if: always()
     needs: [audit, lint, typecheck, test, trivy-fs]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
     steps:
       - run: |
           if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ]; then

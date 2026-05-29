@@ -24,7 +24,7 @@ permissions:
 jobs:
   trivy-fs-nightly:
     name: Trivy fs scan (nightly)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
     steps:
       - uses: actions/checkout@v6
       # Two-step gating mirrors the PR-gating job in ci.yml. Unified

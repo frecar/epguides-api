@@ -11,8 +11,8 @@ keywords = ["tv", "shows", "api", "epguides", "fastapi"]
 # Pinned exact versions matching the previous requirements.txt floor.
 # uv.lock pins transitives. Bump deliberately, not via floating ranges.
 dependencies = [
-    "fastapi==0.136.1",
-    "uvicorn[standard]==0.47.0",
+    "fastapi==0.136.3",
+    "uvicorn[standard]==0.48.0",
     "redis==7.4.0",
     "pydantic==2.13.4",
     "pydantic-settings==2.14.1",
