@@ -226,6 +226,12 @@ jobs:
     runs-on: [self-hosted, Linux, X64, cluster-ci]
     permissions:
       contents: read
+    # Lift the Docker Hub token into a job-level env var so the login step
+    # can gate on its presence. The `secrets` context is NOT permitted in
+    # an `if:` expression, but `env` is — and on fork PRs (no secrets) the
+    # var resolves to an empty string, so the guard skips login cleanly.
+    env:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       # Authenticate to Docker Hub BEFORE buildx is created. The buildx
@@ -244,7 +250,7 @@ jobs:
       # on an empty credential. No registry hostname is committed, so the
       # public-reference guard stays green.
       - name: Log in to Docker Hub
-        if: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+        if: env.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -285,6 +291,11 @@ jobs:
     runs-on: [self-hosted, Linux, X64, cluster-ci]
     permissions:
       contents: read
+    # See docker-build job: `secrets` is not allowed in `if:`, so the
+    # token is lifted to job-level env for the login guard. Empty on
+    # fork PRs → login skipped, anonymous pull.
+    env:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       # Install Trivy into a per-job directory on the runner's local temp
@@ -308,7 +319,7 @@ jobs:
       # propagate into the container builder. Fork-PR-safe via the token
       # guard; no registry hostname is committed.
       - name: Log in to Docker Hub
-        if: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+        if: env.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
