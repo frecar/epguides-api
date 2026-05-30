@@ -87,3 +87,18 @@ repos:
         language: system
         pass_filenames: true
         stages: [pre-commit]
+
+      - id: ci-parity
+        name: "CI parity — deterministic CI checks"
+        # Closes the local-vs-CI check-parity gap. Runs the exact subset of
+        # the CI lint/type jobs that is deterministic + locally reproducible
+        # from the repo tree (full-tree ruff incl RUF100, mypy, configured-
+        # LLM-endpoint lint). Single `make ci-parity` target — one hook, no
+        # drift between this list and the CI step set. The 100%-coverage
+        # floor is already enforced on every commit by the `tests-coverage`
+        # hook above, so it is not duplicated here.
+        entry: make ci-parity
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-push]
