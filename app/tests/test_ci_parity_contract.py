@@ -17,8 +17,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import yaml
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = _REPO_ROOT / "Makefile"
 PRE_COMMIT = _REPO_ROOT / ".pre-commit-config.yaml"
@@ -28,12 +26,9 @@ def _makefile_text() -> str:
     return MAKEFILE.read_text(encoding="utf-8")
 
 
-def _local_hooks() -> dict[str, dict]:
-    config = yaml.safe_load(PRE_COMMIT.read_text(encoding="utf-8"))
-    for repo in config["repos"]:
-        if repo.get("repo") == "local":
-            return {hook["id"]: hook for hook in repo["hooks"]}
-    raise AssertionError("no `repo: local` block in .pre-commit-config.yaml")
+def _pre_commit_text() -> str:
+    # Raw text (no PyYAML) keeps this module stdlib-only.
+    return PRE_COMMIT.read_text(encoding="utf-8")
 
 
 def test_makefile_exposes_ci_parity_target() -> None:
@@ -53,10 +48,10 @@ def test_makefile_exposes_ci_parity_target() -> None:
 
 def test_pre_push_runs_ci_parity_target() -> None:
     """A pre-push hook invokes `make ci-parity` — one hook, no drift."""
-    hooks = _local_hooks()
-    assert "ci-parity" in hooks, "missing the ci-parity pre-push hook"
-    parity = hooks["ci-parity"]
-    assert parity["entry"] == "make ci-parity"
-    assert parity["stages"] == ["pre-push"]
-    assert parity["always_run"] is True
-    assert parity["pass_filenames"] is False
+    text = _pre_commit_text()
+    assert "- id: ci-parity" in text, "missing the ci-parity pre-push hook"
+    block = text.split("- id: ci-parity", 1)[1].split("- id:", 1)[0]
+    assert "entry: make ci-parity" in block
+    assert "stages: [pre-push]" in block
+    assert "always_run: true" in block
+    assert "pass_filenames: false" in block
