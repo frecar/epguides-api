@@ -158,9 +158,24 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
+      # Install Trivy into a per-job directory on the runner's local temp
+      # space. setup-trivy's default install path ($HOME/.local/bin/trivy-bin)
+      # is shared across concurrent jobs on a self-hosted runner host, so one
+      # job writing the binary while another execs it raises ETXTBSY ("Text
+      # file busy", exit 126). ${{ runner.temp }} is unique per job and on
+      # local disk, so there is no shared write/exec target to race on.
+      - name: Install Trivy (per-job, isolated binary)
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.70.0 # keep in sync with aquasecurity/trivy-action@v0.36.0
+          cache: true
+          path: ${{ runner.temp }}
+      - name: Put the per-job Trivy on PATH
+        run: echo "${{ runner.temp }}/trivy-bin" >> "$GITHUB_PATH"
       - name: Trivy fs scan — CRITICAL (gates merge)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          skip-setup-trivy: true # use the per-job Trivy installed above
           scan-type: "fs"
           scan-ref: "."
           severity: "CRITICAL"
@@ -180,6 +195,7 @@ jobs:
         if: always()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          skip-setup-trivy: true # use the per-job Trivy installed above
           scan-type: "fs"
           scan-ref: "."
           # exit-code=0 — HIGH surfaces in the run log but does NOT
