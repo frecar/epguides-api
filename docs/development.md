@@ -121,10 +121,10 @@ app/tests/
 
 | Tool | Purpose |
 |------|---------|
-| 🎨 **Black** | Code formatting (120 chars) |
-| 📦 **isort** | Import sorting |
-| ⚡ **Ruff** | Fast linting |
-| 🧪 **pytest** | Testing |
+| ⚡ **Ruff** | Linting, formatting (120 chars), and import sorting |
+| 🧪 **pytest** | Testing (100% coverage required) |
+| 🔎 **mypy** | Static type checking |
+| 📦 **uv** | Dependency + environment management |
 
 ### Manual Checks
 

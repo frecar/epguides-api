@@ -1,6 +1,9 @@
 version: 2
 updates:
-  - package-ecosystem: "pip"
+  # uv ecosystem — updates pyproject.toml + uv.lock directly (the repo is
+  # uv-managed; there is no requirements.txt at the project root for pip
+  # to scan).
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"

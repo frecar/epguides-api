@@ -44,7 +44,8 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 |-------------|---------|:--------:|
 | Docker | Latest | ✅ |
 | Git | Latest | ✅ |
-| Python | 3.11+ | ⚪ Optional |
+| Python | 3.14 | ⚪ Optional |
+| [uv](https://docs.astral.sh/uv/) | Latest | ⚪ Optional (local dev/tests) |
 
 ### Quick Start
 
@@ -84,16 +85,17 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 !!! note "Only needed for running tests locally"
     If you just want to run the API, `make up` is all you need!
 
+The project is managed with [uv](https://docs.astral.sh/uv/) — `make setup`
+creates the uv-managed virtual environment from the committed `uv.lock` and
+installs the pre-commit hooks in one step:
+
 ```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
+# Create the uv-managed venv + install pre-commit hooks
+make setup
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Install pre-commit hooks
-pre-commit install
+# (equivalently, without the Makefile wrapper)
+uv sync                 # build .venv from uv.lock
+uv run pre-commit install
 ```
 
 ---
@@ -126,7 +128,8 @@ epguides-api/
 ├── Dockerfile              # Production container
 ├── docker-compose.yml      # Development setup
 ├── Makefile                # Dev commands
-└── requirements.txt        # Dependencies
+├── pyproject.toml          # Project metadata + dependencies (uv/PEP 621)
+└── uv.lock                 # Pinned dependency lockfile
 ```
 
 ---
