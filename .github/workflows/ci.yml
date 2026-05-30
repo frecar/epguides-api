@@ -228,6 +228,27 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
+      # Authenticate to Docker Hub BEFORE buildx is created. The buildx
+      # docker-container driver does NOT inherit the host daemon's
+      # registry config, so base-image resolution (`FROM python:3.14-slim`,
+      # `FROM ghcr.io/astral-sh/uv`) otherwise hits Docker Hub anonymously
+      # and is rate-limited (HTTP 429) once the BuildKit cache misses.
+      # An authenticated pull raises the Docker Hub rate limit well above
+      # the anonymous ceiling, removing the 429. setup-buildx-action reads
+      # the credentials login writes to the runner's docker config at
+      # builder-create time and propagates them into the container builder,
+      # so login MUST precede the buildx step.
+      #
+      # Guarded on a non-empty token so fork PRs — which GitHub never grants
+      # secrets — degrade cleanly to an anonymous pull instead of erroring
+      # on an empty credential. No registry hostname is committed, so the
+      # public-reference guard stays green.
+      - name: Log in to Docker Hub
+        if: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build runtime image (cached)
@@ -280,6 +301,18 @@ jobs:
           path: ${{ runner.temp }}
       - name: Put the per-job Trivy on PATH
         run: echo "${{ runner.temp }}/trivy-bin" >> "$GITHUB_PATH"
+      # Authenticate to Docker Hub before buildx is created — same reason
+      # as the docker-build job: the docker-container driver pulls base
+      # images anonymously and is 429-rate-limited on a cache miss without
+      # this. Login MUST precede setup-buildx-action so the credentials
+      # propagate into the container builder. Fork-PR-safe via the token
+      # guard; no registry hostname is committed.
+      - name: Log in to Docker Hub
+        if: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build runtime image (cached, loaded for scan)
