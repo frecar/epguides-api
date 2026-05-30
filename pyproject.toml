@@ -34,8 +34,8 @@ dev = [
     "pytest-cov==7.1.0",
     "ruff==0.15.14",
     "pre-commit==4.6.0",
-    "mypy",
-    "pip-audit",
+    "mypy==2.1.0",
+    "pip-audit==2.10.0",
 ]
 
 [build-system]

@@ -35,10 +35,10 @@ For local runs see "Quick Start" below.
 This repo defines and adheres to a Python-service quality baseline:
 
 - **Dependency manager:** `uv` with `uv.lock` committed. Docker builds use `uv sync --frozen --no-dev` so any lockfile drift fails the build instead of silently re-resolving.
-- **Lint + format:** `ruff` (target `py313` — `py314` strips parens around `except (A, B):` clauses, which the formatter shouldn't do).
+- **Lint + format:** `ruff` (target `py314`, matching the committed `.python-version` and `requires-python = ">=3.14"`).
 - **Type-check:** `mypy` with `check_untyped_defs` + `warn_unused_ignores` + `strict_optional` floor; strict mode opt-in per module.
 - **Tests:** `pytest` + `pytest-cov`. **100% coverage enforced** at the pre-commit + CI gate (`fail_under = 100.0` in `pyproject.toml`). Commits below the floor are rejected.
-- **Security:** OSV-Scanner runs on `uv.lock` in CI. Unfixable transitive CVEs land in `.osv-scanner.toml` with a fix-by date and a tracking issue — never silenced silently.
+- **Security:** CVE coverage is layered in CI — `pip-audit --strict --require-hashes` against the exported (hashed) transitive dependency set, plus a Trivy filesystem scan (reads `uv.lock`) and a Trivy image scan of the built runtime. CRITICAL findings gate the merge; HIGH surface as annotations. Unfixable findings with no upstream patch are suppressed via `.trivyignore` / `ignore-unfixed` with a tracking trail — never silenced silently.
 - **Public surface:** `scripts/check-no-internal-refs.sh` runs in pre-commit and CI. Keep source, docs, and examples standalone; use runtime configuration for private deployment values.
 - **Error tracking:** `app.core.observability` initialises `sentry-sdk[fastapi]` only when `SENTRY_DSN` env var is set; traces and profiles default to `0.0` unless configured.
 - **Observability:** `/metrics` endpoint exposes Prometheus exposition format (cache hits/misses by type, upstream request totals by source/outcome, upstream latency histogram). `/health`, `/health/llm`, `/health/cache` return structured JSON.
@@ -202,6 +202,6 @@ Setup: `make setup` (runs `uv sync` to create `.venv` from `uv.lock`, then insta
 ## Style
 
 - Line length: 120
-- Python 3.12+
+- Python 3.14 (pinned via committed `.python-version`; `requires-python = ">=3.14"`)
 - All I/O async
 - Ruff for linting and formatting
