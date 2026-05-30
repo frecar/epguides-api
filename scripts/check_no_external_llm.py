@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Enforce a configured LLM endpoint policy: no pay-per-token external
-LLM API endpoints in committed code.
+"""Enforce the LLM endpoint policy: no pay-per-token external LLM API
+endpoints in committed code.
 
-This project is designed to be pointed at any OpenAI-compatible LLM
-gateway (local Ollama, vLLM, llama.cpp server, hosted endpoint, ...).
-Pay-per-token external APIs (`api.anthropic.com`, `api.openai.com`, etc.)
-are forbidden in committed code paths to keep cost, privacy exposure,
-and third-party dependency out of the runtime hot path.
+LLM calls should resolve their endpoint at runtime from configuration (an
+approved proxy/gateway) rather than hard-coding a third-party host. External
+pay-per-token APIs (`api.anthropic.com`, `api.openai.com`, etc.) add cost,
+privacy exposure, and third-party dependency. See internal tracking for the
+policy rationale.
 
 This script flags any reference to those endpoints in committed files.
 Test fixtures and benchmark scripts are exempt (they may legitimately
@@ -33,23 +33,24 @@ PATTERN = re.compile(r"api\." + r"(?:" + "|".join(_FORBIDDEN_HOSTS) + r")" + r"\
 # forbidden patterns when explaining the policy.
 IGNORE_MARKER = "llm-policy: ignore"
 
-# Path fragments / filenames that are always allowed (tests, benchmarks,
-# this script itself, virtualenvs, build artifacts).
-ALLOWED_PATH_FRAGMENTS = (
-    "/tests/",
-    "/test/",
-    "/.venv/",
-    "/node_modules/",
-    "/__pycache__/",
-    "/.git/",
-    "/.next/",
-    "/.cache/",
-    "/.mypy_cache/",
-    "/.ruff_cache/",
-    "/.pytest_cache/",
-    "/site-packages/",
-    "/dist/",
-    "/build/",
+# Path components / filenames that are always allowed (tests, benchmarks,
+# this script itself, virtualenvs, build artifacts). Component matching handles
+# both pre-commit's relative paths (`tests/foo.py`) and CI's repo-walk paths.
+ALLOWED_PATH_COMPONENTS = (
+    "tests",
+    "test",
+    ".venv",
+    "node_modules",
+    "__pycache__",
+    ".git",
+    ".next",
+    ".cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    "site-packages",
+    "dist",
+    "build",
 )
 ALLOWED_FILENAMES = {
     "check_no_external_llm.py",
@@ -76,8 +77,7 @@ CHECKED_EXTENSIONS = {
 
 def is_allowed_path(path: Path) -> bool:
     """Return True if the file is in an allowlisted location."""
-    path_str = str(path)
-    if any(frag in path_str for frag in ALLOWED_PATH_FRAGMENTS):
+    if any(part in ALLOWED_PATH_COMPONENTS for part in path.parts):
         return True
     if path.name in ALLOWED_FILENAMES:
         return True
@@ -129,15 +129,14 @@ def main(argv: list[str]) -> int:
 
     if violation_count:
         print()
-        print(f"FAIL: {violation_count} violation(s) of configured LLM endpoint policy.")
+        print(f"FAIL: {violation_count} violation(s) of the LLM endpoint policy.")
         print()
-        print("Project policy: route LLM calls through your configured gateway")
-        print("(set via LLM_API_URL). Pay-per-token external APIs")
-        print("(api.anthropic.com, api.openai.com, etc.) are forbidden in")
-        print("committed code paths.")
+        print("Policy: route all LLM calls through an approved proxy/gateway.")
+        print("Pay-per-token external APIs (api.anthropic.com, api.openai.com,")
+        print("etc.) are forbidden in committed code.")
         print()
         print("Fix options:")
-        print("  - Replace the endpoint with an env-driven default (LLM_API_URL)")
+        print("  - Replace the endpoint with a configured gateway URL (env-driven default)")
         print("  - If the line is documentation that needs to name the forbidden")
         print(f"    pattern, append a trailing comment: `# {IGNORE_MARKER}`")
         print("  - If it's a test fixture, move the file under tests/ (allowlisted)")
