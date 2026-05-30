@@ -286,7 +286,7 @@ jobs:
             [registry."zot-lxc.home.carlsen.io:5000"]
               http = true
       - name: Build runtime image (cached)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime
@@ -367,7 +367,7 @@ jobs:
             [registry."zot-lxc.home.carlsen.io:5000"]
               http = true
       - name: Build runtime image (cached, loaded for scan)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime
