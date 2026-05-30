@@ -166,9 +166,31 @@ fix:
 check: format-check lint
 	@echo "All static checks passed"
 
+typecheck:
+	$(RUN) mypy app/ --config-file pyproject.toml --exclude 'app/tests/'
+
 coverage:
 	$(RUN) pytest --cov=app --cov-report=term-missing --cov-report=html
 	@echo "HTML report: htmlcov/index.html"
+
+# Local-vs-CI check PARITY target. Runs the exact DETERMINISTIC, locally
+# reproducible subset of CI so a clean `make ci-parity` guarantees the
+# corresponding CI lint/type steps go green — closing the push->red->fix
+# churn. A single pre-push hook invokes this one target, mirroring the CI
+# step set 1:1 so the two can't drift. Each line maps to a named CI step:
+#
+#   format-check + lint    -> ruff format --check + ruff check over the FULL
+#                             app/ tree (catches RUF100 unused-noqa in files
+#                             the pre-commit changed-file `--fix` pass skips).
+#   typecheck              -> mypy app/ (the pre-commit hooks have no mypy).
+#   check_no_external_llm   -> configured-LLM-endpoint lint over the full tree
+#                             (the pre-commit hook runs changed files only).
+#
+# Coverage is NOT duplicated here: the `tests-coverage` pre-commit hook
+# already enforces `--cov-fail-under=100` on every commit, so the floor
+# already fires locally before any push.
+ci-parity: format-check lint typecheck
+	$(RUN) python scripts/check_no_external_llm.py
 
 ci: format-check lint test
 	@echo "All checks passed"
