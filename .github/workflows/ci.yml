@@ -208,9 +208,129 @@ jobs:
         env:
           TRIVY_DISABLE_VEX_NOTICE: "true"
 
+  # Build the production image in CI. Without this, the multi-stage
+  # Dockerfile is only syntax-linted by hadolint — an actual build
+  # regression (a base-image tag that no longer resolves, a broken
+  # `uv sync`, a COPY path that drifts after a refactor) would merge
+  # silently and only surface on the next deploy rebuild. This job
+  # gates every PR on a real `docker build` of the runtime target.
+  #
+  # The build is BuildKit-cached via GitHub Actions cache so the cost
+  # stays bounded: a Dockerfile/lockfile-stable PR is a near-instant
+  # cache hit; only dependency or base-image changes pay the cold-build
+  # cost. `load: true` is omitted here (this job only needs to prove the
+  # build succeeds, not export the image) — the trivy-image job below
+  # loads it for scanning off the same shared cache.
+  docker-build:
+    name: Docker build
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build runtime image (cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: false
+          load: false
+          tags: epguides-api:ci
+          cache-from: type=gha,scope=docker-image
+          cache-to: type=gha,mode=max,scope=docker-image
+
+  # Trivy image scan. Orthogonal to trivy-fs above: `fs` scans the repo's
+  # manifests and lockfiles; `image` scans the BUILT image — the
+  # base-image OS package layer (python:3.14-slim) plus the installed
+  # virtualenv. Without this, base-image CVEs are invisible to CI.
+  #
+  # This job rebuilds the runtime image, but off the SAME GitHub Actions
+  # BuildKit cache the docker-build job populated, so the second build is
+  # a cache hit and the extra cost is the image load + scan, not a full
+  # rebuild. `load: true` puts the image in the local Docker daemon so
+  # `trivy image` can read it.
+  #
+  # Two-step gating mirrors the trivy-fs job exactly:
+  #   step 1: severity=CRITICAL, exit-code=1                  → blocks merge
+  #   step 2: severity=HIGH, exit-code=0, if: always()        → surfaces findings only
+  #
+  # `if: always()` on the HIGH step is load-bearing: without it, a
+  # CRITICAL failure skips the HIGH-annotation step entirely, which
+  # would weaken HIGH visibility.
+  trivy-image:
+    name: Trivy image scan
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      # Install Trivy into a per-job directory on the runner's local temp
+      # space. setup-trivy's default install path ($HOME/.local/bin/trivy-bin)
+      # is shared across concurrent jobs on a self-hosted runner host, so one
+      # job writing the binary while another execs it raises ETXTBSY ("Text
+      # file busy", exit 126). ${{ runner.temp }} is unique per job and on
+      # local disk, so there is no shared write/exec target to race on.
+      - name: Install Trivy (per-job, isolated binary)
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.70.0 # keep in sync with aquasecurity/trivy-action@v0.36.0
+          cache: true
+          path: ${{ runner.temp }}
+      - name: Put the per-job Trivy on PATH
+        run: echo "${{ runner.temp }}/trivy-bin" >> "$GITHUB_PATH"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build runtime image (cached, loaded for scan)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: false
+          load: true
+          tags: epguides-api:scan
+          cache-from: type=gha,scope=docker-image
+          cache-to: type=gha,mode=max,scope=docker-image
+      - name: Trivy image scan — CRITICAL (gates merge)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          skip-setup-trivy: true # use the per-job Trivy installed above
+          scan-type: "image"
+          image-ref: "epguides-api:scan"
+          severity: "CRITICAL"
+          exit-code: "1"
+          # Suppress findings with no upstream fix available — those
+          # are noise we cannot act on (`bump the base image` does not
+          # always have a target). Mirrors the trivy-fs policy.
+          ignore-unfixed: true
+          format: "table"
+          trivyignores: ".trivyignore.image"
+        env:
+          TRIVY_DISABLE_VEX_NOTICE: "true"
+      - name: Trivy image scan — HIGH (annotation only)
+        # `if: always()` so a CRITICAL failure above does not suppress
+        # HIGH visibility — policy is "CRITICAL gates, HIGH informs",
+        # not "CRITICAL gates, HIGH only-shown-when-clean".
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          skip-setup-trivy: true # use the per-job Trivy installed above
+          scan-type: "image"
+          image-ref: "epguides-api:scan"
+          # exit-code=0 — HIGH surfaces in the run log but does NOT
+          # gate. Avoids base-image noise creating bypass culture.
+          severity: "HIGH"
+          exit-code: "0"
+          ignore-unfixed: true
+          format: "table"
+          trivyignores: ".trivyignore.image"
+        env:
+          TRIVY_DISABLE_VEX_NOTICE: "true"
+
   ci-gate:
     if: always()
-    needs: [audit, lint, typecheck, test, trivy-fs]
+    needs: [audit, lint, typecheck, test, trivy-fs, docker-build, trivy-image]
     runs-on: [self-hosted, Linux, X64, cluster-ci]
     steps:
       - run: |
