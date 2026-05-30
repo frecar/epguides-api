@@ -24,6 +24,10 @@ permissions:
 jobs:
   refresh:
     runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # Bounded ceiling so a wedged runner (hung uv lock network resolve /
+    # PR-create API call) fails fast instead of holding a shared
+    # self-hosted runner for the GitHub default 6h.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:

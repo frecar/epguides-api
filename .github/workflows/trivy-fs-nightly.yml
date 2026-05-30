@@ -25,6 +25,10 @@ jobs:
   trivy-fs-nightly:
     name: Trivy fs scan (nightly)
     runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # Bounded ceiling so a wedged runner (hung Trivy DB pull or stuck
+    # scan) fails fast instead of holding a shared self-hosted runner
+    # for the GitHub default 6h. Mirrors the trivy-fs PR job in ci.yml.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       # Install Trivy into a per-job directory — see the ci.yml trivy-fs
