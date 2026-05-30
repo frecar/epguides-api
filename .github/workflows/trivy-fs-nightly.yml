@@ -27,6 +27,19 @@ jobs:
     runs-on: [self-hosted, Linux, X64, cluster-ci]
     steps:
       - uses: actions/checkout@v6
+      # Install Trivy into a per-job directory — see the ci.yml trivy-fs
+      # job for the full rationale: setup-trivy's default path is shared
+      # across concurrent jobs on the self-hosted runner host, so writing
+      # the binary in one job while another execs it raises ETXTBSY
+      # (exit 126). ${{ runner.temp }} is per-job and on local disk.
+      - name: Install Trivy (per-job, isolated binary)
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.70.0 # keep in sync with aquasecurity/trivy-action@v0.36.0
+          cache: true
+          path: ${{ runner.temp }}
+      - name: Put the per-job Trivy on PATH
+        run: echo "${{ runner.temp }}/trivy-bin" >> "$GITHUB_PATH"
       # Two-step gating mirrors the PR-gating job in ci.yml. Unified
       # policy across PR + nightly: CRITICAL gates the workflow run
       # (fails the scheduled job → GitHub notification); HIGH surfaces
@@ -35,6 +48,7 @@ jobs:
       - name: Trivy fs scan — CRITICAL (gates run)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          skip-setup-trivy: true # use the per-job Trivy installed above
           scan-type: "fs"
           scan-ref: "."
           severity: "CRITICAL"
@@ -50,6 +64,7 @@ jobs:
         if: always()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          skip-setup-trivy: true # use the per-job Trivy installed above
           scan-type: "fs"
           scan-ref: "."
           severity: "HIGH"
