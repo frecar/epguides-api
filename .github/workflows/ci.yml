@@ -10,6 +10,18 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least-privilege default for the whole workflow. Every
+# job here is read-only — checkout, lint, type-check, test, dependency
+# audit, Docker build (push: false), and Trivy fs/image scans. None
+# post PR comments, push pages, push an image, or cut a release, so no
+# job needs a write escalation. The trivy-fs / docker-build /
+# trivy-image jobs keep their own explicit `permissions: { contents:
+# read }` as documentation; this top-level block makes the read-only
+# floor the default for jobs that don't restate it, rather than relying
+# on the broad ambient `GITHUB_TOKEN` permissions.
+permissions:
+  contents: read
+
 jobs:
   audit:
     name: Security Audit
@@ -372,29 +384,39 @@ jobs:
         env:
           TRIVY_DISABLE_VEX_NOTICE: "true"
 
-  # Aggregate gate. `if: always()` runs it even when a required job
-  # failed, so it can inspect every result and produce the single
-  # pass/fail signal branch protection keys off.
+  # Aggregate gate. This is the single required check
+  # branch protection keys off, so it must run on EVERY outcome and
+  # treat ANYTHING that is not a clean success across all `needs` jobs
+  # as a hard fail. `if: always()` guarantees the gate itself always
+  # runs and reports a definitive pass/fail status (a job that is
+  # itself skipped reports `skipped`, which some branch-protection
+  # configs mis-read as success — so the gate must never be allowed to
+  # skip).
   #
-  # The check must treat ANYTHING that is not a clean success as a
-  # hard fail. `contains(needs.*.result, 'failure')` alone is the
-  # classic GitHub Actions gating foot-gun: a required job that ends
-  # `cancelled` (runner killed mid-run, concurrency cancel landed)
-  # never produces `failure`, so a `failure`-only gate reports green
-  # while a mandatory check did not actually pass. We therefore fail
-  # on `failure` OR `cancelled`.
+  # The assertion catches all three non-success `needs.*.result`
+  # values, because `contains(needs.*.result, 'failure')` alone is the
+  # classic GitHub Actions gating foot-gun:
+  #   - `failure`   — a job failed outright.
+  #   - `cancelled` — runner killed mid-run, or a concurrency cancel
+  #     landed. A cancelled job never reports `failure`, so a
+  #     `failure`-only gate would go green while a mandatory check did
+  #     not actually pass.
+  #   - `skipped`   — an upstream `needs` dependency did not run (e.g.
+  #     its own dependency was cancelled, cascading a skip). A skipped
+  #     required job is NOT a passed one, so the gate fails on it too.
   #
-  # `skipped` is intentionally allowed through: no job in `needs:` is
-  # conditionally skipped today, so a `skipped` result would only
-  # appear if a job were deliberately gated off in future — and that
-  # is the one case we want the gate to permit.
+  # None of the seven `needs` jobs has an `if:` condition today, so a
+  # skipped result is not expected in normal operation — but asserting
+  # on it is the deny-by-default posture and stays correct if a future
+  # change adds a conditional job.
   ci-gate:
     if: always()
     needs: [audit, lint, typecheck, test, trivy-fs, docker-build, trivy-image]
     runs-on: [self-hosted, Linux, X64, cluster-ci]
     steps:
-      - run: |
-          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
-            echo "CI failed"
-            exit 1
-          fi
+      - name: Assert all required jobs succeeded
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: |
+          echo "CI failed: one or more required jobs did not succeed."
+          echo "Results: ${{ join(needs.*.result, ', ') }}"
+          exit 1
