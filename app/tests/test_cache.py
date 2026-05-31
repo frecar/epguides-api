@@ -412,13 +412,15 @@ async def test_cached_decorator_without_model():
 async def test_get_cache_stats_returns_stats():
     """Test get_cache_stats returns cache statistics."""
     mock_redis = AsyncMock()
+    # The client is created with decode_responses=True, so KEYS returns
+    # already-decoded str values at runtime — mirror that here.
     mock_redis.keys.return_value = [
-        b"show:test1",
-        b"show:test2",
-        b"episodes:test1",
-        b"seasons:test1",
-        b"shows:all:raw",
-        b"show_index",
+        "show:test1",
+        "show:test2",
+        "episodes:test1",
+        "seasons:test1",
+        "shows:all:raw",
+        "show_index",
     ]
     mock_redis.ttl.return_value = 86400
     mock_redis.info.return_value = {"used_memory_human": "10M", "used_memory_peak_human": "15M"}
