@@ -26,6 +26,11 @@ jobs:
   audit:
     name: Security Audit
     runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # Bounded ceiling so a wedged self-hosted runner (hung network pull
+    # in pip-audit / uv export, or any stuck step) fails the job instead
+    # of holding a shared runner for the GitHub default 6h. Sized above
+    # normal duration so it only trips on a real hang.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -61,6 +66,9 @@ jobs:
   lint:
     name: Lint
     runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # Bounded ceiling so a wedged runner fails fast instead of holding a
+    # shared self-hosted runner for the GitHub default 6h.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -90,6 +98,9 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # Bounded ceiling so a wedged runner fails fast instead of holding a
+    # shared self-hosted runner for the GitHub default 6h.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -113,6 +124,10 @@ jobs:
   test:
     name: Test
     runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # Bounded ceiling so a wedged runner (or a hung redis service /
+    # stuck pytest) fails fast instead of holding a shared self-hosted
+    # runner for the GitHub default 6h.
+    timeout-minutes: 20
     services:
       redis:
         image: redis:7-alpine
@@ -166,6 +181,10 @@ jobs:
   trivy-fs:
     name: Trivy fs scan
     runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # Bounded ceiling so a wedged runner (hung Trivy DB pull or stuck
+    # scan) fails fast instead of holding a shared self-hosted runner
+    # for the GitHub default 6h.
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -236,6 +255,12 @@ jobs:
   docker-build:
     name: Docker build
     runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # Bounded ceiling — primary wedge-stopper. The buildx bootstrap
+    # pull (moby/buildkit) and in-build FROM-base pulls can hang on a
+    # registry rate-limit / network stall and otherwise hold a shared
+    # self-hosted runner for the GitHub default 6h. 25m sits well above
+    # a normal cached build (sub-3min) so it only trips on a real hang.
+    timeout-minutes: 25
     permissions:
       contents: read
     # Lift the Docker Hub token into a job-level env var so the login step
@@ -317,6 +342,11 @@ jobs:
   trivy-image:
     name: Trivy image scan
     runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # Bounded ceiling — this job both builds the image (same buildx
+    # bootstrap / FROM-base pull hang risk as docker-build) and loads +
+    # scans it. Caps a wedged runner instead of holding it for the
+    # GitHub default 6h. 25m sits above a normal cached build + scan.
+    timeout-minutes: 25
     permissions:
       contents: read
     # See docker-build job: `secrets` is not allowed in `if:`, so the
@@ -441,6 +471,10 @@ jobs:
     if: always()
     needs: [audit, lint, typecheck, test, trivy-fs, docker-build, trivy-image]
     runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # Bounded ceiling — this gate only checks `needs.*.result` and exits,
+    # so it should finish in seconds. A low cap means even this trivial
+    # job can never wedge a shared self-hosted runner for the 6h default.
+    timeout-minutes: 10
     steps:
       - name: Assert all required jobs succeeded
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}

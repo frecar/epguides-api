@@ -11,6 +11,10 @@ jobs:
   auto-merge:
     runs-on: [self-hosted, Linux, X64, cluster-ci]
     if: github.actor == 'dependabot[bot]'
+    # Bounded ceiling so a wedged runner (hung gh API / metadata fetch /
+    # auto-merge wait) fails fast instead of holding a shared self-hosted
+    # runner for the GitHub default 6h.
+    timeout-minutes: 15
     steps:
       - name: Fetch Dependabot metadata
         id: metadata
