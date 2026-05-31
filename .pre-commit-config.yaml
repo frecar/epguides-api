@@ -94,6 +94,24 @@ repos:
         pass_filenames: true
         stages: [pre-commit]
 
+      - id: host-python312-syntax
+        name: "Host-interpreter syntax guard (Python 3.12)"
+        # scripts/ runs under the system `python3` (a developer's machine / CI
+        # runner, possibly older than 3.14) via the `language: system` hooks
+        # above + `make ci-parity`, NOT the 3.14 `uv` venv. The repo is
+        # `requires-python >=3.14` + ruff `target-version=py314`, so the 3.14
+        # toolchain (incl. `ruff format`) will emit 3.14-only syntax — e.g.
+        # rewrite `except (A, B):` into PEP 758 `except A, B:`, a SyntaxError
+        # on Python < 3.14. Compile every host script under a REAL CPython 3.12
+        # (`--no-project` sidesteps the >=3.14 gate; py_compile needs only the
+        # interpreter grammar). Pairs with the ruff per-file-target-version
+        # py312 override in pyproject.toml (the fast lint+format layer).
+        entry: uv run --python 3.12 --no-project python -m py_compile
+        language: system
+        files: ^scripts/.*\.py$
+        pass_filenames: true
+        stages: [pre-commit]
+
       - id: no-private-refs
         name: Private reference check
         entry: bash scripts/check-no-internal-refs.sh

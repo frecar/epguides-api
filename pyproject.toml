@@ -49,6 +49,22 @@ packages = ["app"]
 line-length = 120
 target-version = "py314"
 
+# Host-interpreter carve-back. Everything under scripts/ is invoked by the
+# system `python3` (a developer's machine / CI runner, which may be older than
+# 3.14) via the `language: system` pre-commit hooks
+# (`python3 scripts/check_no_external_llm.py`) and `make ci`/`ci-parity`
+# targets — NOT the 3.14 `uv` venv the app itself runs in. With the
+# project-wide `target-version = "py314"`, a global `ruff format` will happily
+# REWRITE `except (A, B):` into PEP 758 unparenthesized `except A, B:` (valid
+# only on Python 3.14+), which then SyntaxErrors the moment the script is run
+# on a system interpreter older than 3.14. Pin those files to py312 (the
+# minimum interpreter the host-run scripts must stay parseable under) so the
+# linter+formatter never introduces 3.14-only syntax there. The real
+# CPython-3.12 `py_compile` guard (CI + pre-commit + make ci-parity) is the
+# authoritative backstop; this is the fast lint+format layer.
+[tool.ruff.per-file-target-version]
+"scripts/*.py" = "py312"
+
 [tool.ruff.lint]
 select = [
     "E",      # pycodestyle errors
