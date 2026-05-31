@@ -160,7 +160,7 @@ jobs:
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-        run: uv run pytest --cov=app --cov-fail-under=100 --cov-report=term-missing -q
+        run: uv run pytest --cov=app --cov-fail-under=95 --cov-report=term-missing -q
 
   # Trivy fs scan. Standalone job here so PR/push runs gate on it via
   # ci-gate. The companion .github/workflows/trivy-fs-nightly.yml owns

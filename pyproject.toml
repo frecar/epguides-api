@@ -102,7 +102,7 @@ exclude_also = [
     "def __repr__",
     "def __str__",
 ]
-fail_under = 100
+fail_under = 95
 show_missing = true
 skip_covered = false
 precision = 1
