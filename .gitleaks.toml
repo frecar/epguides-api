@@ -1,0 +1,52 @@
+# Gitleaks config for epguides-api — secret-scanning pre-commit gate.
+#
+# The `gitleaks` pre-commit hook (.pre-commit-config.yaml) runs
+# `gitleaks git --pre-commit --redact --staged` on every commit and blocks
+# when a credential is detected in the STAGED diff. This file tunes the
+# detection to near-zero false-positives on epguides-api's tree.
+#
+# Operator full-tree sweep:  gitleaks git --redact  (or)
+#                            pre-commit run gitleaks --all-files
+#
+# IMPORTANT: this allowlist is for KNOWN-FAKE test fixtures and gitignored
+# local material ONLY. Never add a real credential here to silence the gate —
+# rotate it and keep it out of source instead.
+# A full-history sweep of epguides-api found zero secrets.
+
+[extend]
+# Inherit gitleaks' full built-in ruleset and layer the allowlist below on top.
+# `useDefault` MERGES (does not replace) the defaults — dropping this line would
+# disable every built-in rule. `useDefault` and `path` are mutually exclusive.
+useDefault = true
+
+[[allowlists]]
+description = "epguides-api structural files (no fixture findings on the current tree)"
+# `condition = "OR"`: a finding is allowed if it matches ANY clause below
+# (path OR regex OR stopword), not all of them. Keep paths narrow.
+condition = "OR"
+
+# --- Structural files that carry only high-entropy hashes, never secrets -----
+paths = [
+  # The config itself (a TOML full of rule regexes trips generic detectors).
+  '''\.gitleaks\.toml$''',
+  # Lockfiles: high-entropy dependency hashes, never credentials.
+  '''(^|/)uv\.lock$''',
+  '''(^|/)package-lock\.json$''',
+  # Python bytecode — gitignored, never staged; belt-and-suspenders for an
+  # operator `--all-files` sweep.
+  '''(^|/)__pycache__/''',
+  '''\.pyc$''',
+]
+
+# --- Stopwords: if the detected secret contains one of these substrings, it's
+# treated as an obvious placeholder and allowed. Keeps generic high-entropy
+# rules from firing on documented dummy values.
+stopwords = [
+  "example",
+  "placeholder",
+  "changeme",
+  "dummy",
+  "redacted",
+  "your-token-here",
+  "xxxxxxxx",
+]

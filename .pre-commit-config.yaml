@@ -32,6 +32,19 @@ repos:
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
 
+  # Secret-scanning gate. Runs `gitleaks git --pre-commit --redact --staged`
+  # over the STAGED diff on every commit and blocks when a credential is
+  # detected — prevention against accidentally committing a real secret.
+  # Tuning + the known-safe fixture allowlist live in `.gitleaks.toml`
+  # (`[extend] useDefault = true`). `language: golang` — pre-commit
+  # auto-bootstraps Go, so no host toolchain is required. Stacks with the
+  # weaker `detect-private-key` hook above (PEM-only).
+  # NEVER bypass with `git commit --no-verify` or `SKIP=gitleaks`.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
   - repo: local
     hooks:
       - id: update-version
