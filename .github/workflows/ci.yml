@@ -25,7 +25,13 @@ permissions:
 jobs:
   audit:
     name: Security Audit
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # GitHub-hosted runner. This is a public repo: a fork PR can run
+    # arbitrary code in CI, so every pull_request-reachable job runs on an
+    # ephemeral, network-isolated GitHub-hosted runner rather than a
+    # self-hosted one. The image-build jobs below authenticate their
+    # Docker Hub base-image pulls with a read-only token (when available)
+    # to avoid the anonymous pull-rate limit on a hosted runner.
+    runs-on: ubuntu-latest
     # Bounded ceiling so a wedged self-hosted runner (hung network pull
     # in pip-audit / uv export, or any stuck step) fails the job instead
     # of holding a shared runner for the GitHub default 6h. Sized above
@@ -65,7 +71,8 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    runs-on: ubuntu-latest
     # Bounded ceiling so a wedged runner fails fast instead of holding a
     # shared self-hosted runner for the GitHub default 6h.
     timeout-minutes: 15
@@ -113,7 +120,8 @@ jobs:
 
   typecheck:
     name: Type Check
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    runs-on: ubuntu-latest
     # Bounded ceiling so a wedged runner fails fast instead of holding a
     # shared self-hosted runner for the GitHub default 6h.
     timeout-minutes: 15
@@ -139,7 +147,8 @@ jobs:
 
   test:
     name: Test
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    runs-on: ubuntu-latest
     # Bounded ceiling so a wedged runner (or a hung redis service /
     # stuck pytest) fails fast instead of holding a shared self-hosted
     # runner for the GitHub default 6h.
@@ -196,7 +205,8 @@ jobs:
   # single-step form.
   trivy-fs:
     name: Trivy fs scan
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    runs-on: ubuntu-latest
     # Bounded ceiling so a wedged runner (hung Trivy DB pull or stuck
     # scan) fails fast instead of holding a shared self-hosted runner
     # for the GitHub default 6h.
@@ -270,41 +280,44 @@ jobs:
   # loads it for scanning off the same shared cache.
   docker-build:
     name: Docker build
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    runs-on: ubuntu-latest
     # Bounded ceiling — primary wedge-stopper. The buildx bootstrap
     # pull (moby/buildkit) and in-build FROM-base pulls can hang on a
-    # registry rate-limit / network stall and otherwise hold a shared
-    # self-hosted runner for the GitHub default 6h. 25m sits well above
-    # a normal cached build (sub-3min) so it only trips on a real hang.
+    # registry rate-limit / network stall. 25m sits well above a normal
+    # cached build (sub-3min) so it only trips on a real hang.
     timeout-minutes: 25
     permissions:
       contents: read
+    # Lift the Docker Hub token into a job-level env var so the login step
+    # can gate on its presence. The `secrets` context is NOT permitted in
+    # an `if:` expression, but `env` is — and on fork PRs (no secrets) the
+    # var resolves to an empty string, so the guard skips login cleanly.
+    env:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      # Authenticate to Docker Hub BEFORE buildx is created. The buildx
+      # docker-container driver does NOT inherit the host daemon's registry
+      # config, so base-image resolution (`FROM python:3.14-slim`) otherwise
+      # hits Docker Hub anonymously and is rate-limited (HTTP 429) once the
+      # BuildKit cache misses. An authenticated pull raises the rate limit
+      # well above the anonymous ceiling. setup-buildx-action reads the
+      # credentials login writes to the runner's docker config at
+      # builder-create time and propagates them into the container builder,
+      # so login MUST precede the buildx step.
+      #
+      # Guarded on a non-empty token so fork PRs — which GitHub never grants
+      # secrets — degrade cleanly to an anonymous pull instead of erroring
+      # on an empty credential.
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
-        with:
-          # Route docker.io base-image pulls through a local OCI pull-through
-          # mirror (private-runner build config). This is the sole Docker Hub
-          # rate-limit mitigation: the mirror authenticates upstream against a
-          # per-account budget and serves docker.io from a warm cache, hitting
-          # the upstream registry at most once per image instead of once per
-          # build. The runner host's dockerd trusts this HTTP mirror (its
-          # insecure-registries entry), so both the buildx `docker-container`
-          # builder-bootstrap pull AND the in-build `FROM python:3.14-slim`
-          # pull resolve through it without a 429. A direct `docker/login-action`
-          # to Docker Hub used to precede this step, but it is now redundant
-          # (and weaker — the shared account bucket is itself exhausted), so it
-          # was removed. `FROM ghcr.io/astral-sh/uv` is unaffected (ghcr.io is
-          # not subject to Docker Hub's anonymous pull limit and is not proxied
-          # by a docker.io mirror). The mirror endpoint is repo build config,
-          # not a deployment reference — the private-reference guard allowlists
-          # this exact host token (scripts/check-no-internal-refs.sh).
-          buildkitd-config-inline: |
-            [registry."docker.io"]
-              mirrors = ["zot-lxc.home.carlsen.io:5000"]
-            [registry."zot-lxc.home.carlsen.io:5000"]
-              http = true
       - name: Build runtime image (cached)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
@@ -336,14 +349,19 @@ jobs:
   # would weaken HIGH visibility.
   trivy-image:
     name: Trivy image scan
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    runs-on: ubuntu-latest
     # Bounded ceiling — this job both builds the image (same buildx
     # bootstrap / FROM-base pull hang risk as docker-build) and loads +
-    # scans it. Caps a wedged runner instead of holding it for the
-    # GitHub default 6h. 25m sits above a normal cached build + scan.
+    # scans it. 25m sits above a normal cached build + scan.
     timeout-minutes: 25
     permissions:
       contents: read
+    # See docker-build: `secrets` is not allowed in `if:`, so the token is
+    # lifted to job-level env for the login guard. Empty on fork PRs →
+    # login skipped, anonymous pull.
+    env:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       # Install Trivy into a per-job directory on the runner's local temp
@@ -360,22 +378,20 @@ jobs:
           path: ${{ runner.temp }}
       - name: Put the per-job Trivy on PATH
         run: echo "${{ runner.temp }}/trivy-bin" >> "$GITHUB_PATH"
+      # Authenticate to Docker Hub before buildx is created — same reason
+      # as the docker-build job: the docker-container driver pulls base
+      # images anonymously and is 429-rate-limited on a cache miss without
+      # this. Login MUST precede setup-buildx-action so the credentials
+      # propagate into the container builder. Fork-PR-safe via the token
+      # guard (empty token → anonymous pull).
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
-        with:
-          # Route docker.io base-image pulls through the local OCI pull-through
-          # mirror — same rationale + sole-mitigation note as the docker-build
-          # job above. The runner host's dockerd trusts this HTTP mirror, so the
-          # buildx bootstrap pull and the in-build base-image pulls resolve
-          # through it with no 429. The redundant Docker Hub `docker/login-action`
-          # was removed (the shared account bucket is itself exhausted, so it was
-          # weaker than the mirror). The mirror endpoint is repo build config,
-          # allowlisted by the private-reference guard.
-          buildkitd-config-inline: |
-            [registry."docker.io"]
-              mirrors = ["zot-lxc.home.carlsen.io:5000"]
-            [registry."zot-lxc.home.carlsen.io:5000"]
-              http = true
       - name: Build runtime image (cached, loaded for scan)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
@@ -443,7 +459,9 @@ jobs:
     # SHA256), NOT `gitleaks/gitleaks-action`: the Docker action pulls an image
     # (Docker-Hub pull-rate-limit pain) and trips org-license checks. The scan
     # itself is a local git op — no network once the binary is in place.
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    #
+    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -527,10 +545,10 @@ jobs:
   ci-gate:
     if: always()
     needs: [audit, lint, typecheck, test, trivy-fs, docker-build, trivy-image, gitleaks]
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    runs-on: ubuntu-latest
     # Bounded ceiling — this gate only checks `needs.*.result` and exits,
-    # so it should finish in seconds. A low cap means even this trivial
-    # job can never wedge a shared self-hosted runner for the 6h default.
+    # so it should finish in seconds.
     timeout-minutes: 10
     steps:
       - name: Assert all required jobs succeeded

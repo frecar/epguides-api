@@ -23,10 +23,11 @@ permissions:
 
 jobs:
   refresh:
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # GitHub-hosted: keep this public repo entirely off self-hosted
+    # runners. Scheduled lockfile refresh needs only uv + the GitHub API.
+    runs-on: ubuntu-latest
     # Bounded ceiling so a wedged runner (hung uv lock network resolve /
-    # PR-create API call) fails fast instead of holding a shared
-    # self-hosted runner for the GitHub default 6h.
+    # PR-create API call) fails fast.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
