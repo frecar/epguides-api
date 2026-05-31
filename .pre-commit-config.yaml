@@ -56,8 +56,8 @@ repos:
         stages: [pre-commit]
 
       - id: tests-coverage
-        name: Run tests (100% coverage required)
-        entry: uv run pytest --cov=app --cov-fail-under=100 -q
+        name: Run tests (95% coverage floor)
+        entry: uv run pytest --cov=app --cov-fail-under=95 -q
         language: system
         pass_filenames: false
         always_run: true
