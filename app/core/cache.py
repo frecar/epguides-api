@@ -112,7 +112,7 @@ async def invalidate_cache(key_prefix: str, key_suffix: str) -> bool:
     try:
         redis = await get_redis()
         cache_key = f"{key_prefix}:{key_suffix}"
-        deleted = cast("int", await redis.delete(cache_key))
+        deleted = await redis.delete(cache_key)
         if deleted:
             logger.info("Invalidated cache: %s", cache_key)
         return bool(deleted > 0)
@@ -136,7 +136,7 @@ async def extend_cache_ttl(key_prefix: str, key_suffix: str, new_ttl: int) -> bo
     try:
         redis = await get_redis()
         cache_key = f"{key_prefix}:{key_suffix}"
-        result = cast("bool", await redis.expire(cache_key, new_ttl))
+        result = await redis.expire(cache_key, new_ttl)
         if result:
             logger.info("Extended cache TTL for %s to %d seconds", cache_key, new_ttl)
         return result
@@ -183,8 +183,9 @@ async def cache_hget(hash_key: str, field: str) -> str | None:
     """Get field from hash, or None on miss/error."""
     try:
         redis = await get_redis()
-        # redis.hget returns Awaitable[str | None] but type stubs are wrong
-        result: str | None = await redis.hget(hash_key, field)  # type: ignore[misc]
+        # decode_responses=True yields str at runtime; the command overloads
+        # still annotate bytes|str|None, so narrow at the Redis boundary.
+        result = cast("str | None", await redis.hget(hash_key, field))
         return result
     except Exception as e:
         logger.warning("Cache hash read error for %s[%s]: %s", hash_key, field, e)
@@ -195,7 +196,7 @@ async def cache_exists(key: str) -> bool:
     """Check if key exists in cache."""
     try:
         redis = await get_redis()
-        count = cast("int", await redis.exists(key))
+        count = await redis.exists(key)
         return bool(count > 0)
     except Exception:
         return False
@@ -366,9 +367,10 @@ async def get_cache_stats() -> dict[str, Any]:
     try:
         redis = await get_redis()
 
-        # Get all keys and categorize them
-        keys: list[bytes] = await redis.keys("*")
-        key_strings = [k.decode() if isinstance(k, bytes) else k for k in keys]
+        # Get all keys and categorize them. decode_responses=True means the
+        # client returns str keys at runtime; the overloads still type these
+        # as list[bytes | str], so narrow at the Redis boundary.
+        key_strings = cast("list[str]", await redis.keys("*"))
 
         # Categorize keys
         shows_cached = sum(1 for k in key_strings if k.startswith("show:") and not k.endswith(":raw"))
