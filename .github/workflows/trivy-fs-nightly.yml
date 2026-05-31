@@ -26,7 +26,7 @@ jobs:
     name: Trivy fs scan (nightly)
     runs-on: [self-hosted, Linux, X64, cluster-ci]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       # Install Trivy into a per-job directory — see the ci.yml trivy-fs
       # job for the full rationale: setup-trivy's default path is shared
       # across concurrent jobs on the self-hosted runner host, so writing
@@ -46,7 +46,7 @@ jobs:
       # in log only. Same split keeps the meaning of "the trivy-fs
       # policy" uniform across triggers.
       - name: Trivy fs scan — CRITICAL (gates run)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           skip-setup-trivy: true # use the per-job Trivy installed above
           scan-type: "fs"
@@ -62,7 +62,7 @@ jobs:
         # if: always() ensures a CRITICAL fail above does not hide
         # HIGH findings — see ci.yml comment for the rationale.
         if: always()
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           skip-setup-trivy: true # use the per-job Trivy installed above
           scan-type: "fs"
