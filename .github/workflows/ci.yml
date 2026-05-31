@@ -327,7 +327,14 @@ jobs:
           load: false
           tags: epguides-api:ci
           cache-from: type=gha,scope=docker-image
-          cache-to: type=gha,mode=max,scope=docker-image
+          # ignore-error=true: the GitHub Actions Cache API is rate-limited,
+          # so under concurrent CI load the mode=max cache *export* RPC can
+          # stall and the buildkit builder is torn down mid-export (goaway
+          # NO_ERROR / "graceful_stop"), failing the job even though the image
+          # built fine. The cache write-back is a non-load-bearing build-time
+          # optimisation, so a failed export must not fail the build.
+          # ignore-error is a documented type=gha cache-to boolean.
+          cache-to: type=gha,mode=max,scope=docker-image,ignore-error=true
 
   # Trivy image scan. Orthogonal to trivy-fs above: `fs` scans the repo's
   # manifests and lockfiles; `image` scans the BUILT image — the
@@ -401,7 +408,14 @@ jobs:
           load: true
           tags: epguides-api:scan
           cache-from: type=gha,scope=docker-image
-          cache-to: type=gha,mode=max,scope=docker-image
+          # ignore-error=true: the GitHub Actions Cache API is rate-limited,
+          # so under concurrent CI load the mode=max cache *export* RPC can
+          # stall and the buildkit builder is torn down mid-export (goaway
+          # NO_ERROR / "graceful_stop"), failing the job even though the image
+          # built fine. The cache write-back is a non-load-bearing build-time
+          # optimisation, so a failed export must not fail the build.
+          # ignore-error is a documented type=gha cache-to boolean.
+          cache-to: type=gha,mode=max,scope=docker-image,ignore-error=true
       - name: Trivy image scan — CRITICAL (gates merge)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
