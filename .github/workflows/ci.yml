@@ -279,48 +279,27 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
-    # Lift the Docker Hub token into a job-level env var so the login step
-    # can gate on its presence. The `secrets` context is NOT permitted in
-    # an `if:` expression, but `env` is — and on fork PRs (no secrets) the
-    # var resolves to an empty string, so the guard skips login cleanly.
-    env:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      # Authenticate to Docker Hub BEFORE buildx is created. The buildx
-      # docker-container driver does NOT inherit the host daemon's
-      # registry config, so base-image resolution (`FROM python:3.14-slim`,
-      # `FROM ghcr.io/astral-sh/uv`) otherwise hits Docker Hub anonymously
-      # and is rate-limited (HTTP 429) once the BuildKit cache misses.
-      # An authenticated pull raises the Docker Hub rate limit well above
-      # the anonymous ceiling, removing the 429. setup-buildx-action reads
-      # the credentials login writes to the runner's docker config at
-      # builder-create time and propagates them into the container builder,
-      # so login MUST precede the buildx step.
-      #
-      # Guarded on a non-empty token so fork PRs — which GitHub never grants
-      # secrets — degrade cleanly to an anonymous pull instead of erroring
-      # on an empty credential. No registry hostname is committed, so the
-      # public-reference guard stays green.
-      - name: Log in to Docker Hub
-        if: env.DOCKERHUB_TOKEN != ''
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
         with:
           # Route docker.io base-image pulls through a local OCI pull-through
-          # mirror (private-runner build config). The authenticated registry
-          # login above no longer suffices on its own: the shared registry
-          # account's pull budget is exhausted under concurrent-job load, so
-          # the buildx `docker-container` driver's direct `FROM python:3.14-slim`
-          # pull still trips a 429. The local mirror serves docker.io from a
-          # warm cache, hitting the upstream registry at most once per image
-          # instead of once per build. The mirror endpoint is repo build
-          # config, not a deployment reference — the private-reference guard
-          # allowlists this exact host token (scripts/check-no-internal-refs.sh).
+          # mirror (private-runner build config). This is the sole Docker Hub
+          # rate-limit mitigation: the mirror authenticates upstream against a
+          # per-account budget and serves docker.io from a warm cache, hitting
+          # the upstream registry at most once per image instead of once per
+          # build. The runner host's dockerd trusts this HTTP mirror (its
+          # insecure-registries entry), so both the buildx `docker-container`
+          # builder-bootstrap pull AND the in-build `FROM python:3.14-slim`
+          # pull resolve through it without a 429. A direct `docker/login-action`
+          # to Docker Hub used to precede this step, but it is now redundant
+          # (and weaker — the shared account bucket is itself exhausted), so it
+          # was removed. `FROM ghcr.io/astral-sh/uv` is unaffected (ghcr.io is
+          # not subject to Docker Hub's anonymous pull limit and is not proxied
+          # by a docker.io mirror). The mirror endpoint is repo build config,
+          # not a deployment reference — the private-reference guard allowlists
+          # this exact host token (scripts/check-no-internal-refs.sh).
           buildkitd-config-inline: |
             [registry."docker.io"]
               mirrors = ["zot-lxc.home.carlsen.io:5000"]
@@ -365,11 +344,6 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
-    # See docker-build job: `secrets` is not allowed in `if:`, so the
-    # token is lifted to job-level env for the login guard. Empty on
-    # fork PRs → login skipped, anonymous pull.
-    env:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       # Install Trivy into a per-job directory on the runner's local temp
@@ -386,27 +360,17 @@ jobs:
           path: ${{ runner.temp }}
       - name: Put the per-job Trivy on PATH
         run: echo "${{ runner.temp }}/trivy-bin" >> "$GITHUB_PATH"
-      # Authenticate to Docker Hub before buildx is created — same reason
-      # as the docker-build job: the docker-container driver pulls base
-      # images anonymously and is 429-rate-limited on a cache miss without
-      # this. Login MUST precede setup-buildx-action so the credentials
-      # propagate into the container builder. Fork-PR-safe via the token
-      # guard; no registry hostname is committed.
-      - name: Log in to Docker Hub
-        if: env.DOCKERHUB_TOKEN != ''
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
         with:
           # Route docker.io base-image pulls through the local OCI pull-through
-          # mirror — same rationale as the docker-build job above: the shared
-          # registry account's pull budget is exhausted under concurrent-job
-          # load, so an authenticated direct pull still 429s; the local mirror
-          # serves docker.io from a warm cache. The mirror endpoint is repo
-          # build config, allowlisted by the private-reference guard.
+          # mirror — same rationale + sole-mitigation note as the docker-build
+          # job above. The runner host's dockerd trusts this HTTP mirror, so the
+          # buildx bootstrap pull and the in-build base-image pulls resolve
+          # through it with no 429. The redundant Docker Hub `docker/login-action`
+          # was removed (the shared account bucket is itself exhausted, so it was
+          # weaker than the mirror). The mirror endpoint is repo build config,
+          # allowlisted by the private-reference guard.
           buildkitd-config-inline: |
             [registry."docker.io"]
               mirrors = ["zot-lxc.home.carlsen.io:5000"]
