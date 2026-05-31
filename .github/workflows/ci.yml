@@ -458,6 +458,83 @@ jobs:
         env:
           TRIVY_DISABLE_VEX_NOTICE: "true"
 
+  gitleaks:
+    # Server-side secret-scanning BACKSTOP to the local `gitleaks` pre-commit
+    # hook. The local hook scans the STAGED diff at commit time but is
+    # bypassable (`git commit --no-verify`, `SKIP=gitleaks`, commenting out the
+    # hook); this job re-runs gitleaks on the PR so a bypassed local hook is
+    # still caught before merge. It reuses the SAME vendored `.gitleaks.toml`
+    # (no CI-vs-local divergence) and is wired into `ci-gate` below so a
+    # detected secret blocks the merge.
+    #
+    # NOT path-filtered — it always runs, so it never reports `skipped` and is
+    # safe in ci-gate's `needs` regardless of which files a PR touches.
+    #
+    # SCOPE = PR-diff range, not full-tree: the gate catches a NEWLY-introduced
+    # secret. A pre-existing committed secret must be rotated, not turned into
+    # an unrelated-PR blocker. A periodic full-history sweep is a separate
+    # concern.
+    #
+    # IMPLEMENTATION = pinned CLI binary from GitHub Releases (version +
+    # SHA256), NOT `gitleaks/gitleaks-action`: the Docker action pulls an image
+    # (Docker-Hub pull-rate-limit pain) and trips org-license checks. The scan
+    # itself is a local git op — no network once the binary is in place.
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Full history so the PR base commit is present for the range scan.
+          fetch-depth: 0
+
+      - name: Install pinned gitleaks
+        # v8.30.1 matches the `gitleaks/gitleaks` `rev` pinned in
+        # .pre-commit-config.yaml — keep the two in lockstep so CI == local.
+        # When bumping the hook, bump GITLEAKS_VERSION + GITLEAKS_SHA256 here in
+        # the same PR (SHA256 = linux_x64 tarball digest from checksums.txt).
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${tarball}"
+          tmp="$(mktemp -d)"
+          curl -fsSL --retry 3 -o "${tmp}/${tarball}" "${url}"
+          echo "${GITLEAKS_SHA256}  ${tmp}/${tarball}" | sha256sum -c -
+          tar -xzf "${tmp}/${tarball}" -C "${tmp}" gitleaks
+          install -m 0755 "${tmp}/gitleaks" "${RUNNER_TEMP}/gitleaks"
+          echo "${RUNNER_TEMP}" >> "$GITHUB_PATH"
+          rm -rf "${tmp}"
+
+      - name: Scan PR diff for secrets
+        # Range = base..head on pull_request, before..after on push to main.
+        # Use head.sha (NOT github.sha, the synthetic merge commit on PR events)
+        # so we scan exactly the contributor's commits. On a push whose `before`
+        # is the zero-SHA (new branch / first push / force-push to an unknown
+        # parent), fall back to scanning HEAD's working tree so the gate never
+        # silently no-ops.
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          GH_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          common=(--config .gitleaks.toml --redact --no-banner --verbose)
+          if [ "${GH_EVENT}" = "pull_request" ]; then
+            echo "Scanning PR range ${PR_BASE_SHA}..${PR_HEAD_SHA}"
+            gitleaks git "${common[@]}" --log-opts="${PR_BASE_SHA}..${PR_HEAD_SHA}"
+          elif [ "${GH_EVENT}" = "push" ] && [ -n "${PUSH_BEFORE}" ] \
+               && [ "${PUSH_BEFORE}" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+            echo "Scanning push range ${PUSH_BEFORE}..${GITHUB_SHA}"
+            gitleaks git "${common[@]}" --log-opts="${PUSH_BEFORE}..${GITHUB_SHA}"
+          else
+            echo "No usable base commit (new branch / first push); scanning working tree"
+            gitleaks dir . "${common[@]}"
+          fi
+
   # Aggregate gate. This is the single required check
   # branch protection keys off, so it must run on EVERY outcome and
   # treat ANYTHING that is not a clean success across all `needs` jobs
@@ -485,7 +562,7 @@ jobs:
   # change adds a conditional job.
   ci-gate:
     if: always()
-    needs: [audit, lint, typecheck, test, trivy-fs, docker-build, trivy-image]
+    needs: [audit, lint, typecheck, test, trivy-fs, docker-build, trivy-image, gitleaks]
     runs-on: [self-hosted, Linux, X64, cluster-ci]
     # Bounded ceiling — this gate only checks `needs.*.result` and exits,
     # so it should finish in seconds. A low cap means even this trivial
