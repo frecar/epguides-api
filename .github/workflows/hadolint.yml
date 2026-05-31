@@ -26,10 +26,13 @@ permissions:
 jobs:
   hadolint:
     name: hadolint
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
-    # Bounded ceiling so a wedged self-hosted runner fails fast instead
-    # of holding a shared runner for the GitHub default 6h. hadolint is
-    # a fast lint; 15m only trips on a real hang.
+    # GitHub-hosted: pull_request-reachable on a public repo, so fork code
+    # must not run on a self-hosted runner. hadolint-action pulls its image
+    # from ghcr.io (not Docker Hub), so there is no anonymous-pull-limit
+    # concern on a hosted runner.
+    runs-on: ubuntu-latest
+    # Bounded ceiling so a wedged runner fails fast. hadolint is a fast
+    # lint; 15m only trips on a real hang.
     timeout-minutes: 15
     steps:
       - name: Checkout

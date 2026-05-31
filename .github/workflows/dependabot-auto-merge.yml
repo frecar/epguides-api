@@ -9,11 +9,12 @@ permissions:
 
 jobs:
   auto-merge:
-    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    # GitHub-hosted: public-repo, pull_request-reachable. Pure GitHub API
+    # calls (approve + enable auto-merge) — no self-hosted runner needed.
+    runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
     # Bounded ceiling so a wedged runner (hung gh API / metadata fetch /
-    # auto-merge wait) fails fast instead of holding a shared self-hosted
-    # runner for the GitHub default 6h.
+    # auto-merge wait) fails fast.
     timeout-minutes: 15
     steps:
       - name: Fetch Dependabot metadata

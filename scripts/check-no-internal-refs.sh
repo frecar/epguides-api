@@ -11,22 +11,6 @@ is_allowlisted_match() {
     local line="$2"
     local remaining="$line"
 
-    # WHY: all repository workflows run on the private cluster runner pool, but
-    # workflow runner labels are not deployment endpoints or runtime config.
-    if [[ "$file" == .github/workflows/* && "$line" == *"runs-on: [self-hosted, Linux, X64, cluster-ci]"* ]]; then
-        return 0
-    fi
-
-    # WHY: workflow image-build jobs point BuildKit's docker.io base-image
-    # pulls at the cluster's Zot pull-through mirror (asgard#2185) so they
-    # don't trip Docker Hub's rate limit. The mirror endpoint is repo build
-    # config, not a deployment endpoint or runtime secret — same category as
-    # the cluster-ci runner label above. Strip the known mirror host token so
-    # the remainder of the line still gets scanned for any OTHER private ref.
-    if [[ "$file" == .github/workflows/* ]]; then
-        remaining="${remaining//zot-lxc.home.carlsen.io:5000/}"
-    fi
-
     # WHY: public package metadata uses the maintainer email address.
     if [[ "$file" == "pyproject.toml" ]]; then
         remaining="${remaining//fredrik@carlsen.io/}"
