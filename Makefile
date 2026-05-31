@@ -185,12 +185,18 @@ coverage:
 #   typecheck              -> mypy app/ (the pre-commit hooks have no mypy).
 #   check_no_external_llm   -> configured-LLM-endpoint lint over the full tree
 #                             (the pre-commit hook runs changed files only).
+#   host-py312 py_compile   -> compile scripts/*.py under a REAL CPython 3.12
+#                             (the minimum system interpreter those host-run
+#                             scripts must stay parseable under), mirroring the
+#                             "Host-interpreter syntax guard" CI step +
+#                             pre-commit hook.
 #
 # Coverage is NOT duplicated here: the `tests-coverage` pre-commit hook
 # already enforces `--cov-fail-under=100` on every commit, so the floor
 # already fires locally before any push.
 ci-parity: format-check lint typecheck
 	$(RUN) python scripts/check_no_external_llm.py
+	uv run --python 3.12 --no-project python -m py_compile scripts/*.py
 
 ci: format-check lint test
 	@echo "All checks passed"

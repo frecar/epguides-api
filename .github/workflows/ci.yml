@@ -95,6 +95,22 @@ jobs:
       - name: Configured LLM endpoint check
         run: python3 scripts/check_no_external_llm.py
 
+      - name: Host-interpreter syntax guard (Python 3.12)
+        # Everything under scripts/ is run by the system `python3` (a
+        # developer's machine / CI runner, possibly older than 3.14) via the
+        # `language: system` pre-commit hooks + `make ci-parity`, NOT the 3.14
+        # `uv` venv. The repo's `requires-python >=3.14` + ruff
+        # `target-version=py314` mean the 3.14 toolchain (and `ruff format`)
+        # will happily emit 3.14-only syntax — e.g. rewrite `except (A, B):`
+        # into PEP 758 `except A, B:`, which is a SyntaxError on Python < 3.14.
+        # This step compiles every host-run script under a real CPython 3.12
+        # (`--no-project` sidesteps the `requires-python >=3.14` gate —
+        # py_compile needs only the interpreter grammar, no project deps). The
+        # ruff `per-file-target-version` py312 override in pyproject.toml is
+        # the fast lint+format layer; this is the authoritative compile
+        # backstop.
+        run: uv run --python 3.12 --no-project python -m py_compile scripts/*.py
+
   typecheck:
     name: Type Check
     runs-on: [self-hosted, Linux, X64, cluster-ci]
