@@ -81,14 +81,19 @@ async def test_cache_set_stores_value():
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
         await cache.cache_set("test_key", "test_value", 3600)
-        mock_redis.setex.assert_called_once_with("test_key", 3600, "test_value")
+        # Pin value (positional) and TTL (ex= keyword) separately so an
+        # arg-order swap between value and ttl would fail this assertion.
+        mock_redis.set.assert_called_once_with("test_key", "test_value", ex=3600)
+        _, args, kwargs = mock_redis.set.mock_calls[0]
+        assert args == ("test_key", "test_value")
+        assert kwargs == {"ex": 3600}
 
 
 @pytest.mark.asyncio
 async def test_cache_set_handles_error():
     """Test cache_set handles Redis error silently."""
     mock_redis = AsyncMock()
-    mock_redis.setex.side_effect = Exception("Redis error")
+    mock_redis.set.side_effect = Exception("Redis error")
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
         # Should not raise

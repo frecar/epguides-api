@@ -165,7 +165,9 @@ async def cache_set(key: str, value: str, ttl: int) -> None:
     """Set value in cache with TTL. Fails silently."""
     try:
         redis = await get_redis()
-        await redis.setex(key, ttl, value)
+        # redis-py 8.0 deprecates setex(); set(ex=) is the semantic equivalent
+        # (atomic key+TTL write, overwrites unconditionally, no NX/XX).
+        await redis.set(key, value, ex=ttl)
     except Exception as e:
         logger.warning("Cache write error for %s: %s", key, e)
 
