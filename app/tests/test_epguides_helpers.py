@@ -203,12 +203,27 @@ def test_parse_episode_rows_empty_rows():
 
 
 def test_parse_episode_rows_short_rows():
-    """Test parsing with rows shorter than expected column indices."""
+    """A row shorter than the column indices (here ``number`` is out of range
+    and ``season`` is the non-numeric token ``"two"``) is skipped, not kept:
+    it has no valid numeric season/number, so it isn't a real episode (#298).
+    Previously such partial/garbage rows were surfaced, which is the class of
+    bug that let HTML fragments reach EpisodeSchema."""
     rows = [["only", "two"]]
     column_map = {"season": 1, "number": 2, "release_date": 3, "title": 4}
     result = epguides._parse_episode_rows(rows, column_map)
+    assert result == []
+
+
+def test_parse_episode_rows_short_row_keeps_numeric_partial():
+    """A short row that still has numeric season + number is kept even when
+    later columns (title) are missing — the numeric guard gates on the
+    episode-identity columns only, not on completeness."""
+    rows = [["x", "1", "2"]]  # season=col1="1", number=col2="2", title=col4 missing
+    column_map = {"season": 1, "number": 2, "release_date": 3, "title": 4}
+    result = epguides._parse_episode_rows(rows, column_map)
     assert len(result) == 1
-    assert result[0]["season"] == "two"
+    assert result[0]["season"] == "1"
+    assert result[0]["number"] == "2"
     assert "title" not in result[0]
 
 
@@ -892,6 +907,155 @@ async def test_fetch_csv_records_timeout_only_via_fetch_url(mock_fetch):
 
 
 # =============================================================================
+# fetch_csv — HTML-masquerading-as-CSV detection (#298)
+# =============================================================================
+
+# The actual page-head fragment that, parsed as CSV, leaked
+# ' user-scalable=yes">' into the episode-number column and broke caching for
+# dozens of shows. Kept verbatim as the regression fixture.
+_VIEWPORT_HTML_BODY = (
+    "<!DOCTYPE html>\n"
+    '<html lang="en">\n'
+    "<head>\n"
+    '<meta charset="utf-8">\n'
+    '<meta name="viewport" content="width=device-width, initial-scale=1, '
+    'user-scalable=yes">\n'
+    "<title>Some Show (a Titles &amp; Air Dates Guide)</title>\n"
+    "</head>\n"
+    "<body></body>\n"
+    "</html>\n"
+)
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_url")
+async def test_fetch_csv_rejects_html_body_masquerading_as_csv(mock_fetch):
+    """HTTP 200 returning the HTML show page (or an error page) instead of
+    CSV — the exact source of #298. Without this guard csv.reader parses the
+    markup line-by-line and the viewport meta tag's ``user-scalable=yes">``
+    fragment lands in the episode-number column, failing EpisodeSchema and
+    dropping the show's episodes. Must return [] (→ TVMaze fallback) and
+    record a ``parse_error`` outcome — never surface the HTML rows."""
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_response.encoding = "utf-8"
+    mock_response.text = _VIEWPORT_HTML_BODY
+    mock_response.content = _VIEWPORT_HTML_BODY.encode()
+    mock_fetch.return_value = mock_response
+
+    before = UPSTREAM_REQUESTS.labels(source="epguides", outcome="parse_error")._value.get()
+
+    result = await epguides.fetch_csv("https://epguides.com/common/exportToCSVmaze.asp?maze=999")
+
+    assert result == []
+    assert UPSTREAM_REQUESTS.labels(source="epguides", outcome="parse_error")._value.get() == before + 1
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides._fetch_url")
+async def test_fetch_csv_parses_valid_csv_normally(mock_fetch):
+    """Sanity counterpart: a real CSV body is parsed into rows and is NOT
+    misclassified as HTML by the masquerade guard."""
+    csv_body = "number,season,airdate\n1,1,2024-01-01\n2,1,2024-01-08\n"
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_response.encoding = "utf-8"
+    mock_response.text = csv_body
+    mock_response.content = csv_body.encode()
+    mock_fetch.return_value = mock_response
+
+    result = await epguides.fetch_csv("https://epguides.com/common/exportToCSVmaze.asp?maze=999")
+
+    assert result == [["number", "season", "airdate"], ["1", "1", "2024-01-01"], ["2", "1", "2024-01-08"]]
+
+
+def test_looks_like_html_detects_document_markers():
+    """Leading markup markers identify an HTML body, case-insensitively and
+    after a BOM / leading whitespace."""
+    assert epguides._looks_like_html("<!DOCTYPE html>\n<html></html>")
+    assert epguides._looks_like_html("<html><head></head></html>")
+    assert epguides._looks_like_html("  \n\t<meta name='viewport'>")
+    assert epguides._looks_like_html("﻿<!doctype HTML>")  # UTF-8 BOM prefix
+    assert epguides._looks_like_html("<?xml version='1.0'?>")
+
+
+def test_looks_like_html_allows_csv_with_angle_brackets():
+    """A legitimate CSV row whose title cell contains angle brackets must NOT
+    be misclassified as HTML — only the *leading* token is inspected, and real
+    CSV starts with a number/header, not a markup marker."""
+    assert not epguides._looks_like_html('1,1,2024-01-01,"3 < 4: The Reckoning"')
+    assert not epguides._looks_like_html("number,season,airdate,title")
+    assert not epguides._looks_like_html("")
+
+
+# =============================================================================
+# _parse_episode_rows — numeric season/number validation (#298)
+# =============================================================================
+
+
+def test_parse_episode_rows_skips_html_fragment_number():
+    """A row whose ``number`` column holds an HTML fragment (the #298 leak,
+    e.g. ' user-scalable=yes">') is skipped, not surfaced — markup never
+    reaches EpisodeSchema. The clean episode row beside it is kept."""
+    rows = [
+        ["number", "season", "airdate", "", "", "title"],  # header — non-numeric
+        [' user-scalable=yes">', "1", "01 Jan 24", "", "", "junk"],  # the #298 leak
+        ["1", "1", "01 Jan 24", "", "", "Real Episode"],  # legit
+    ]
+    column_map = {"season": 1, "number": 0, "release_date": 2, "title": 5}
+
+    result = epguides._parse_episode_rows(rows, column_map)
+
+    assert len(result) == 1
+    assert result[0]["number"] == "1"
+    assert result[0]["title"] == "Real Episode"
+
+
+def test_parse_episode_rows_keeps_season_zero_specials():
+    """Specials use season 0 (EpisodeSchema allows season ge=0); the numeric
+    guard must keep them, not treat 0 as falsy/invalid."""
+    rows = [
+        ["0", "1", "01 Jan 24", "", "", "Special"],
+    ]
+    column_map = {"season": 0, "number": 1, "release_date": 2, "title": 5}
+
+    result = epguides._parse_episode_rows(rows, column_map)
+
+    assert len(result) == 1
+    assert result[0]["season"] == "0"
+
+
+def test_parse_episode_rows_skips_non_numeric_season():
+    """A non-numeric season token (e.g. stray markup) skips the row."""
+    rows = [
+        ["<body>", "1", "01 Jan 24", "", "", "junk"],
+        ["2", "3", "08 Jan 24", "", "", "Good"],
+    ]
+    column_map = {"season": 0, "number": 1, "release_date": 2, "title": 5}
+
+    result = epguides._parse_episode_rows(rows, column_map)
+
+    assert len(result) == 1
+    assert result[0]["title"] == "Good"
+
+
+def test_is_integer_token_variants():
+    """_is_integer_token accepts plain/signed/whitespace integers and ints;
+    rejects markup, floats, and empty strings."""
+    assert epguides._is_integer_token("1")
+    assert epguides._is_integer_token("0")
+    assert epguides._is_integer_token("  42 ")
+    assert epguides._is_integer_token("+1")
+    assert epguides._is_integer_token("-3")
+    assert epguides._is_integer_token(7)
+    assert not epguides._is_integer_token(' user-scalable=yes">')
+    assert not epguides._is_integer_token("")
+    assert not epguides._is_integer_token("1.5")
+    assert not epguides._is_integer_token(None)
+    assert not epguides._is_integer_token(["1"])
+
+
+# =============================================================================
 # get_episodes_data — sick-CSV fallback paths (#253)
 # =============================================================================
 
@@ -994,3 +1158,31 @@ async def test_get_episodes_data_silent_hang_falls_back_via_title_when_no_maze_i
     assert len(result) == 1
     mock_search.assert_called_once_with("Test Show")
     mock_episodes.assert_called_once_with("67890")
+
+
+# =============================================================================
+# get_episodes_data — raw cache key isolation (#298)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@patch("app.core.cache.cache_set", new_callable=AsyncMock)
+@patch("app.core.cache.cache_get", new_callable=AsyncMock, return_value=None)
+@patch("app.services.epguides._fetch_url", new_callable=AsyncMock, return_value=None)
+async def test_get_episodes_data_uses_distinct_raw_cache_key(_mock_fetch_url, mock_cache_get, _mock_cache_set):
+    """The raw (unvalidated) episode-dict cache must live under a DISTINCT
+    key namespace from the model-validated ``episodes:`` cache (#298).
+
+    Sharing the ``episodes:`` prefix let a raw dict — e.g. one carrying an
+    HTML fragment in ``number`` — be read back through the EpisodeSchema cache
+    and fail validation, dropping the whole show. The raw layer must key on
+    ``episodes_raw:`` so the two namespaces can never cross-contaminate."""
+    # _fetch_url returns None → empty result; nothing is written, so assert the
+    # READ key namespace via cache_get instead. (The fallback path also reads
+    # the shows-metadata cache, so cache_get fires more than once — assert the
+    # raw episode key is the one probed for this show, and the schema key never.)
+    await epguides.get_episodes_data("somekey")
+
+    read_keys = [call.args[0] for call in mock_cache_get.await_args_list]
+    assert "episodes_raw:somekey" in read_keys
+    assert "episodes:somekey" not in read_keys

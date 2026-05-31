@@ -46,11 +46,19 @@ _MONTH_YEAR_FORMATS = ["%b %Y", "%B %Y", "%b %y", "%B %y"]
 
 
 async def invalidate_show_cache(normalized_id: str) -> None:
-    """Invalidate all caches for a show."""
+    """Invalidate all caches for a show.
+
+    Both episode cache layers are cleared: the model-validated list
+    (``episodes:``) and the raw fetched dicts (``episodes_raw:``). Clearing
+    only the former would leave a stale raw layer that the schema layer
+    re-derives from on the next miss, so a ``?refresh=true`` would not actually
+    re-fetch episodes from upstream within the raw layer's TTL (#298).
+    """
     await cache_delete(
         f"show:{normalized_id}",
         f"seasons:{normalized_id}",
         f"episodes:{normalized_id}",
+        f"episodes_raw:{normalized_id}",
     )
 
 

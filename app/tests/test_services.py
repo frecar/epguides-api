@@ -394,6 +394,11 @@ async def test_invalidate_show_cache(mock_get_redis):
     call_args = mock_redis.delete.call_args[0]
     assert "show:breakingbad" in call_args
     assert "seasons:breakingbad" in call_args
+    # Both episode cache layers must be cleared on refresh (#298): the
+    # model-validated list and the raw fetched dicts. Clearing only the
+    # former would leave a stale raw layer the schema layer re-derives from.
+    assert "episodes:breakingbad" in call_args
+    assert "episodes_raw:breakingbad" in call_args
 
 
 # =============================================================================
