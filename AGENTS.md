@@ -37,7 +37,7 @@ This repo defines and adheres to a Python-service quality baseline:
 - **Dependency manager:** `uv` with `uv.lock` committed. Docker builds use `uv sync --frozen --no-dev` so any lockfile drift fails the build instead of silently re-resolving.
 - **Lint + format:** `ruff` (target `py314`, matching the committed `.python-version` and `requires-python = ">=3.14"`).
 - **Type-check:** `mypy` with `check_untyped_defs` + `warn_unused_ignores` + `strict_optional` floor; strict mode opt-in per module.
-- **Tests:** `pytest` + `pytest-cov`. **100% coverage enforced** at the pre-commit + CI gate (`fail_under = 100.0` in `pyproject.toml`). Commits below the floor are rejected.
+- **Tests:** `pytest` + `pytest-cov`. **95% coverage floor** at the pre-commit + CI gate (`fail_under = 95` in `pyproject.toml`). Commits below the floor are rejected.
 - **Security:** CVE coverage is layered in CI — `pip-audit --strict --require-hashes` against the exported (hashed) transitive dependency set, plus a Trivy filesystem scan (reads `uv.lock`) and a Trivy image scan of the built runtime. CRITICAL findings gate the merge; HIGH surface as annotations. Unfixable findings with no upstream patch are suppressed via `.trivyignore` / `ignore-unfixed` with a tracking trail — never silenced silently.
 - **Public surface:** `scripts/check-no-internal-refs.sh` runs in pre-commit and CI. Keep source, docs, and examples standalone; use runtime configuration for private deployment values.
 - **Error tracking:** `app.core.observability` initialises `sentry-sdk[fastapi]` only when `SENTRY_DSN` env var is set; traces and profiles default to `0.0` unless configured.
@@ -53,7 +53,7 @@ This repo defines and adheres to a Python-service quality baseline:
 make help          # Show all commands
 make up            # Start dev environment (Docker + hot reload)
 make down          # Stop all services
-make test          # Run tests (100% coverage required)
+make test          # Run tests (95% coverage floor)
 make fix           # Format + lint with ruff
 make doctor        # Check environment health
 make urls          # Show service URLs
@@ -83,7 +83,7 @@ app/
 │   ├── show_service.py  # Business logic
 │   ├── epguides.py      # External API calls
 │   └── llm_service.py   # Natural language queries
-└── tests/               # 100% coverage required
+└── tests/               # 95% coverage floor
 ```
 
 **Flow:** Endpoints -> Services -> External APIs, with Redis caching at service layer.
@@ -177,7 +177,7 @@ results = await asyncio.gather(
 
 ## Testing
 
-100% coverage enforced by pre-commit. Commits blocked if coverage drops.
+95% coverage floor enforced by pre-commit. Commits below the floor are rejected.
 
 Mock patterns:
 ```python
@@ -195,7 +195,7 @@ Runs automatically on commit:
 1. Trailing whitespace, YAML check, large files, merge conflicts, private keys
 2. Ruff lint + format
 3. Version update
-4. Tests with 100% coverage
+4. Tests with 95% coverage floor
 
 Setup: `make setup` (runs `uv sync` to create `.venv` from `uv.lock`, then installs pre-commit hooks). Requires `uv` — install via https://docs.astral.sh/uv/.
 
