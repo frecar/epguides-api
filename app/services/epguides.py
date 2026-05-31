@@ -133,6 +133,27 @@ async def _fetch_url(url: str) -> httpx.Response | None:
 # =============================================================================
 
 
+# Leading markers that identify an HTML document body returned where CSV was
+# expected. The CSV export endpoint occasionally answers HTTP 200 with the
+# show *page* (or an error page) instead of CSV; csv.reader would otherwise
+# parse that markup line-by-line and feed fragments like the viewport meta
+# tag's ``user-scalable=yes">`` into the episode-number column (see #298).
+_HTML_LEADING_MARKERS = ("<!doctype", "<html", "<head", "<meta", "<?xml", "<!--")
+
+
+def _looks_like_html(text: str) -> bool:
+    """
+    Return True if ``text`` is an HTML document body rather than CSV.
+
+    Only the leading bytes are inspected (after stripping a BOM and leading
+    whitespace), so a legitimate CSV cell that merely *contains* angle
+    brackets — e.g. an episode title like ``"3 < 4"`` — never false-positives;
+    real CSV starts with a number/header token, not a markup marker.
+    """
+    head = text.lstrip("﻿").lstrip()[:512].lower()
+    return head.startswith(_HTML_LEADING_MARKERS)
+
+
 async def fetch_csv(url: str) -> list[list[str]]:
     """
     Fetch and parse CSV from URL.
@@ -150,6 +171,11 @@ async def fetch_csv(url: str) -> list[list[str]]:
     the caller falls through to the TVMaze fallback rather than treating an
     empty CSV as a valid (zero-episodes) result. Recorded as the
     ``empty_response`` outcome on the upstream-request counter for observability.
+
+    HTML bodies masquerading as CSV (HTTP 200 returning the show page or an
+    error page) are likewise treated as upstream-unavailable (#298): without
+    this guard ``csv.reader`` parses the markup line-by-line and HTML fragments
+    leak into episode fields. Recorded as the ``parse_error`` outcome.
     """
     response = await _fetch_url(url)
     if not response:
@@ -164,6 +190,15 @@ async def fetch_csv(url: str) -> list[list[str]]:
             response.status_code,
         )
         record_upstream_request("epguides", "empty_response")
+        return []
+
+    if _looks_like_html(text):
+        logger.warning(
+            "HTML body where CSV expected from %s (HTTP %d) — treating as upstream-unavailable",
+            url,
+            response.status_code,
+        )
+        record_upstream_request("epguides", "parse_error")
         return []
 
     try:
@@ -515,7 +550,13 @@ def _add_word_boundaries(text: str) -> str:
     return result
 
 
-@cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="episodes")
+# NOTE: distinct key prefix from the EpisodeSchema cache. This function caches
+# *raw, unvalidated* episode dicts; the model-validated list is cached
+# separately under "episodes:<show>" by show_service.get_episodes
+# (@cached(model=EpisodeSchema)). Sharing one prefix let a raw dict be read
+# back through the schema cache and fail EpisodeSchema validation (#298), so
+# the namespaces are kept separate.
+@cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="episodes_raw")
 async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
     """
     Fetch episode data for a show.
@@ -817,26 +858,66 @@ async def get_maze_id_for_show(show_id: str) -> str | None:
     return None
 
 
+def _is_integer_token(value: Any) -> bool:
+    """
+    Return True if ``value`` is a clean integer token (optionally signed).
+
+    Used to reject non-episode rows before they reach ``EpisodeSchema``: the
+    header row, blank separators, and — crucially — HTML fragments such as
+    ``' user-scalable=yes">'`` that slip in when the upstream returns markup
+    instead of CSV (#298). ``str.isdigit`` alone would reject a legitimately
+    signed ``"+1"``; ``int()`` accepts surrounding whitespace and signs while
+    still rejecting any markup.
+    """
+    if isinstance(value, int):
+        return True
+    if not isinstance(value, str):
+        return False
+    try:
+        int(value.strip())
+        return True
+    except ValueError:
+        return False
+
+
 def _parse_episode_rows(rows: list[list[str]], column_map: dict[str, int]) -> list[dict[str, Any]]:
     """
     Parse CSV rows into episode dictionaries.
+
+    Rows whose ``season`` or ``number`` columns are not clean integers are
+    skipped, not kept: that is the header row, blank separators, and any HTML
+    fragment that leaked past the upstream guard (#298). Skipping here means a
+    future source-layout shift produces a logged parse-miss rather than a
+    record with markup in ``EpisodeSchema.number``.
 
     Args:
         rows: Raw CSV rows.
         column_map: Mapping of field names to column indices.
 
     Returns:
-        List of episode dictionaries.
+        List of episode dictionaries (numeric season/number guaranteed).
     """
     episodes: list[dict[str, Any]] = []
+    skipped = 0
 
     for row in rows:
         if not row:
             continue
 
         episode = {key: row[idx] for key, idx in column_map.items() if len(row) > idx}
-        if episode:
-            episodes.append(episode)
+        if not episode:
+            continue
+
+        # Require numeric season + number. Non-numeric rows are the header,
+        # blank rows, or markup that leaked in — never a real episode.
+        if not (_is_integer_token(episode.get("season")) and _is_integer_token(episode.get("number"))):
+            skipped += 1
+            continue
+
+        episodes.append(episode)
+
+    if skipped:
+        logger.debug("Skipped %d non-episode CSV row(s) with non-numeric season/number", skipped)
 
     return episodes
 
