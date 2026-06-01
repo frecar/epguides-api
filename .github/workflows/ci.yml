@@ -187,6 +187,13 @@ jobs:
           REDIS_PORT: 6379
         run: uv run pytest --cov=app --cov-fail-under=95 --cov-report=term-missing -q
 
+  # The three jobs below (trivy-fs, docker-build, trivy-image) are a managed
+  # copy kept byte-identical to the canonical CI template. Hand-edits between
+  # the markers are overwritten by the next template sync; change the canonical
+  # template (and re-run the drift check) instead. The drift check compares only
+  # the region between the markers, so the rest of this workflow stays freely
+  # editable.
+  # ===== BEGIN managed-public-ci-template: ci-trivy-buildx — DO NOT HAND-EDIT =====
   # Trivy fs scan. Standalone job here so PR/push runs gate on it via
   # ci-gate. The companion .github/workflows/trivy-fs-nightly.yml owns
   # the 03:30 UTC schedule trigger independently so scheduled sweeps
@@ -451,6 +458,7 @@ jobs:
           trivyignores: ".trivyignore.image"
         env:
           TRIVY_DISABLE_VEX_NOTICE: "true"
+  # ===== END managed-public-ci-template: ci-trivy-buildx =====
 
   gitleaks:
     # Server-side secret-scanning BACKSTOP to the local `gitleaks` pre-commit
