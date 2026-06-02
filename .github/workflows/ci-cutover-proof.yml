@@ -1,0 +1,19 @@
+name: CI cutover proof
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci-runner-proof:
+    runs-on: [self-hosted, Linux, X64, cluster-ci]
+    timeout-minutes: 5
+    steps:
+      - name: Prove this PR job is on the dedicated ci LXC
+        run: |
+          echo "runner=${{ runner.name }}"
+          echo "hostname=$(hostname)"
+          test "$(hostname)" = ci
