@@ -229,7 +229,7 @@ jobs:
       # file busy", exit 126). ${{ runner.temp }} is unique per job and on
       # local disk, so there is no shared write/exec target to race on.
       - name: Install Trivy (per-job, isolated binary)
-        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           version: v0.70.0 # keep in sync with aquasecurity/trivy-action@v0.36.0
           cache: true
@@ -385,7 +385,7 @@ jobs:
       # file busy", exit 126). ${{ runner.temp }} is unique per job and on
       # local disk, so there is no shared write/exec target to race on.
       - name: Install Trivy (per-job, isolated binary)
-        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           version: v0.70.0 # keep in sync with aquasecurity/trivy-action@v0.36.0
           cache: true
