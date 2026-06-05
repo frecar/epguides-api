@@ -43,6 +43,7 @@ ALLOWED_PATH_COMPONENTS = (
     "node_modules",
     "__pycache__",
     ".git",
+    ".claude",  # local agent tooling worktrees, never part of a checkout's source
     ".next",
     ".cache",
     ".mypy_cache",
