@@ -38,7 +38,7 @@ jobs:
     # normal duration so it only trips on a real hang.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Private reference check
         run: bash scripts/check-no-internal-refs.sh
@@ -77,7 +77,7 @@ jobs:
     # shared self-hosted runner for the GitHub default 6h.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Isolate uv cache
         run: |
@@ -126,7 +126,7 @@ jobs:
     # shared self-hosted runner for the GitHub default 6h.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Isolate uv cache
         run: |
@@ -165,7 +165,7 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Isolate uv cache
         run: |
@@ -221,7 +221,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       # Install Trivy into a per-job directory on the runner's local temp
       # space. setup-trivy's default install path ($HOME/.local/bin/trivy-bin)
       # is shared across concurrent jobs on a self-hosted runner host, so one
@@ -303,7 +303,7 @@ jobs:
     env:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       # Authenticate to Docker Hub BEFORE buildx is created. The buildx
       # docker-container driver does NOT inherit the host daemon's registry
       # config, so base-image resolution (`FROM python:3.14-slim`) otherwise
@@ -377,7 +377,7 @@ jobs:
     env:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       # Install Trivy into a per-job directory on the runner's local temp
       # space. setup-trivy's default install path ($HOME/.local/bin/trivy-bin)
       # is shared across concurrent jobs on a self-hosted runner host, so one
@@ -486,7 +486,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           # Full history so the PR base commit is present for the range scan.
           fetch-depth: 0
