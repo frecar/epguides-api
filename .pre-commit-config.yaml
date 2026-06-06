@@ -23,10 +23,10 @@ repos:
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Single ruff version of record — keep in lockstep with the
-    # [dependency-groups].dev ruff pin (ruff==0.15.14) in pyproject.toml
+    # [dependency-groups].dev ruff pin (ruff==0.15.15) in pyproject.toml
     # so pre-commit and CI never format/lint against different ruff
     # versions (the classic drift trap).
-    rev: v0.15.14
+    rev: v0.15.15
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
