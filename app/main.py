@@ -20,7 +20,7 @@ from app.api.endpoints import mcp, shows
 from app.core.cache import close_redis_pool, get_cache_stats, refresh_cache_age_gauges
 from app.core.config import settings
 from app.core.constants import VERSION
-from app.core.metrics import mark_worker_dead, render_metrics
+from app.core.metrics import init_ingest_freshness, mark_worker_dead, render_metrics
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware, get_request_id
 from app.core.observability import init_observability
 from app.exceptions import EpguidesAPIException, ExternalServiceError
@@ -77,6 +77,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     Handles startup and shutdown events.
     """
     logger.info("Application startup")
+    # Seed the per-source ingest-freshness gauges to 0 so the series are
+    # continuously present from boot (avoids an absence-paging false alarm
+    # before the first successful upstream fetch). See app.core.metrics.
+    init_ingest_freshness()
     task = asyncio.create_task(_cache_age_refresh_loop())
     yield
     task.cancel()
