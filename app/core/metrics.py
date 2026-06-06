@@ -5,6 +5,31 @@ can scrape from the `/metrics` endpoint to monitor cache efficiency.
 
 Documented in CLAUDE.md "Observability gaps" section.
 
+## Ingest freshness heartbeat
+
+`epguides_ingest_last_success_timestamp{source}` is a per-source freshness
+gauge: the unix epoch of the most recent *successful* upstream fetch from
+each data source (epguides.com, tvmaze). It lets a monitoring system page
+when an upstream source stops returning fresh data while requests are still
+arriving — a silently-stale scrape would otherwise be invisible.
+
+Two design points keep this honest for a request-driven (pull) API:
+
+* **Pre-initialised to 0 at startup** (`init_ingest_freshness`). A labelled
+  Prometheus gauge does not appear in the exposition until `.labels(...)` is
+  touched; without pre-init, a freshly-booted process that hasn't served a
+  successful fetch yet would have the series *absent*, which an
+  absence-paging staleness rule reads as a dead producer (false page). The 0
+  placeholder makes the series continuously present from boot: it means "no
+  successful fetch since this process started", which a demand-aware
+  staleness rule correctly ignores (there is no recent successful traffic to
+  be stale *relative to*).
+* **Demand-aware alerting lives downstream.** Because there is no guaranteed
+  import cadence here, the gauge ageing during a quiet period is not a fault
+  — only "recent successful traffic, then it stopped" is. The producer's job
+  is just to emit the timestamp honestly; the threshold + demand guard are
+  the alert rule's concern.
+
 ## Multi-worker mode
 
 uvicorn runs with `--workers 5` in production (one process per CPU core).
@@ -22,6 +47,7 @@ default in-process registry — same behavior as before.
 """
 
 import os
+import time
 
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -93,6 +119,53 @@ CACHE_OLDEST_ENTRY_AGE = Gauge(
     multiprocess_mode="max",
 )
 
+# Per-source ingest freshness heartbeat — unix epoch of the most recent
+# *successful* upstream fetch per source. See module docstring for the
+# pre-init / demand-aware-alerting rationale. `multiprocess_mode="max"` is the
+# correct collapse for a timestamp gauge across uvicorn workers: the freshest
+# success across all workers is the true last-success time (a worker that
+# served an older success must not drag the aggregate backwards).
+INGEST_LAST_SUCCESS = Gauge(
+    "epguides_ingest_last_success_timestamp",
+    "Unix epoch of the most recent successful upstream fetch per source "
+    "(epguides, tvmaze). Pre-initialised to 0 at startup so the series is "
+    "continuously present (0 = no successful fetch since process start).",
+    labelnames=["source"],
+    multiprocess_mode="max",
+)
+
+# Sources whose ingest freshness we track. Pre-initialised at startup so the
+# gauge series exist from boot (see init_ingest_freshness).
+INGEST_SOURCES = ("epguides", "tvmaze")
+
+
+def init_ingest_freshness() -> None:
+    """Pre-initialise the ingest-freshness gauge for every known source to 0.
+
+    A labelled Prometheus gauge is absent from the exposition until its
+    label-set is first touched. Without this, a freshly-booted process that
+    hasn't yet served a successful upstream fetch would expose *no* series —
+    which an absence-paging staleness rule reads as a dead producer and
+    false-pages. Seeding 0 makes the series continuously present from boot.
+
+    Idempotent: setting 0 again on an already-set label is harmless. Called
+    once from the FastAPI lifespan startup. Must NOT overwrite a real
+    timestamp, so this only runs at startup before any fetch has happened;
+    `.set(0)` here races nothing because lifespan startup precedes request
+    handling.
+    """
+    for source in INGEST_SOURCES:
+        INGEST_LAST_SUCCESS.labels(source=source).set(0)
+
+
+def record_ingest_success(source: str) -> None:
+    """Stamp the ingest-freshness gauge with the current time for `source`.
+
+    Called on every successful upstream fetch. `multiprocess_mode="max"`
+    ensures the aggregate across workers reflects the freshest success.
+    """
+    INGEST_LAST_SUCCESS.labels(source=source).set(time.time())
+
 
 def update_cache_age_gauge(type_ages: dict[str, float]) -> None:
     """Set the cache age gauge for each resource type. Called by the background task."""
@@ -124,8 +197,14 @@ def record_cache_miss(cache_key: str) -> None:
 
 
 def record_upstream_request(source: str, outcome: str) -> None:
-    """Increment the upstream request counter for the given source and outcome."""
+    """Increment the upstream request counter for the given source and outcome.
+
+    On a `success` outcome, also stamp the per-source ingest-freshness gauge
+    so every successful-fetch callsite updates the heartbeat for free.
+    """
     UPSTREAM_REQUESTS.labels(source=source, outcome=outcome).inc()
+    if outcome == "success":
+        record_ingest_success(source)
 
 
 def observe_upstream_response_age(source: str, duration_seconds: float) -> None:

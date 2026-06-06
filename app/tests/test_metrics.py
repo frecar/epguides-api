@@ -1,6 +1,7 @@
 """Tests for prometheus metrics module."""
 
 import os
+import time
 from typing import Any
 from unittest.mock import patch
 
@@ -10,13 +11,17 @@ from app.core.metrics import (
     CACHE_HITS,
     CACHE_MISSES,
     CACHE_OLDEST_ENTRY_AGE,
+    INGEST_LAST_SUCCESS,
+    INGEST_SOURCES,
     UPSTREAM_REQUESTS,
     UPSTREAM_RESPONSE_AGE,
     cache_type_from_key,
+    init_ingest_freshness,
     mark_worker_dead,
     observe_upstream_response_age,
     record_cache_hit,
     record_cache_miss,
+    record_ingest_success,
     record_upstream_request,
     render_metrics,
     update_cache_age_gauge,
@@ -259,6 +264,55 @@ class TestUpstreamMetricsInExposition:
 
     def test_source_label_in_output(self) -> None:
         record_upstream_request("tvmaze", "success")
+        body, _ = render_metrics()
+        assert b'source="tvmaze"' in body
+
+
+class TestIngestFreshness:
+    """Per-source ingest freshness heartbeat gauge."""
+
+    def test_record_success_stamps_a_recent_timestamp(self) -> None:
+        before = time.time()
+        record_ingest_success("epguides")
+        value = INGEST_LAST_SUCCESS.labels(source="epguides")._value.get()
+        after = time.time()
+        assert before <= value <= after
+
+    def test_record_success_is_per_source(self) -> None:
+        record_ingest_success("tvmaze")
+        # Make epguides demonstrably older, then confirm tvmaze stamp does
+        # not bump it.
+        INGEST_LAST_SUCCESS.labels(source="epguides").set(1.0)
+        record_ingest_success("tvmaze")
+        assert INGEST_LAST_SUCCESS.labels(source="epguides")._value.get() == 1.0
+
+    def test_success_outcome_updates_freshness_via_record_upstream_request(self) -> None:
+        INGEST_LAST_SUCCESS.labels(source="epguides").set(1.0)
+        before = time.time()
+        record_upstream_request("epguides", "success")
+        value = INGEST_LAST_SUCCESS.labels(source="epguides")._value.get()
+        assert value >= before
+
+    def test_non_success_outcome_does_not_update_freshness(self) -> None:
+        INGEST_LAST_SUCCESS.labels(source="tvmaze").set(1.0)
+        record_upstream_request("tvmaze", "timeout")
+        assert INGEST_LAST_SUCCESS.labels(source="tvmaze")._value.get() == 1.0
+
+    def test_init_seeds_all_sources(self) -> None:
+        # Dirty every source, then re-init resets them all to 0.
+        for source in INGEST_SOURCES:
+            INGEST_LAST_SUCCESS.labels(source=source).set(12345.0)
+        init_ingest_freshness()
+        for source in INGEST_SOURCES:
+            assert INGEST_LAST_SUCCESS.labels(source=source)._value.get() == 0.0
+
+    def test_gauge_name_appears_in_exposition(self) -> None:
+        record_ingest_success("epguides")
+        body, _ = render_metrics()
+        assert b"epguides_ingest_last_success_timestamp" in body
+
+    def test_source_label_appears_in_exposition(self) -> None:
+        record_ingest_success("tvmaze")
         body, _ = render_metrics()
         assert b'source="tvmaze"' in body
 
