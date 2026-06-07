@@ -133,3 +133,24 @@ repos:
         always_run: true
         pass_filenames: false
         stages: [pre-push]
+
+      - id: audit-osv
+        name: "Dependency-CVE check (OSV-Scanner vs uv.lock)"
+        # Shift-left of the CI "Security Audit" OSV-Scanner job: runs the
+        # SAME verdict (--lockfile=uv.lock --config=.osv-scanner.toml)
+        # locally at push time so a vulnerable lockfile bump is caught
+        # before the push round-trip. DELIBERATELY a separate hook from
+        # `ci-parity` above: ci-parity is offline-deterministic and runs
+        # the repo tree, whereas OSV needs the osv.dev advisory DB. The
+        # wrapper warn-skips (exit 0) when osv-scanner is absent / there's
+        # no lockfile / osv.dev is unreachable — so an offline push is
+        # NEVER hard-blocked — and hard-fails (exit 1) only when the scan
+        # ran and found an un-ignored vulnerability. CI's online OSV job is
+        # the authoritative backstop; do NOT silence a finding with
+        # --ignore-vuln — bump the dep or add a dated .osv-scanner.toml
+        # entry with reason + reviewer + CVSS-tiered ignoreUntil.
+        entry: bash scripts/audit_osv.sh
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-push]
