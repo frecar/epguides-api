@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: Builder — uv installs deps into a virtualenv
 # ---------------------------------------------------------------------------
-FROM python:3.14-slim AS builder
+FROM python:3.14.5-slim AS builder
 
 # Pin uv to an exact version — `latest` would silently move on every build.
 # The astral-sh/uv image only contains the static uv binary; we COPY it
@@ -39,7 +39,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime — minimal production image
 # ---------------------------------------------------------------------------
-FROM python:3.14-slim AS runtime
+FROM python:3.14.5-slim AS runtime
 
 LABEL org.opencontainers.image.title="Epguides API" \
       org.opencontainers.image.description="REST API for TV show metadata, episodes, and air dates" \
