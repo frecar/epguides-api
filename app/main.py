@@ -8,6 +8,7 @@ middleware, and exception handlers.
 import asyncio
 import logging.config
 import os
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -17,7 +18,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from app.api.endpoints import mcp, shows
-from app.core.cache import close_redis_pool, get_cache_stats, refresh_cache_age_gauges
+from app.core.cache import (
+    close_redis_pool,
+    get_cache_stats,
+    get_upstream_last_success,
+    probe_redis_round_trip,
+    refresh_cache_age_gauges,
+)
 from app.core.config import settings
 from app.core.constants import VERSION
 from app.core.metrics import init_ingest_freshness, mark_worker_dead, render_metrics
@@ -44,6 +51,17 @@ def _initialize_logging() -> None:
 _initialize_logging()
 
 logger = logging.getLogger(__name__)
+
+# Wall-clock time this worker process started. Used by /health/ready to grant a
+# cold-start grace window: right after a deploy no upstream fetch has happened
+# yet, so the freshness marker is absent — without a grace window the readiness
+# probe would 503 immediately and block the rollout.
+_PROCESS_START_TIME = time.time()
+
+# The primary upstream the readiness probe gates on. epguides.com is the
+# authoritative source; TVMaze is only a fallback, so an epguides regression is
+# the signal that matters for "is our data going stale".
+_READINESS_UPSTREAM = "epguides"
 
 # =============================================================================
 # Observability (opt-in via env vars)
@@ -307,12 +325,16 @@ def root_redirect() -> RedirectResponse:
     return RedirectResponse(url="/docs")
 
 
-@app.get("/health", tags=["Health"], summary="💚 API health check")
+@app.get("/health", tags=["Health"], summary="💚 Liveness check")
 def health_check() -> dict[str, str]:
     """
-    **Check API health status.**
+    **Liveness check — is the process up and accepting connections?**
 
-    Use for load balancer health checks, monitoring, and verifying the API is operational.
+    Deliberately cheap and dependency-free: it never touches Redis or an
+    upstream, so a container liveness probe (and load balancers) can call it
+    frequently without adding load. It proves the process is alive, nothing
+    more — for "is the service actually able to serve good data?", use
+    [`/health/ready`](#operations-Health-readiness_check_health_ready_get).
 
     ### Response
     ```json
@@ -324,6 +346,131 @@ def health_check() -> dict[str, str]:
     ```
     """
     return {"status": "healthy", "service": "epguides-api", "version": VERSION}
+
+
+async def _build_readiness_report() -> tuple[str, int, dict[str, object]]:
+    """Run the deep dependency checks and return (status, http_code, body).
+
+    Two independent sub-checks feed an overall status:
+
+    * **redis** — a write/read round-trip. A failure is *degraded, not fatal*:
+      the API still serves by fetching upstreams live when the cache is down,
+      so we stay ``200`` and just flag the sub-status.
+    * **upstream** — freshness of the last successful epguides.com fetch. If no
+      success has landed within ``UPSTREAM_STALENESS_HOURS`` the data is
+      silently going stale behind the cache, so the service is **not ready**:
+      ``503`` with a reason. During the post-deploy cold-start grace window an
+      *absent* marker is reported as ``bootstrapping`` (``200``) so a fresh
+      rollout is not failed before it serves its first request.
+
+    Overall: ``ok`` when both pass; ``unready`` (``503``) when the upstream is
+    stale; ``degraded`` (``200``) when only Redis is unhealthy.
+    """
+    threshold_seconds = settings.UPSTREAM_STALENESS_HOURS * 3600.0
+
+    # --- Redis round-trip (degraded, not fatal) ---------------------------
+    redis_ok, round_trip_ms = await probe_redis_round_trip()
+    redis_check: dict[str, object] = {"status": "ok" if redis_ok else "unavailable"}
+    if redis_ok and round_trip_ms is not None:
+        redis_check["round_trip_ms"] = round(round_trip_ms, 2)
+
+    # --- Upstream freshness (fatal when stale) ----------------------------
+    last_success = await get_upstream_last_success(_READINESS_UPSTREAM)
+    upstream_check: dict[str, object] = {
+        "source": _READINESS_UPSTREAM,
+        "threshold_seconds": threshold_seconds,
+    }
+    upstream_stale = False
+
+    if last_success is None:
+        # No successful fetch recorded yet. Within the cold-start grace window
+        # this is expected (the process just booted); past it, it means we have
+        # never reached the upstream — which IS a not-ready condition.
+        uptime = time.time() - _PROCESS_START_TIME
+        if uptime <= settings.UPSTREAM_FRESHNESS_COLD_START_GRACE_SECONDS:
+            upstream_check["status"] = "bootstrapping"
+            upstream_check["reason"] = "no upstream fetch yet (within cold-start grace window)"
+        else:
+            upstream_check["status"] = "stale"
+            upstream_check["reason"] = "no successful upstream fetch recorded since startup"
+            upstream_stale = True
+    else:
+        age_seconds = max(0.0, time.time() - last_success)
+        upstream_check["last_success_age_seconds"] = round(age_seconds, 1)
+        if age_seconds > threshold_seconds:
+            upstream_check["status"] = "stale"
+            upstream_check["reason"] = (
+                f"no successful {_READINESS_UPSTREAM} fetch in "
+                f"{age_seconds / 3600.0:.1f}h (threshold {settings.UPSTREAM_STALENESS_HOURS:.1f}h)"
+            )
+            upstream_stale = True
+        else:
+            upstream_check["status"] = "ok"
+
+    # --- Collapse to an overall status + HTTP code ------------------------
+    if upstream_stale:
+        overall, http_code = "unready", status.HTTP_503_SERVICE_UNAVAILABLE
+    elif not redis_ok:
+        overall, http_code = "degraded", status.HTTP_200_OK
+    else:
+        overall, http_code = "ok", status.HTTP_200_OK
+
+    body: dict[str, object] = {
+        "status": overall,
+        "service": "epguides-api",
+        "version": VERSION,
+        "checks": {"redis": redis_check, "upstream": upstream_check},
+    }
+    return overall, http_code, body
+
+
+@app.get("/health/ready", tags=["Health"], summary="🩺 Readiness check (deep)")
+async def readiness_check() -> JSONResponse:
+    """
+    **Readiness check — is the service actually able to serve good data?**
+
+    Unlike [`/health`](#operations-Health-health_check_health_get) (cheap
+    liveness), this exercises the real dependency path so an "up but broken"
+    instance is visible:
+
+    * **Redis** — a write/read round-trip (not just a ping), so a read-only
+      replica or an eviction-storming instance is caught. A Redis failure is
+      **degraded, not fatal** (HTTP 200): the API still serves by fetching
+      upstreams live, so the instance stays in rotation.
+    * **Upstream freshness** — the age of the last successful epguides.com
+      fetch. If nothing has succeeded within the staleness threshold the cache
+      is masking a silent upstream regression, so the instance is **not ready**
+      (HTTP 503) with a reason. A freshly deployed instance gets a cold-start
+      grace window before this fires.
+
+    Assert on the body's `status` field (`ok` / `degraded` / `unready`), not
+    just the HTTP code — a synthetic probe wanting "everything healthy" should
+    require `status == "ok"`.
+
+    ### Response (healthy)
+    ```json
+    {
+      "status": "ok",
+      "service": "epguides-api",
+      "version": "123",
+      "checks": {
+        "redis": {"status": "ok", "round_trip_ms": 1.2},
+        "upstream": {
+          "source": "epguides",
+          "status": "ok",
+          "last_success_age_seconds": 812.0,
+          "threshold_seconds": 86400.0
+        }
+      }
+    }
+    ```
+
+    ### Status codes
+    - `200` — `ok` (all healthy) or `degraded` (Redis down, still serving).
+    - `503` — `unready` (no fresh upstream data; the cache is masking staleness).
+    """
+    _, http_code, body = await _build_readiness_report()
+    return JSONResponse(status_code=http_code, content=body)
 
 
 @app.get("/health/llm", tags=["Health"], summary="🤖 LLM health check")

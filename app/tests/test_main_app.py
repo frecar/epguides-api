@@ -371,3 +371,142 @@ def test_validation_error_returns_errors_list():
     assert "errors" in data
     assert isinstance(data["errors"], list)
     assert len(data["errors"]) > 0
+
+
+# =============================================================================
+# Readiness (/health/ready) Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_readiness_ok_when_redis_and_upstream_fresh():
+    """Both checks healthy → status 'ok', HTTP 200."""
+    import time
+
+    from app.main import _READINESS_UPSTREAM
+
+    with (
+        patch("app.main.probe_redis_round_trip", new=AsyncMock(return_value=(True, 1.5))),
+        patch("app.main.get_upstream_last_success", new=AsyncMock(return_value=time.time() - 60)),
+    ):
+        response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["service"] == "epguides-api"
+    assert data["checks"]["redis"]["status"] == "ok"
+    assert data["checks"]["redis"]["round_trip_ms"] == 1.5
+    assert data["checks"]["upstream"]["status"] == "ok"
+    assert data["checks"]["upstream"]["source"] == _READINESS_UPSTREAM
+    assert data["checks"]["upstream"]["last_success_age_seconds"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_readiness_degraded_when_redis_down_but_upstream_fresh():
+    """Redis down but upstream fresh → 'degraded', HTTP 200 (still serving)."""
+    import time
+
+    with (
+        patch("app.main.probe_redis_round_trip", new=AsyncMock(return_value=(False, None))),
+        patch("app.main.get_upstream_last_success", new=AsyncMock(return_value=time.time() - 60)),
+    ):
+        response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "degraded"
+    assert data["checks"]["redis"]["status"] == "unavailable"
+    assert "round_trip_ms" not in data["checks"]["redis"]
+    assert data["checks"]["upstream"]["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_readiness_unready_when_upstream_stale():
+    """Upstream older than the threshold → 'unready', HTTP 503 with a reason."""
+    import time
+
+    # 48h old against a 24h default threshold.
+    stale_ts = time.time() - (48 * 3600)
+
+    with (
+        patch("app.main.probe_redis_round_trip", new=AsyncMock(return_value=(True, 2.0))),
+        patch("app.main.get_upstream_last_success", new=AsyncMock(return_value=stale_ts)),
+    ):
+        response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "unready"
+    assert data["checks"]["upstream"]["status"] == "stale"
+    assert "reason" in data["checks"]["upstream"]
+    assert data["checks"]["redis"]["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_readiness_unready_takes_priority_over_redis_degraded():
+    """Stale upstream is fatal even if Redis is also down → 503 'unready'."""
+    import time
+
+    stale_ts = time.time() - (48 * 3600)
+
+    with (
+        patch("app.main.probe_redis_round_trip", new=AsyncMock(return_value=(False, None))),
+        patch("app.main.get_upstream_last_success", new=AsyncMock(return_value=stale_ts)),
+    ):
+        response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "unready"
+
+
+@pytest.mark.asyncio
+async def test_readiness_bootstrapping_within_cold_start_grace():
+    """Absent marker within the cold-start grace window → 200, 'ok' overall."""
+    import time
+
+    # Pretend the process just started so we are inside the grace window.
+    with (
+        patch("app.main.probe_redis_round_trip", new=AsyncMock(return_value=(True, 1.0))),
+        patch("app.main.get_upstream_last_success", new=AsyncMock(return_value=None)),
+        patch("app.main._PROCESS_START_TIME", time.time()),
+    ):
+        response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["checks"]["upstream"]["status"] == "bootstrapping"
+    assert "grace" in data["checks"]["upstream"]["reason"]
+
+
+@pytest.mark.asyncio
+async def test_readiness_stale_when_no_fetch_after_grace_window():
+    """Absent marker past the grace window → 503 'unready' (never reached upstream)."""
+    import time
+
+    from app.main import settings as main_settings
+
+    # Process started long ago: grace window has elapsed with no success.
+    long_ago = time.time() - (main_settings.UPSTREAM_FRESHNESS_COLD_START_GRACE_SECONDS + 60)
+
+    with (
+        patch("app.main.probe_redis_round_trip", new=AsyncMock(return_value=(True, 1.0))),
+        patch("app.main.get_upstream_last_success", new=AsyncMock(return_value=None)),
+        patch("app.main._PROCESS_START_TIME", long_ago),
+    ):
+        response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "unready"
+    assert data["checks"]["upstream"]["status"] == "stale"
+    assert "since startup" in data["checks"]["upstream"]["reason"]
+
+
+def test_readiness_listed_in_openapi():
+    """The deep readiness endpoint is part of the documented public surface."""
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    assert "/health/ready" in response.json()["paths"]

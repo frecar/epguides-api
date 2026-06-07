@@ -20,7 +20,8 @@ Complete reference for all REST API endpoints.
 | `GET` | `/shows/{key}/episodes` | Get all episodes with filtering |
 | `GET` | `/shows/{key}/episodes/next` | Get next unreleased episode |
 | `GET` | `/shows/{key}/episodes/latest` | Get latest released episode |
-| `GET` | `/health` | Health check |
+| `GET` | `/health` | Liveness check (cheap, process-up) |
+| `GET` | `/health/ready` | Readiness check (deep — Redis + upstream freshness) |
 | `GET` | `/health/llm` | LLM status |
 | `POST` | `/mcp` | MCP JSON-RPC endpoint |
 

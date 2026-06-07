@@ -5,8 +5,10 @@ Provides a simple async caching decorator that handles cache hits/misses
 and falls back gracefully on errors.
 """
 
+import asyncio
 import logging
 import re
+import time
 from collections.abc import Awaitable, Callable, Coroutine
 from functools import wraps
 from typing import Any, ParamSpec, TypeVar, cast
@@ -36,6 +38,21 @@ _CACHE_AGE_LOCK_TTL = 260
 
 # Prefixes that map directly to resource types in the cache key `<type>:<id>`.
 _SCAN_PREFIXES = ("show", "episodes", "seasons", "search", "shows")
+
+# Redis key holding the unix timestamp of the most recent successful upstream
+# fetch per source. Shared across all uvicorn workers (a per-process value
+# would skew under multi-worker / multi-replica deployments). Read by the
+# /health/ready readiness probe to compute upstream freshness; written on every
+# successful upstream fetch. No TTL — the value's *age* is the staleness
+# signal, so it must persist until the next success overwrites it.
+_UPSTREAM_LAST_SUCCESS_KEY = "health:upstream_last_success:{source}"
+
+# Static key the readiness probe writes-then-reads to prove a live Redis
+# round-trip (validates the write path — a PING alone passes on a read-only
+# replica or a maxmemory-evicting instance). Short TTL so it self-expires and
+# never lingers as dead state.
+_READINESS_PROBE_KEY = "health:readiness_probe"
+_READINESS_PROBE_TTL = 10
 
 # =============================================================================
 # Type Variables
@@ -202,6 +219,85 @@ async def cache_exists(key: str) -> bool:
         return bool(count > 0)
     except Exception:
         return False
+
+
+# =============================================================================
+# Readiness / Upstream-Freshness Helpers
+# =============================================================================
+
+
+async def mark_upstream_success(source: str) -> None:
+    """Record the current time as the last successful fetch for `source`.
+
+    Writes the unix timestamp to a shared Redis key so the /health/ready
+    readiness probe can compute upstream freshness across all uvicorn workers.
+    Fails silently — a Redis write error here must never break the request
+    that triggered the successful upstream fetch; the worst case is the
+    readiness probe sees an older-than-reality timestamp, which the probe's
+    own Redis sub-check already surfaces as degraded.
+    """
+    try:
+        redis = await get_redis()
+        key = _UPSTREAM_LAST_SUCCESS_KEY.format(source=source)
+        await redis.set(key, str(time.time()))
+    except Exception as e:
+        logger.warning("Failed to record upstream success for %s: %s", source, e)
+
+
+async def get_upstream_last_success(source: str) -> float | None:
+    """Return the unix timestamp of the last successful fetch for `source`.
+
+    Returns None when no success has been recorded yet (cold start) or on any
+    Redis read error. A malformed stored value is treated as absent rather
+    than raising, so a corrupted key never breaks the readiness probe.
+    """
+    try:
+        redis = await get_redis()
+        key = _UPSTREAM_LAST_SUCCESS_KEY.format(source=source)
+        raw = cast("str | None", await redis.get(key))
+        if raw is None:
+            return None
+        return float(raw)
+    except ValueError, TypeError:
+        logger.warning("Malformed upstream-success timestamp for %s", source)
+        return None
+    except Exception as e:
+        logger.warning("Failed to read upstream success for %s: %s", source, e)
+        return None
+
+
+async def probe_redis_round_trip() -> tuple[bool, float | None]:
+    """Prove Redis is reachable AND writable via a set/get read-back.
+
+    A write-then-read validates the full path: a plain PING passes against a
+    read-only replica or a maxmemory-evicting instance that can no longer
+    accept writes — states in which our cache is effectively broken. Bounded
+    by READINESS_REDIS_TIMEOUT_SECONDS so a sick Redis can't hang the probe.
+
+    Returns (ok, round_trip_ms). `ok` is True only when the value written is
+    read back intact; `round_trip_ms` is the measured latency on success and
+    None on any failure or timeout.
+    """
+    probe_token = str(time.time())
+
+    async def _round_trip() -> bool:
+        redis = await get_redis()
+        await redis.set(_READINESS_PROBE_KEY, probe_token, ex=_READINESS_PROBE_TTL)
+        read_back = cast("str | None", await redis.get(_READINESS_PROBE_KEY))
+        return read_back == probe_token
+
+    start = time.monotonic()
+    try:
+        # asyncio.wait_for raises TimeoutError on expiry (a subclass of
+        # Exception), so a single except handles timeout + connection errors.
+        ok = await asyncio.wait_for(_round_trip(), timeout=settings.READINESS_REDIS_TIMEOUT_SECONDS)
+    except Exception as e:
+        logger.warning("Redis readiness round-trip failed: %s", e)
+        return False, None
+
+    if not ok:
+        return False, None
+    return True, (time.monotonic() - start) * 1000.0
 
 
 # =============================================================================
