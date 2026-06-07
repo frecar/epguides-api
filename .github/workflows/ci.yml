@@ -69,6 +69,24 @@ jobs:
         # workaround.
         run: uvx pip-audit --strict --desc --require-hashes -r /tmp/requirements-audit.txt
 
+      - name: Security audit (OSV-Scanner)
+        # Authoritative ONLINE dependency-CVE backstop. The local
+        # `scripts/audit_osv.sh` pre-push hook shifts this same verdict
+        # left (it warn-skips offline); this CI step is the source of
+        # truth that always runs against the live osv.dev advisory DB.
+        # All ignores live in .osv-scanner.toml with a mandatory
+        # ignoreUntil + reason + reviewer comment — NO --ignore-vuln CLI
+        # flags. Orthogonal to pip-audit above: pip-audit scans the
+        # exported hashed requirements.txt, OSV-Scanner reads the uv.lock
+        # resolved graph directly — overlapping osv.dev coverage with
+        # independent parsers, so a miss in one parser is caught by the
+        # other.
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --lockfile=uv.lock
+            --config=.osv-scanner.toml
+
   lint:
     name: Lint
     # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).

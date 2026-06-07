@@ -1,5 +1,5 @@
 .PHONY: help setup up dev down stop build up-prod logs run test lint format format-check fix check coverage ci
-.PHONY: docs docs-build cache-clear deploy-prod doctor urls open clean
+.PHONY: docs docs-build cache-clear deploy-prod doctor urls open clean audit-osv
 
 .DEFAULT_GOAL := help
 
@@ -37,6 +37,7 @@ help:
 	@echo "  make format-check   Check formatting without changes"
 	@echo "  make test           Run tests with coverage"
 	@echo "  make coverage       Run tests with HTML coverage report"
+	@echo "  make audit-osv      Local dependency-CVE check (OSV-Scanner vs uv.lock)"
 	@echo ""
 	@echo "Production:"
 	@echo "  make up-prod        Start production"
@@ -200,6 +201,16 @@ ci-parity: format-check lint typecheck
 
 ci: format-check lint test
 	@echo "All checks passed"
+
+# Local dependency-CVE check. Runs the SAME OSV-Scanner verdict CI runs
+# online (--lockfile=uv.lock --config=.osv-scanner.toml) so a vulnerable
+# lockfile bump is caught at `git push` instead of after the round-trip.
+# The wrapper warn-skips (exit 0) when osv-scanner is absent / there's no
+# lockfile / osv.dev is unreachable, and hard-fails (exit 1) only when the
+# scan ran and found an un-ignored vulnerability — so an offline push is
+# never blocked. CI's online OSV job is the authoritative backstop.
+audit-osv:
+	bash scripts/audit_osv.sh
 
 # =============================================================================
 # DOCS

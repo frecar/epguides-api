@@ -1,0 +1,32 @@
+# OSV-Scanner ignore policy for epguides-api.
+#
+# Scope: the resolved dependency tree in uv.lock. The CI "Security Audit"
+# job runs OSV-Scanner online against osv.dev as the authoritative
+# dependency-CVE backstop; `scripts/audit_osv.sh` (wired as a pre-push
+# hook) runs the SAME verdict locally to shift the check left, and
+# warn-skips when offline so CI stays the source of truth.
+#
+# Currently NO pinned ignores — the deployed dependency tree is clean per
+# OSV.dev. The default posture is: a surfaced vulnerability is a real one
+# that needs the dep upgraded, NOT silenced here.
+#
+# When adding a new ignore: required schema fields are
+#   id (TOML key), reason (TOML key), ignoreUntil (TOML key, date),
+#   type (# comment), reviewer (# comment).
+# OSV-Scanner is strict about TOML keys it doesn't recognize, so `type`
+# and `reviewer` MUST be `# type:` / `# reviewer:` comments directly
+# above each [[IgnoredVulns]] entry. PR review enforces.
+#
+# CVSS-tiered max ignoreUntil (the ignore is a FORCING FUNCTION, not a
+# renewal date — re-evaluate at expiry, never silently renew):
+#   Critical (>= 9.0)   -> 14 days
+#   High (7.0 - 8.9)    -> 30 days
+#   Medium (4.0 - 6.9)  -> 90 days
+#   Low (< 4.0)         -> 90 days
+#
+# What does NOT belong here: upstream-fixed CVEs — bump the dep instead.
+# An upstream-fixed CVE listed here surfaces as an "unused ignore".
+#
+# This file is intentionally comment-only (zero [[IgnoredVulns]] entries):
+# a config with no ignores is valid TOML and scans the full tree. Add
+# [[IgnoredVulns]] blocks per the schema above when an ignore is justified.
