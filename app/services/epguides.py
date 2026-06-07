@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from app.core.cache import cache
+from app.core.cache import cache, mark_upstream_success
 from app.core.config import settings
 from app.core.constants import CACHE_TTL_SHOWS_METADATA_SECONDS, DATE_FORMATS, EPGUIDES_BASE_URL
 from app.core.metrics import observe_upstream_response_age, record_upstream_request
@@ -109,6 +109,7 @@ async def _fetch_url(url: str) -> httpx.Response | None:
             response.raise_for_status()
             observe_upstream_response_age("epguides", time.monotonic() - start)
             record_upstream_request("epguides", "success")
+            await mark_upstream_success("epguides")
             return response
     except httpx.TimeoutException:
         logger.warning("Timeout fetching %s after %ss", url, settings.HTTP_TIMEOUT_SECONDS)
@@ -265,6 +266,7 @@ async def _tvmaze_get(url: str, **kwargs: Any) -> httpx.Response | None:
                 return None
             observe_upstream_response_age("tvmaze", time.monotonic() - start)
             record_upstream_request("tvmaze", "success")
+            await mark_upstream_success("tvmaze")
             return response
     except httpx.TimeoutException:
         logger.warning("Timeout fetching TVMaze %s", url)

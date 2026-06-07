@@ -62,6 +62,30 @@ class Settings(BaseSettings):
     HTTP_TIMEOUT_SECONDS: float = 5.0  # Timeout for external HTTP requests
 
     # -------------------------------------------------------------------------
+    # Readiness / Deep-Health Configuration
+    # -------------------------------------------------------------------------
+    # /health/ready flips to a degraded (HTTP 503) state when no successful
+    # upstream (epguides.com) fetch has happened within this many hours. The
+    # cache hides upstream outages for up to its TTL, so a longer-than-cadence
+    # gap without a single success means the data is silently going stale.
+    # Default 24h: comfortably longer than a healthy scrape cadence, short
+    # enough to surface a multi-hour upstream regression before users notice.
+    UPSTREAM_STALENESS_HOURS: float = 24.0
+
+    # Grace window after process start during which an *absent* freshness
+    # marker (no upstream fetch recorded yet) is reported as "bootstrapping"
+    # (HTTP 200) instead of "stale" (HTTP 503). Without this, a freshly
+    # deployed instance fails its readiness probe immediately — before it has
+    # had a chance to serve a single upstream fetch — which would block the
+    # rollout. Default 15 minutes.
+    UPSTREAM_FRESHNESS_COLD_START_GRACE_SECONDS: float = 900.0
+
+    # Upper bound on the Redis round-trip the readiness probe performs, so a
+    # sick Redis cannot make the probe itself hang. Kept short — readiness
+    # probes are called frequently and must answer fast.
+    READINESS_REDIS_TIMEOUT_SECONDS: float = 2.0
+
+    # -------------------------------------------------------------------------
     # Logging Configuration
     # -------------------------------------------------------------------------
     LOG_LEVEL: str = "INFO"  # pragma: no cover - class body; covered at import time

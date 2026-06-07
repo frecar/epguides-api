@@ -41,7 +41,7 @@ This repo defines and adheres to a Python-service quality baseline:
 - **Security:** CVE coverage is layered in CI — `pip-audit --strict --require-hashes` against the exported (hashed) transitive dependency set, plus a Trivy filesystem scan (reads `uv.lock`) and a Trivy image scan of the built runtime. CRITICAL findings gate the merge; HIGH surface as annotations. Unfixable findings with no upstream patch are suppressed via `.trivyignore` / `ignore-unfixed` with a tracking trail — never silenced silently.
 - **Public surface:** `scripts/check-no-internal-refs.sh` runs in pre-commit and CI. Keep source, docs, and examples standalone; use runtime configuration for private deployment values.
 - **Error tracking:** `app.core.observability` initialises `sentry-sdk[fastapi]` only when `SENTRY_DSN` env var is set; traces and profiles default to `0.0` unless configured.
-- **Observability:** `/metrics` endpoint exposes Prometheus exposition format (cache hits/misses by type, upstream request totals by source/outcome, upstream latency histogram). `/health`, `/health/llm`, `/health/cache` return structured JSON.
+- **Observability:** `/metrics` endpoint exposes Prometheus exposition format (cache hits/misses by type, upstream request totals by source/outcome, upstream latency histogram, per-source ingest-freshness heartbeat). `/health` (cheap liveness), `/health/ready` (deep readiness — Redis round-trip + upstream freshness, structured `status` field, `503` when data is silently stale), `/health/llm`, `/health/cache` return structured JSON.
 - **Docker hardening:** multi-stage build (compile in builder, ship runtime only), non-root user (UID 1000), `no-new-privileges`, healthcheck, log rotation, pinned `python:3.14-slim` base, pinned `ghcr.io/astral-sh/uv:0.11.3` for the uv binary.
 - **Backup tier:** **N/A.** All persistent state is in upstream APIs (epguides.com, TVMaze); cache is Redis-resident and ephemeral. No DB to back up. Documented as a baseline-contract row even when the answer is "nothing to do here."
 - **Makefile contract:** `make help / dev / stop / lint / fix / test / ci / build` — same surface as other Python services I maintain (aliases `up`/`down`/`deploy-prod` retained for existing muscle memory).
@@ -151,7 +151,7 @@ The cache hides upstream outages — once warmed, the API serves stale-but-bound
 ### Observability gaps (open work — #196 follow-ups)
 
 - No metric for cache hit/miss ratio per type. Add `epguides_cache_hits_total{type}` / `epguides_cache_misses_total{type}` in the `@cached` decorator.
-- No alert if upstream stops responding. Add `epguides_upstream_request_total{source,outcome}` + Grafana `EpguidesUpstreamStale` alert (no successful epguides.com fetch in 24h).
+- Upstream-staleness signal: `epguides_upstream_request_total{source,outcome}` + `epguides_ingest_last_success_timestamp{source}` heartbeat are exported, and `/health/ready` now flips to a `503` when no successful epguides.com fetch has landed within `UPSTREAM_STALENESS_HOURS` (default 24h). Remaining open work is operator-side monitoring config (the external Grafana/probe alert wiring), out of this repo's scope.
 - No measurement of upstream latency. Add `epguides_upstream_response_age_seconds{source}` histogram.
 
 These are kept intentionally separate from the SLA section above so the docs reflect today's truth — the gaps don't lie about coverage that doesn't exist yet.

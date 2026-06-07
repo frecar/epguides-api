@@ -616,3 +616,162 @@ async def test_refresh_cache_age_gauges_exception_logs_warning(caplog):
         with caplog.at_level(logging.WARNING, logger="app.core.cache"):
             await cache.refresh_cache_age_gauges()
     assert "Failed to refresh cache age gauges" in caplog.text
+
+
+# =============================================================================
+# Readiness / Upstream-Freshness Helper Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_mark_upstream_success_writes_timestamp():
+    """mark_upstream_success writes the current time to the per-source key."""
+    mock_redis = AsyncMock()
+
+    with patch.object(cache, "get_redis", return_value=mock_redis):
+        await cache.mark_upstream_success("epguides")
+
+    mock_redis.set.assert_called_once()
+    key, value = mock_redis.set.call_args[0]
+    assert key == "health:upstream_last_success:epguides"
+    # Value is a stringified float timestamp
+    assert float(value) > 0
+
+
+@pytest.mark.asyncio
+async def test_mark_upstream_success_swallows_redis_error(caplog):
+    """A Redis write failure must not propagate out of mark_upstream_success."""
+    import logging
+
+    with patch.object(cache, "get_redis", side_effect=Exception("redis down")):
+        with caplog.at_level(logging.WARNING, logger="app.core.cache"):
+            await cache.mark_upstream_success("epguides")
+    assert "Failed to record upstream success" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_get_upstream_last_success_returns_float():
+    """A stored timestamp is parsed back to a float."""
+    mock_redis = AsyncMock()
+    mock_redis.get.return_value = "1700000000.5"
+
+    with patch.object(cache, "get_redis", return_value=mock_redis):
+        result = await cache.get_upstream_last_success("epguides")
+
+    assert result == 1700000000.5
+    mock_redis.get.assert_called_once_with("health:upstream_last_success:epguides")
+
+
+@pytest.mark.asyncio
+async def test_get_upstream_last_success_absent_returns_none():
+    """An absent key (no fetch recorded yet) returns None."""
+    mock_redis = AsyncMock()
+    mock_redis.get.return_value = None
+
+    with patch.object(cache, "get_redis", return_value=mock_redis):
+        result = await cache.get_upstream_last_success("epguides")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_upstream_last_success_malformed_returns_none(caplog):
+    """A corrupted (non-numeric) stored value is treated as absent, not raised."""
+    import logging
+
+    mock_redis = AsyncMock()
+    mock_redis.get.return_value = "not-a-number"
+
+    with patch.object(cache, "get_redis", return_value=mock_redis):
+        with caplog.at_level(logging.WARNING, logger="app.core.cache"):
+            result = await cache.get_upstream_last_success("epguides")
+
+    assert result is None
+    assert "Malformed upstream-success timestamp" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_get_upstream_last_success_redis_error_returns_none(caplog):
+    """A Redis read error returns None and logs a warning."""
+    import logging
+
+    with patch.object(cache, "get_redis", side_effect=Exception("redis down")):
+        with caplog.at_level(logging.WARNING, logger="app.core.cache"):
+            result = await cache.get_upstream_last_success("epguides")
+
+    assert result is None
+    assert "Failed to read upstream success" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_probe_redis_round_trip_ok():
+    """A successful set/get read-back returns (True, latency)."""
+    mock_redis = AsyncMock()
+
+    # Echo back whatever was written so the read-back matches.
+    written: dict[str, str] = {}
+
+    async def _set(key, value, ex=None):
+        written[key] = value
+
+    async def _get(key):
+        return written.get(key)
+
+    mock_redis.set.side_effect = _set
+    mock_redis.get.side_effect = _get
+
+    with patch.object(cache, "get_redis", return_value=mock_redis):
+        ok, round_trip_ms = await cache.probe_redis_round_trip()
+
+    assert ok is True
+    assert round_trip_ms is not None
+    assert round_trip_ms >= 0
+
+
+@pytest.mark.asyncio
+async def test_probe_redis_round_trip_value_mismatch():
+    """If the read-back value does not match what was written, the probe fails."""
+    mock_redis = AsyncMock()
+    mock_redis.get.return_value = "stale-or-evicted-value"
+
+    with patch.object(cache, "get_redis", return_value=mock_redis):
+        ok, round_trip_ms = await cache.probe_redis_round_trip()
+
+    assert ok is False
+    assert round_trip_ms is None
+
+
+@pytest.mark.asyncio
+async def test_probe_redis_round_trip_error_returns_false(caplog):
+    """A Redis connection error returns (False, None) and logs a warning."""
+    import logging
+
+    with patch.object(cache, "get_redis", side_effect=Exception("connection refused")):
+        with caplog.at_level(logging.WARNING, logger="app.core.cache"):
+            ok, round_trip_ms = await cache.probe_redis_round_trip()
+
+    assert ok is False
+    assert round_trip_ms is None
+    assert "Redis readiness round-trip failed" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_probe_redis_round_trip_timeout_returns_false():
+    """A round-trip exceeding the configured timeout returns (False, None)."""
+    import asyncio
+
+    mock_redis = AsyncMock()
+
+    async def _slow_set(*args, **kwargs):
+        await asyncio.sleep(5)
+
+    mock_redis.set.side_effect = _slow_set
+
+    with (
+        patch.object(cache, "get_redis", return_value=mock_redis),
+        patch.object(cache.settings, "READINESS_REDIS_TIMEOUT_SECONDS", 0.01),
+    ):
+        ok, round_trip_ms = await cache.probe_redis_round_trip()
+
+    assert ok is False
+    assert round_trip_ms is None

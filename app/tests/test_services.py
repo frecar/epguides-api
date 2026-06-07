@@ -2429,10 +2429,66 @@ async def test_fetch_url_success(mock_client_class):
     mock_client.__aenter__.return_value = mock_client
     mock_client_class.return_value = mock_client
 
-    result = await epguides._fetch_url("http://example.com/test")
+    with patch("app.services.epguides.mark_upstream_success", new=AsyncMock()):
+        result = await epguides._fetch_url("http://example.com/test")
 
     assert result is not None
     assert result.status_code == 200
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_success_marks_upstream_freshness(mock_client_class):
+    """A successful epguides fetch stamps the readiness freshness marker."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    with patch("app.services.epguides.mark_upstream_success", new=AsyncMock()) as mock_mark:
+        await epguides._fetch_url("http://example.com/test")
+
+    mock_mark.assert_awaited_once_with("epguides")
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_fetch_url_failure_does_not_mark_upstream_freshness(mock_client_class):
+    """A failed epguides fetch must NOT stamp the freshness marker."""
+    import httpx
+
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = httpx.ConnectError("unreachable")
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    with patch("app.services.epguides.mark_upstream_success", new=AsyncMock()) as mock_mark:
+        result = await epguides._fetch_url("http://example.com/test")
+
+    assert result is None
+    mock_mark.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@patch("httpx.AsyncClient")
+async def test_tvmaze_get_success_marks_upstream_freshness(mock_client_class):
+    """A successful TVMaze fetch stamps the tvmaze freshness marker."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_response
+    mock_client.__aenter__.return_value = mock_client
+    mock_client_class.return_value = mock_client
+
+    with patch("app.services.epguides.mark_upstream_success", new=AsyncMock()) as mock_mark:
+        await epguides._tvmaze_get("http://example.com/tvmaze")
+
+    mock_mark.assert_awaited_once_with("tvmaze")
 
 
 @pytest.mark.asyncio
