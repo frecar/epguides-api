@@ -36,6 +36,9 @@ dev = [
     "pre-commit==4.6.0",
     "mypy==2.1.0",
     "pip-audit==2.10.0",
+    # Drives the in-process OpenAPI route-contract gate (app/contract.py +
+    # app/tests/test_api_contract.py) — test-only, never imported at runtime.
+    "jsonschema==4.26.0",
 ]
 
 [build-system]
