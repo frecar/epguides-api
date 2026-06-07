@@ -244,10 +244,7 @@ def check_file(path: Path) -> list[tuple[int, str]]:
 
 
 def main(argv: list[str]) -> int:
-    if argv:
-        files = [Path(a) for a in argv]
-    else:
-        files = [p for p in Path.cwd().rglob("*.py") if p.is_file()]
+    files = [Path(a) for a in argv] if argv else [p for p in Path.cwd().rglob("*.py") if p.is_file()]
 
     violation_count = 0
     for f in files:
