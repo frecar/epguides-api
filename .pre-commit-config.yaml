@@ -154,3 +154,34 @@ repos:
         always_run: true
         pass_filenames: false
         stages: [pre-push]
+
+  # >>> shared baseline additions (managed; do not hand-edit) >>>
+  # Lint GitHub Actions workflow YAML locally. `language: golang` auto-bootstraps
+  # Go, so no host toolchain is needed. Keep this `rev` and the CI `actionlint`
+  # job's pinned version in lockstep.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.10
+    hooks:
+      - id: actionlint
+
+  # Spell-checker (crate-ci/typos). Allowlist of domain vocabulary lives in
+  # `.typos.toml` — add a word there ONLY for a real domain term, never to paper
+  # over a misspelling. Keep this `rev` and CI's `typos` job in lockstep.
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.47.2
+    hooks:
+      - id: typos
+
+  # Lint standalone shell scripts on the host shellcheck binary — NOT the
+  # Docker-image hook, to dodge Docker-Hub rate-limits on shared NAT egress.
+  # `language: system` calls the on-PATH shellcheck directly.
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: "ShellCheck — host binary lints shell scripts"
+        entry: shellcheck
+        language: system
+        types: [shell]
+        # shellcheck has no zsh dialect ("Unknown shell: zsh").
+        exclude: \.zsh$
+  # <<< shared baseline additions <<<
