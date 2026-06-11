@@ -394,6 +394,7 @@ async def test_readiness_ok_when_redis_and_upstream_fresh():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
+    assert data["overall_ok"] is True
     assert data["service"] == "epguides-api"
     assert data["checks"]["redis"]["status"] == "ok"
     assert data["checks"]["redis"]["round_trip_ms"] == 1.5
@@ -416,6 +417,7 @@ async def test_readiness_degraded_when_redis_down_but_upstream_fresh():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "degraded"
+    assert data["overall_ok"] is False
     assert data["checks"]["redis"]["status"] == "unavailable"
     assert "round_trip_ms" not in data["checks"]["redis"]
     assert data["checks"]["upstream"]["status"] == "ok"
@@ -438,6 +440,7 @@ async def test_readiness_unready_when_upstream_stale():
     assert response.status_code == 503
     data = response.json()
     assert data["status"] == "unready"
+    assert data["overall_ok"] is False
     assert data["checks"]["upstream"]["status"] == "stale"
     assert "reason" in data["checks"]["upstream"]
     assert data["checks"]["redis"]["status"] == "ok"
@@ -459,6 +462,7 @@ async def test_readiness_unready_takes_priority_over_redis_degraded():
     assert response.status_code == 503
     data = response.json()
     assert data["status"] == "unready"
+    assert data["overall_ok"] is False
 
 
 @pytest.mark.asyncio
@@ -477,6 +481,7 @@ async def test_readiness_bootstrapping_within_cold_start_grace():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
+    assert data["overall_ok"] is True
     assert data["checks"]["upstream"]["status"] == "bootstrapping"
     assert "grace" in data["checks"]["upstream"]["reason"]
 
@@ -501,8 +506,38 @@ async def test_readiness_stale_when_no_fetch_after_grace_window():
     assert response.status_code == 503
     data = response.json()
     assert data["status"] == "unready"
+    assert data["overall_ok"] is False
     assert data["checks"]["upstream"]["status"] == "stale"
     assert "since startup" in data["checks"]["upstream"]["reason"]
+
+
+@pytest.mark.asyncio
+async def test_readiness_overall_ok_is_collision_proof_on_degraded_body():
+    """The exact false-pass `overall_ok` exists to prevent, as a regression test.
+
+    A *degraded* body still contains the raw substring ``"status": "ok"`` (the
+    healthy upstream sub-check), so a substring/regex monitor asserting on it
+    false-passes. ``overall_ok`` must (a) be False on that same body and (b)
+    never appear inside nested check objects — that's what makes a regex on it
+    collision-proof.
+    """
+    import time
+
+    with (
+        patch("app.main.probe_redis_round_trip", new=AsyncMock(return_value=(False, None))),
+        patch("app.main.get_upstream_last_success", new=AsyncMock(return_value=time.time() - 60)),
+    ):
+        response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    data = response.json()
+    # The unsound substring assertion would false-pass on this degraded body:
+    assert data["status"] == "degraded"
+    assert '"status":"ok"' in response.text.replace(" ", "")
+    # ...while the collision-proof marker correctly reads unhealthy:
+    assert data["overall_ok"] is False
+    # And the key exists ONLY at the top level — never in nested check objects.
+    assert all("overall_ok" not in check for check in data["checks"].values())
 
 
 def test_readiness_listed_in_openapi():
