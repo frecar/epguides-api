@@ -365,6 +365,13 @@ async def _build_readiness_report() -> tuple[str, int, dict[str, object]]:
 
     Overall: ``ok`` when both pass; ``unready`` (``503``) when the upstream is
     stale; ``degraded`` (``200``) when only Redis is unhealthy.
+
+    The body also carries a top-level ``overall_ok`` boolean — ``True`` exactly
+    when the overall status is ``ok``. It exists because the nested per-check
+    objects have their own ``status`` fields, so a substring/regex body
+    assertion on ``"status": "ok"`` can false-pass against a degraded body (a
+    healthy sub-check still matches). ``overall_ok`` appears only at the top
+    level, making it the collision-proof marker for such monitors.
     """
     threshold_seconds = settings.UPSTREAM_STALENESS_HOURS * 3600.0
 
@@ -417,6 +424,11 @@ async def _build_readiness_report() -> tuple[str, int, dict[str, object]]:
 
     body: dict[str, object] = {
         "status": overall,
+        # Collision-proof machine marker: the key never appears in nested check
+        # objects, so a regex/substring monitor asserting on it cannot
+        # false-pass against a degraded/unready body (unlike "status": "ok",
+        # which healthy sub-checks also emit).
+        "overall_ok": overall == "ok",
         "service": "epguides-api",
         "version": VERSION,
         "checks": {"redis": redis_check, "upstream": upstream_check},
@@ -443,18 +455,43 @@ async def readiness_check() -> JSONResponse:
       (HTTP 503) with a reason. A freshly deployed instance gets a cold-start
       grace window before this fires.
 
-    Assert on the body's `status` field (`ok` / `degraded` / `unready`), not
-    just the HTTP code — a synthetic probe wanting "everything healthy" should
-    require `status == "ok"`.
+    Assert on the body, not just the HTTP code. A synthetic probe wanting
+    "everything healthy" should assert the top-level **`overall_ok`** boolean
+    (e.g. regex `"overall_ok"\\s*:\\s*true`) — it is `true` exactly when
+    `status == "ok"` and the key never appears inside nested check objects, so
+    it cannot false-pass. Matching on `"status": "ok"` instead is unsound: a
+    *degraded* body still contains that substring via a healthy sub-check
+    (e.g. `checks.upstream.status == "ok"` while Redis is down). The
+    human-readable tri-state lives in `status` (`ok` / `degraded` / `unready`).
 
     ### Response (healthy)
     ```json
     {
       "status": "ok",
+      "overall_ok": true,
       "service": "epguides-api",
       "version": "123",
       "checks": {
         "redis": {"status": "ok", "round_trip_ms": 1.2},
+        "upstream": {
+          "source": "epguides",
+          "status": "ok",
+          "last_success_age_seconds": 812.0,
+          "threshold_seconds": 86400.0
+        }
+      }
+    }
+    ```
+
+    ### Response (degraded — note the still-present `"status": "ok"` substring)
+    ```json
+    {
+      "status": "degraded",
+      "overall_ok": false,
+      "service": "epguides-api",
+      "version": "123",
+      "checks": {
+        "redis": {"status": "unavailable"},
         "upstream": {
           "source": "epguides",
           "status": "ok",
