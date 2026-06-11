@@ -167,10 +167,21 @@ repos:
   # Spell-checker (crate-ci/typos). Allowlist of domain vocabulary lives in
   # `.typos.toml` — add a word there ONLY for a real domain term, never to paper
   # over a misspelling. Keep this `rev` and CI's `typos` job in lockstep.
+  #
+  # `args` overrides the upstream default `[--write-changes, --force-exclude]`:
+  # we DROP `--write-changes` so the hook is CHECK-ONLY and can never auto-fix.
+  # Auto-fix silently rewrites source — and for a localized repo it corrupts
+  # non-English UI strings into broken English. We KEEP
+  # `--force-exclude` so a repo's `.typos.toml` `[files] extend-exclude` is
+  # honoured even when pre-commit passes explicit filenames (without it, an
+  # explicitly-passed excluded file is scanned anyway). Check-only is the right
+  # default for every consumer; a repo that genuinely wants auto-fix overrides
+  # this hook OUTSIDE the managed block.
   - repo: https://github.com/crate-ci/typos
     rev: v1.47.2
     hooks:
       - id: typos
+        args: ["--force-exclude"]
 
   # Lint standalone shell scripts on the host shellcheck binary — NOT the
   # Docker-image hook, to dodge Docker-Hub rate-limits on shared NAT egress.
