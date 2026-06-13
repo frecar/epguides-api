@@ -1,5 +1,44 @@
 # epguides-api — Agent Guidance
 
+<!-- AGENTS-CORE:BEGIN — generated from frecar/dotfiles code/AGENTS-CORE-public.md. Do NOT edit inline; run code/sync-agents-core.sh. -->
+## Cross-agent core rules
+
+These rules bind **every** agent working in this repo — Claude, Codex, Gemini, OpenCode — regardless of tool. They are the shared contract; your tool-specific file (`CLAUDE.md` / `GEMINI.md` / your config) adds only tool mechanics on top. This block is machine-synced — do not edit it inline.
+
+### Worktrees
+- Create worktrees **only** under `/tmp/wt-<branch-slug>/<repo>` (branch with `/`→`-`). **Never** nest a worktree inside the main clone directory — that pollutes the workspace.
+- Base off fresh `origin/main`: `git fetch origin` immediately before `git worktree add "/tmp/wt-<slug>/<repo>" origin/main -b <branch>`.
+- Name the worktree by the branch, not the issue. **Tear it down** on completion or hand-off: `git worktree remove <path>` + `rm -rf` the parent.
+
+### Multi-agent coordination (several agents run concurrently as the same GitHub user)
+- Before starting an issue, sweep for an existing branch touching it (`git ls-remote --heads origin "*<issue>*"`). If one exists, another agent has it — back off.
+- Claim atomically: assign yourself, flip `status:ready`→`status:in-progress`, push an agent-name-prefixed branch, and post a claim comment. Then **wait ~60s and re-read** — if another agent's claim landed in the gap, back off and undo yours.
+- One issue per agent. Never edit, review, or push to another agent's claimed issue / PR / branch. Stamp your agent identity on branches and comments so ownership is visible.
+
+### Merge discipline
+- `main` is protected on every repo: **never** `git push` to it, **never** raw `gh pr merge` or web-merge.
+- Merge **only** via the project's gated merge wrapper, which refuses unless every required check has concluded `success`.
+- **Never merge red.** A failing/missing required check or a change-requesting review is a signal to FIX, not to merge. Branch off latest `origin/main` → worktree-isolate → wait for CI green → merge via the gate.
+
+### Commits & conventions
+- **Never** add `Co-Authored-By` or any AI-attribution line — commits are the operator's own work.
+- **Never** fix production by ad-hoc SSH. Fix in the repo, commit, deploy. Ad-hoc SSH creates drift that the next deploy overwrites.
+- Docker-first — run tooling in containers, not on the host. Keep secrets in environment variables or a secrets manager, never committed to the repo.
+- Do not hard-code external LLM API endpoints (OpenAI, Anthropic, etc.) in source. Route model calls through the endpoint configured via environment variable.
+
+### GitHub issues
+- Any non-trivial plan or task becomes a GH issue, before or as you start — the issue is the durable record. Apply **exactly one each** of `type:` (bug/feature/chore/docs/infra), `severity:` (critical/high/medium/low), `status:` (triage/ready/in-progress/blocked/burn-in) at file time.
+- Self-filed issue → `Closes #N` in the PR. **External-reporter** issue → `Refs #N` (never auto-close on merge; the reporter verifies first).
+- This is a public repo — never reference internal hostnames, IPs, private repos, or private deployment details in issues/PRs/comments.
+
+### Quality gates
+- Pre-commit and pre-push run automatically; **never** `--no-verify`. Fix the failure instead.
+- Wait for CI green before merging. The coverage floor is a fixed **95%** — never lower a gate to pass.
+
+> Detail and rationale live in this repo's own `AGENTS.md` below. This CORE is the non-negotiable shared minimum.
+<!-- AGENTS-CORE:END -->
+
+
 Canonical agent instructions for this repository. Compatibility files (`CLAUDE.md`, `.github/copilot-instructions.md`) point here.
 
 REST API for TV show metadata, episodes, air dates, and summaries. Also provides an MCP server for AI assistants.
