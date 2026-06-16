@@ -17,9 +17,12 @@ on:
     - cron: "30 6 * * 1"   # Monday 06:30 UTC
   workflow_dispatch: {}
 
+# #344: the auto-PR is now opened with the CARLSEN_PRIVATE_REPO_TOKEN PAT (see
+# the create-pull-request step), NOT GITHUB_TOKEN, so the job's own GITHUB_TOKEN
+# no longer needs write — checkout is the only GITHUB_TOKEN consumer. Least
+# privilege: read-only contents (the PAT, not the job token, opens the PR).
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   refresh:
@@ -51,9 +54,25 @@ jobs:
       - name: Open or update PR if lock changed
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # #344: open the PR with the CARLSEN_PRIVATE_REPO_TOKEN PAT, NOT
+          # GITHUB_TOKEN. GitHub's anti-recursion rule means a PR created by
+          # GITHUB_TOKEN never triggers `on: pull_request` workflows, so the
+          # refresh PR got ZERO CI checks and was un-mergeable (the merge gate
+          # requires every required context to conclude success; a missing
+          # context blocks forever — PR #341 sat BLOCKED until it was re-pushed
+          # under a real user identity). A PAT-authored PR fires `on:
+          # pull_request` like a normal user PR, producing the full required
+          # checks. This secret is already available as a repo Actions secret
+          # and is the established cross-repo create-pull-request PAT used by
+          # every sibling repo's uv-lock-refresh workflow.
+          token: ${{ secrets.CARLSEN_PRIVATE_REPO_TOKEN }}
           branch: chore/uv-lock-refresh
           delete-branch: true
+          # #344: this job only ever regenerates uv.lock, so restrict the commit
+          # to that path. Keeps the PAT-scope argument tight (no `workflow` scope
+          # needed — never touches .github/workflows/) and prevents any stray
+          # working-tree change from riding along.
+          add-paths: uv.lock
           commit-message: "chore(deps): refresh uv.lock against current constraints"
           title: "chore(deps): refresh uv.lock"
           body: |
