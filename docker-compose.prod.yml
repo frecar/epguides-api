@@ -24,7 +24,14 @@ services:
       --backlog 1024
       --log-level warning
     ports:
-      - "3000:3000"
+      # IPv4-only publish. The bare "3000:3000" form binds BOTH 0.0.0.0:3000 AND
+      # the IPv6 [::]:3000 dual-stack listener. This API is only ever reached
+      # over IPv4 behind a reverse proxy, so the [::] listener is an unguarded
+      # ingress surface with no purpose. Pinning the IPv4 wildcard removes it
+      # while keeping the exact IPv4 reachability the proxy uses today. 0.0.0.0
+      # (not 127.0.0.1, not a specific host IP) is deliberate: it preserves the
+      # in-container loopback healthcheck and survives container/host re-IP.
+      - "0.0.0.0:3000:3000"
     environment:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
