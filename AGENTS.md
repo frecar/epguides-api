@@ -3,7 +3,7 @@
 <!-- AGENTS-CORE:BEGIN — generated from frecar/dotfiles code/AGENTS-CORE-public.md. Do NOT edit inline; run code/sync-agents-core.sh. -->
 ## Cross-agent core rules
 
-These rules bind **every** agent working in this repo — Claude, Codex, Gemini, OpenCode — regardless of tool. They are the shared contract; your tool-specific file (`CLAUDE.md` / `GEMINI.md` / your config) adds only tool mechanics on top. This block is machine-synced — do not edit it inline.
+These rules bind **every** agent working in this repo — Claude, Codex, OpenCode — regardless of tool. They are the shared contract; your tool-specific file (`CLAUDE.md` / `AGENTS.md` / your config) adds only tool mechanics on top. This block is machine-synced — do not edit it inline.
 
 ### Worktrees
 - Create worktrees **only** under `/tmp/wt-<branch-slug>/<repo>` (branch with `/`→`-`). **Never** nest a worktree inside the main clone directory — that pollutes the workspace.
