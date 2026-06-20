@@ -1156,29 +1156,92 @@ async def test_get_show_runtime_cache_miss(mock_hget):
 
 
 @pytest.mark.asyncio
-@patch("app.services.epguides.get_episodes_data")
-async def test_calculate_episode_stats(mock_episodes_data):
-    """Test _calculate_episode_stats calculates correctly."""
-    mock_episodes_data.return_value = [
-        {"season": "1", "number": "1", "title": "E1", "release_date": "01 Jan 20"},
-        {"season": "1", "number": "2", "title": "E2", "release_date": "08 Jan 20"},
+@patch("app.services.show_service.get_episodes")
+async def test_calculate_episode_stats(mock_get_episodes):
+    """Test _calculate_episode_stats calculates correctly from EpisodeSchema objects."""
+    from datetime import date
+
+    from app.models.schemas import EpisodeSchema
+
+    mock_get_episodes.return_value = [
+        EpisodeSchema(season=1, number=1, title="E1", release_date=date(2020, 1, 1), is_released=True),
+        EpisodeSchema(season=1, number=2, title="E2", release_date=date(2020, 1, 8), is_released=True),
     ]
 
     result = await show_service._calculate_episode_stats("test")
 
     assert result is not None
     assert result.valid_episode_count == 2
+    assert result.has_unreleased is False
+    assert result.last_release_date == date(2020, 1, 8)
 
 
 @pytest.mark.asyncio
-@patch("app.services.epguides.get_episodes_data")
-async def test_calculate_episode_stats_empty(mock_episodes_data):
+@patch("app.services.show_service.get_episodes")
+async def test_calculate_episode_stats_empty(mock_get_episodes):
     """Test _calculate_episode_stats returns None for empty episodes."""
-    mock_episodes_data.return_value = []
+    mock_get_episodes.return_value = []
 
     result = await show_service._calculate_episode_stats("test")
 
     assert result is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_episodes")
+async def test_calculate_episode_stats_has_unreleased(mock_get_episodes):
+    """Test _calculate_episode_stats detects unreleased episodes."""
+    from datetime import date
+
+    from app.models.schemas import EpisodeSchema
+
+    mock_get_episodes.return_value = [
+        EpisodeSchema(season=1, number=1, title="E1", release_date=date(2020, 1, 1), is_released=True),
+        EpisodeSchema(season=1, number=2, title="E2", release_date=date(2099, 1, 1), is_released=False),
+    ]
+
+    result = await show_service._calculate_episode_stats("test")
+
+    assert result is not None
+    assert result.has_unreleased is True
+    assert result.valid_episode_count == 2
+
+
+@pytest.mark.asyncio
+@patch("app.services.show_service.get_episodes")
+@patch("app.services.epguides.get_episodes_data")
+async def test_calculate_episode_stats_never_calls_get_episodes_data(mock_raw_fetch, mock_get_episodes):
+    """
+    Regression test for #349: _calculate_episode_stats must NOT call
+    epguides.get_episodes_data() directly.
+
+    The old implementation called get_episodes_data() independently, causing a
+    second upstream round-trip on cold cache when _enrich_show_metadata ran
+    alongside get_episodes() in parallel.  After the fix, _calculate_episode_stats
+    delegates to get_episodes() — the validated, cached service layer — so the
+    raw upstream fetch is never invoked from this path.
+
+    A 1000-episode fixture exercises the large-catalog code path (One Piece,
+    Tonight Show, etc.) that originally exhibited >15s cold-build latency.
+    """
+    from datetime import date
+
+    from app.models.schemas import EpisodeSchema
+
+    large_catalog = [
+        EpisodeSchema(season=s, number=e, title=f"S{s}E{e}", release_date=date(2020, 1, 1), is_released=True)
+        for s in range(1, 21)
+        for e in range(1, 51)
+    ]  # 1000-episode fixture
+    mock_get_episodes.return_value = large_catalog
+
+    stats = await show_service._calculate_episode_stats("onepiece")
+
+    # The raw upstream fetch must never be called from _calculate_episode_stats
+    mock_raw_fetch.assert_not_called()
+    assert stats is not None
+    assert stats.valid_episode_count == 1000
+    assert stats.has_unreleased is False
 
 
 def test_build_show_updates():
@@ -2841,7 +2904,7 @@ def test_parse_date_iso_format():
 
 
 def test_parse_date_invalid_format():
-    """Test _parse_date returns None for unparseable dates."""
+    """Test _parse_date returns None for unparsable dates."""
     result = show_service._parse_date("not a date")
 
     assert result is None
