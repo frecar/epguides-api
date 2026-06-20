@@ -589,34 +589,32 @@ class _EpisodeStats:
 
 async def _calculate_episode_stats(normalized_id: str) -> _EpisodeStats | None:
     """
-    Calculate statistics from raw episode data.
+    Calculate statistics from parsed episode data.
 
-    Returns episode count, last release date, and whether there are
-    unreleased episodes.
+    Uses ``get_episodes`` (the validated, cached service layer) rather than
+    calling ``epguides.get_episodes_data`` directly.  This means:
+
+    - On a **warm** ``episodes:{id}`` cache hit: stats are derived from
+      in-memory ``EpisodeSchema`` objects — no network I/O.
+    - On a **cold** build: ``get_episodes`` fetches from upstream once and
+      populates ``episodes:{id}``; the result is reused here without a
+      second upstream round-trip.  The old implementation called
+      ``get_episodes_data`` independently, so a cold show build issued two
+      independent upstream fetches for the same episode list (#349).
+
+    ``EpisodeSchema`` objects are already fully parsed and validated, so
+    the field-existence checks from the raw-dict path are replaced by
+    straightforward attribute reads.
     """
-    raw_data = await epguides.get_episodes_data(normalized_id)
-    if not raw_data:
+    episodes = await get_episodes(normalized_id)
+    if not episodes:
         return None
 
-    threshold = datetime.now(UTC) - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
     stats = _EpisodeStats()
-
-    for item in raw_data:
-        release_date = _parse_release_date(item.get("release_date"))
-        if not release_date:
-            continue
-
-        # Check if episode is valid (has required fields)
-        if _has_required_episode_fields(item):
-            stats.valid_episode_count += 1
-
-        # Check if unreleased
-        if release_date > threshold:
-            stats.has_unreleased = True
-
-        # Track last release date
-        if stats.last_release_date is None or release_date.date() > stats.last_release_date:
-            stats.last_release_date = release_date.date()
+    stats.valid_episode_count = len(episodes)
+    stats.has_unreleased = any(not ep.is_released for ep in episodes)
+    if episodes:
+        stats.last_release_date = max(ep.release_date for ep in episodes)
 
     return stats
 
