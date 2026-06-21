@@ -16,7 +16,7 @@ help:
 	@echo "Quick Start:"
 	@echo "  make setup          Install venv + pre-commit hooks"
 	@echo "  make up             Start dev environment"
-	@echo "  make test           Run tests (100% coverage)"
+	@echo "  make test           Run tests (95% coverage floor via pre-commit/CI)"
 	@echo "  make doctor         Check environment health"
 	@echo ""
 	@echo "Development:"
@@ -193,7 +193,7 @@ coverage:
 #                             pre-commit hook.
 #
 # Coverage is NOT duplicated here: the `tests-coverage` pre-commit hook
-# already enforces `--cov-fail-under=100` on every commit, so the floor
+# already enforces `--cov-fail-under=95` on every commit, so the floor
 # already fires locally before any push.
 ci-parity: format-check lint typecheck
 	$(RUN) python scripts/check_no_external_llm.py

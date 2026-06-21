@@ -176,7 +176,7 @@ git clone git@github.com:frecar/epguides-api.git
 cd epguides-api
 make setup   # creates the uv-managed venv + installs pre-commit hooks
 make up      # docker compose, hot reload
-make test    # 100% coverage required
+make test    # runs tests (95% coverage floor enforced by pre-commit and CI)
 make fix     # ruff format + lint auto-fix
 make doctor  # env health check
 make urls    # show service URLs
@@ -185,15 +185,15 @@ make urls    # show service URLs
 Run a single test:
 
 ```bash
-make test  # runs everything; pre-commit gate also enforces 100%
+make test  # runs everything; pre-commit and CI enforce 95% coverage floor
 uv run pytest app/tests/test_endpoints.py::test_function -v  # one specific test
 ```
 
-**Coverage:** 100% enforced by pre-commit. If you can't test it, remove it. Never `--no-verify`.
+**Coverage:** 95% floor enforced by pre-commit and CI (`--cov-fail-under=95`). `make test` alone does not enforce the floor — the gate lives in `.pre-commit-config.yaml` and `.github/workflows/ci.yml`. Never `--no-verify`.
 
 **Workflow:**
 1. Branch off `main` with a conventional prefix (`feat/`, `fix/`, `chore/`, `docs/`)
-2. Commit. Pre-commit runs ruff + version bump + 100% coverage tests
+2. Commit. Pre-commit runs ruff + version bump + 95% coverage tests
 3. Push and open a PR
 4. Squash merge
 
