@@ -125,7 +125,7 @@ repos:
         # the CI lint/type jobs that is deterministic + locally reproducible
         # from the repo tree (full-tree ruff incl RUF100, mypy, configured-
         # LLM-endpoint lint). Single `make ci-parity` target — one hook, no
-        # drift between this list and the CI step set. The 100%-coverage
+        # drift between this list and the CI step set. The 95%-coverage
         # floor is already enforced on every commit by the `tests-coverage`
         # hook above, so it is not duplicated here.
         entry: make ci-parity
