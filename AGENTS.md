@@ -9,6 +9,12 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 - Create worktrees **only** under `/tmp/wt-<branch-slug>/<repo>` (branch with `/`→`-`). **Never** nest a worktree inside the main clone directory — that pollutes the workspace.
 - Base off fresh `origin/main`: `git fetch origin` immediately before `git worktree add "/tmp/wt-<slug>/<repo>" origin/main -b <branch>`.
 - Name the worktree by the branch, not the issue. **Tear it down** on completion or hand-off: `git worktree remove <path>` + `rm -rf` the parent.
+- **Cross-clone edit leak (most damaging):** Only Edit/Write/`sed -i` paths **inside your worktree**. Verify with `git -C <worktree> status` — your edits must appear there, never in the main clone. Shell-outs and non-Claude agents bypass any edit hooks; this written rule is the only guard for all agents.
+- **Worktrees isolate the directory, not the branch ref.** Two agents in separate worktrees can still commit to the same branch. If you detect a foreign commit on your branch: escape to a fresh distinctly-named branch, preserve the foreign commit, never force-push-war.
+- **A vanished or silent worktree is NOT a dead agent.** A quiet output file, missing `/tmp/wt-*` dir, or a failed process-grep are NOT done-signals — the worktree reaper can evict a live worktree mid-run. Done = the **completion notification only**. Never take over another agent's worktree based on mtime or absence.
+- **Deploy from a clean on-main clone.** A detached-HEAD, dirty, or behind-main worktree is fine for a PR merge but may be rejected by the deploy-currency guard. Always deploy from a clean main clone, not a worktree.
+- **Pre-commit shared-cache stash collision.** Concurrent agents sharing the pre-commit cache collide on the stash. Always push with a **clean working tree** — no staged or uncommitted changes at push time.
+- **Resuming an aged worktree (hand-off / idle / post-crash reattach):** Run `git -C <worktree> fetch origin` then `git rebase origin/main` before continuing. Its base is stale; building on it un-synced causes conflicts and duplicates already-merged work. If the rebase is non-trivial or the branch is badly diverged, open a fresh worktree off `origin/main` and cherry-pick instead.
 
 ### Multi-agent coordination (several agents run concurrently as the same GitHub user)
 - Before starting an issue, sweep for an existing branch touching it (`git ls-remote --heads origin "*<issue>*"`). If one exists, another agent has it — back off.
