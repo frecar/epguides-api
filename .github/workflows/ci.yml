@@ -51,7 +51,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          version: "0.11.19"
+          version: "0.11.23"
           enable-cache: true
 
       - name: Export deps to requirements.txt (third-party only)
@@ -105,7 +105,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          version: "0.11.19"
+          version: "0.11.23"
           enable-cache: true
 
       - name: Sync dev dependencies
@@ -154,7 +154,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          version: "0.11.19"
+          version: "0.11.23"
           enable-cache: true
 
       - name: Sync dependencies
@@ -193,7 +193,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          version: "0.11.19"
+          version: "0.11.23"
           enable-cache: true
 
       - name: Sync dependencies
@@ -563,7 +563,7 @@ jobs:
   # as a hard fail. `if: always()` guarantees the gate itself always
   # runs and reports a definitive pass/fail status (a job that is
   # itself skipped reports `skipped`, which some branch-protection
-  # configs mis-read as success — so the gate must never be allowed to
+  # configs misread as success — so the gate must never be allowed to
   # skip).
   #
   # The assertion catches all three non-success `needs.*.result`
