@@ -15,14 +15,17 @@
 # scripts/check_base_image_digest_pin_drift.py.
 FROM python:3.14.6-slim@sha256:63a4c7f612a00f92042cbdcc7cdc6a306f38485af0a200b9c89de7d9b1607d15 AS builder
 
-# Pin uv to an exact version + digest — a tag alone silently moves on every
-# build, and uv writes the venv that ships to runtime (a swapped uv binary
-# would defeat `uv sync --frozen`, since uv is what verifies the lockfile
-# hashes). The astral-sh/uv image only contains the static uv binary; we COPY
+# uv is pinned to an exact version (not `latest`). It is deliberately NOT
+# digest-pinned: the uv version is the single source of record, kept in lockstep
+# across the fleet by an external sync that rewrites only the version on a
+# reviewed bump. A digest here would NOT be updated by that sync, so the next
+# version bump would leave the tag and digest disagreeing (the build would
+# silently keep the old digest's bytes under a new version label). The version
+# tag is the reviewed-bump control; the digest-pin guard forbids a digest on
+# this line. The astral-sh/uv image only contains the static uv binary; we COPY
 # it into our python base image rather than using it as the base (which lacks
-# python). Digest is the multi-arch index digest from
-# `docker buildx imagetools inspect ghcr.io/astral-sh/uv:0.11.21`.
-COPY --from=ghcr.io/astral-sh/uv:0.11.21@sha256:ff07b86af50d4d9391d9daf4ff89ce427bc544f9aae87057e69a1cc0aa369946 /uv /usr/local/bin/uv
+# python).
+COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
 
 WORKDIR /build
 

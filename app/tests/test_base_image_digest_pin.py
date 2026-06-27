@@ -43,10 +43,11 @@ def _write(tmp_path: Path, content: str) -> None:
 # --- the repo invariant -----------------------------------------------------
 
 
-def test_repo_dockerfile_is_digest_pinned() -> None:
+def test_repo_dockerfile_passes_the_guard() -> None:
     result = _run(_REPO_ROOT)
     assert result.returncode == 0, (
-        f"the repo Dockerfile must keep every FROM + external COPY --from digest-pinned; guard said:\n{result.stderr}"
+        f"the repo Dockerfile must keep its python FROM digest-pinned and its uv "
+        f"COPY --from a bare version tag (no digest); guard said:\n{result.stderr}"
     )
 
 
@@ -80,6 +81,26 @@ def test_guard_passes_fully_pinned_including_copy_from(tmp_path: Path) -> None:
         "COPY --from=builder /app /app\n",
     )
     assert _run(tmp_path).returncode == 0
+
+
+def test_guard_passes_uv_bare_version_tag(tmp_path: Path) -> None:
+    # The central-version-managed uv image must be a bare version tag (no digest).
+    _write(
+        tmp_path,
+        f"FROM {_PINNED_PY} AS builder\nCOPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /uv\n",
+    )
+    assert _run(tmp_path).returncode == 0
+
+
+def test_guard_forbids_uv_with_digest(tmp_path: Path) -> None:
+    # A digest on the central-version-managed uv image is a hard error: the
+    # version sync would not update it, so tag and digest desync on the next bump.
+    uv_digest = "ghcr.io/astral-sh/uv:0.11.21@sha256:" + "f" * 64
+    _write(tmp_path, f"FROM {_PINNED_PY} AS builder\nCOPY --from={uv_digest} /uv /uv\n")
+    result = _run(tmp_path)
+    assert result.returncode == 1
+    assert "central-version-managed" in result.stderr
+    assert "Dockerfile:2" in result.stderr
 
 
 def test_guard_skips_internal_refs_and_scratch(tmp_path: Path) -> None:
