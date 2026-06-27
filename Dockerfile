@@ -6,13 +6,23 @@
 # ---------------------------------------------------------------------------
 # Stage 1: Builder — uv installs deps into a virtualenv
 # ---------------------------------------------------------------------------
-FROM python:3.14.6-slim AS builder
+# Base image pinned by tag + digest: the digest is the immutable, reproducible
+# provenance (so the build is byte-stable and a mutated upstream tag can't be
+# adopted silently); the tag stays for readability + so the docker dependabot
+# ecosystem can track and bump it. The digest is the MULTI-ARCH INDEX digest
+# (resolved with `docker buildx imagetools inspect python:3.14.6-slim`), so each
+# build host still resolves its own platform. Enforced by
+# scripts/check_base_image_digest_pin_drift.py.
+FROM python:3.14.6-slim@sha256:63a4c7f612a00f92042cbdcc7cdc6a306f38485af0a200b9c89de7d9b1607d15 AS builder
 
-# Pin uv to an exact version — `latest` would silently move on every build.
-# The astral-sh/uv image only contains the static uv binary; we COPY it
-# into our python base image rather than using it as the base (which lacks
-# python).
-COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
+# Pin uv to an exact version + digest — a tag alone silently moves on every
+# build, and uv writes the venv that ships to runtime (a swapped uv binary
+# would defeat `uv sync --frozen`, since uv is what verifies the lockfile
+# hashes). The astral-sh/uv image only contains the static uv binary; we COPY
+# it into our python base image rather than using it as the base (which lacks
+# python). Digest is the multi-arch index digest from
+# `docker buildx imagetools inspect ghcr.io/astral-sh/uv:0.11.21`.
+COPY --from=ghcr.io/astral-sh/uv:0.11.21@sha256:ff07b86af50d4d9391d9daf4ff89ce427bc544f9aae87057e69a1cc0aa369946 /uv /usr/local/bin/uv
 
 WORKDIR /build
 
@@ -39,7 +49,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime — minimal production image
 # ---------------------------------------------------------------------------
-FROM python:3.14.6-slim AS runtime
+FROM python:3.14.6-slim@sha256:63a4c7f612a00f92042cbdcc7cdc6a306f38485af0a200b9c89de7d9b1607d15 AS runtime
 
 LABEL org.opencontainers.image.title="Epguides API" \
       org.opencontainers.image.description="REST API for TV show metadata, episodes, and air dates" \

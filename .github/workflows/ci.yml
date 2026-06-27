@@ -120,6 +120,13 @@ jobs:
       - name: Configured LLM endpoint check
         run: python3 scripts/check_no_external_llm.py
 
+      - name: Base image digest-pin check
+        # Fail-closed: every external image a Dockerfile pulls (FROM + COPY
+        # --from) must be pinned by `tag@sha256:` so the build is reproducible
+        # and a mutated upstream tag can't be adopted silently. Stdlib-only +
+        # docker-less, so it also runs in `make ci-parity` / pre-commit.
+        run: python3 scripts/check_base_image_digest_pin_drift.py
+
       - name: Host-interpreter syntax guard (Python 3.12)
         # Everything under scripts/ is run by the system `python3` (a
         # developer's machine / CI runner, possibly older than 3.14) via the

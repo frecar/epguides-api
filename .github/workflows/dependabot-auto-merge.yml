@@ -23,15 +23,25 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # The docker ecosystem (base/tool-image digest bumps) is excluded from
+      # auto-approve/auto-merge. A digest bump is non-semver-major, so it would
+      # otherwise sail through — but no required check inspects the image
+      # LAYERS, so a poisoned/wrong digest would land green-but-unexamined. An
+      # image swap is a supply-chain decision that needs human review; the bot
+      # still opens the PR + runs CI, a human approves + merges.
       - name: Auto-approve patch and minor updates
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        if: >-
+          steps.metadata.outputs.update-type != 'version-update:semver-major' &&
+          steps.metadata.outputs.package-ecosystem != 'docker'
         run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Auto-merge patch and minor updates
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        if: >-
+          steps.metadata.outputs.update-type != 'version-update:semver-major' &&
+          steps.metadata.outputs.package-ecosystem != 'docker'
         run: gh pr merge --squash --auto "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
