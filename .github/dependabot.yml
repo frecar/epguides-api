@@ -31,3 +31,26 @@ updates:
     labels:
       - "dependencies"
       - "ci"
+
+  # docker ecosystem — tracks the Dockerfile's `FROM` + `COPY --from` image
+  # digests so a pinned `tag@sha256:` stays fresh via a reviewed bump rather
+  # than rotting at a frozen digest. Weekly (matching the uv cadence) + grouped
+  # into one PR. These bumps are deliberately EXCLUDED from auto-merge (see
+  # dependabot-auto-merge.yml): a base/tool-image swap is a supply-chain change
+  # that no required check inspects at the image-layer level, so it needs human
+  # review before merge.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "deps"
+    groups:
+      docker-images:
+        patterns:
+          - "*"

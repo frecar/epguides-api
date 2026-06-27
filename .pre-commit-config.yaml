@@ -94,6 +94,17 @@ repos:
         pass_filenames: true
         stages: [pre-commit]
 
+      - id: base-image-digest-pin
+        name: "Base image digest-pin check"
+        # Fail-closed: every external image a Dockerfile pulls (FROM + COPY
+        # --from) must be `tag@sha256:` so the build is reproducible. The
+        # script scans the whole tree itself, so filenames are not passed.
+        entry: python3 scripts/check_base_image_digest_pin_drift.py
+        language: system
+        pass_filenames: false
+        files: '(Dockerfile.*|scripts/check_base_image_digest_pin_drift\.py)$'
+        stages: [pre-commit]
+
       - id: host-python312-syntax
         name: "Host-interpreter syntax guard (Python 3.12)"
         # scripts/ runs under the system `python3` (a developer's machine / CI
