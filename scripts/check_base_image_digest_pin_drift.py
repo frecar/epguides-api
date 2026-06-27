@@ -27,6 +27,15 @@ It covers two kinds of external reference:
   build (e.g. a static tool binary). A poisoned tool image is the same
   build-time supply-chain exposure as a poisoned base.
 
+One **named exception** (``_CENTRAL_VERSION_MANAGED_PREFIXES``): an image whose
+version is the single source of record, rewritten fleet-wide by an external sync
+on a reviewed bump (currently ``ghcr.io/astral-sh/uv``). Such an image must be
+pinned by an exact version tag and must **NOT** carry a digest: that sync only
+rewrites the version, so a digest would desync from the tag on the next bump
+(the build would keep the old digest's bytes under a new version label, with the
+guard and CI both green). A digest on one of these lines is therefore a hard
+ERROR — the exact version tag + reviewed bump is its reproducibility control.
+
 Intentionally NOT flagged (skipped, not failed):
 
 - ``FROM scratch`` — the empty base; there is no upstream image to pin.
@@ -78,6 +87,27 @@ _FROM_FLAG_RE = re.compile(r"^--[a-z][a-z0-9-]*=\S+$")
 # `COPY --from=<ref>` (also matches `COPY --chown=... --from=<ref>`).
 _COPY_FROM_RE = re.compile(r"^\s*COPY\b.*?--from=(\S+)", re.IGNORECASE)
 
+# Images whose VERSION is the single source of record, kept in lockstep across
+# repos by an external sync that rewrites only the version tag on a reviewed
+# bump. These must be pinned by an exact version tag and must NOT carry an
+# `@sha256:` digest: that sync does not update a digest, so a digest here would
+# desync from the tag on the next version bump (the build would keep the old
+# digest's bytes under a new version label). The exact version tag + reviewed
+# bump is the reproducibility control for these; a digest fights it.
+_CENTRAL_VERSION_MANAGED_PREFIXES = ("ghcr.io/astral-sh/uv:",)
+
+# Problem categories a single external image reference can have.
+_PROBLEM_UNPINNED = "unpinned"
+_PROBLEM_CENTRAL_HAS_DIGEST = "central_has_digest"
+
+
+def _external_ref_problem(ref: str) -> str | None:
+    """Classify an EXTERNAL image reference; return a problem key or ``None`` if OK."""
+    if any(ref.startswith(prefix) for prefix in _CENTRAL_VERSION_MANAGED_PREFIXES):
+        # Central-version-managed: must be a bare version tag, never a digest.
+        return _PROBLEM_CENTRAL_HAS_DIGEST if "@sha256:" in ref else None
+    return None if _PINNED_RE.match(ref) else _PROBLEM_UNPINNED
+
 
 def find_dockerfiles(repo_root: Path) -> list[Path]:
     """Return every tracked ``Dockerfile`` / ``Dockerfile.*`` under ``repo_root``."""
@@ -119,9 +149,9 @@ def _is_internal_copy_ref(ref: str, stage_aliases: set[str]) -> bool:
     return ref.lower() in stage_aliases or ref.isdigit()
 
 
-def find_unpinned(repo_root: Path) -> list[tuple[Path, int, str]]:
-    """Return (path, lineno, raw_line) for every unpinned EXTERNAL image reference."""
-    hits: list[tuple[Path, int, str]] = []
+def find_problems(repo_root: Path) -> list[tuple[Path, int, str, str]]:
+    """Return (path, lineno, raw_line, problem) for every bad EXTERNAL image ref."""
+    hits: list[tuple[Path, int, str, str]] = []
     for path in find_dockerfiles(repo_root):
         try:
             text = path.read_bytes().decode("utf-8", errors="ignore")
@@ -134,16 +164,19 @@ def find_unpinned(repo_root: Path) -> list[tuple[Path, int, str]]:
                 image_ref, stage_alias = parsed
                 ref_l = image_ref.lower()
                 if ref_l != "scratch" and ref_l not in stage_aliases:
-                    if not _PINNED_RE.match(image_ref):
-                        hits.append((path, lineno, raw.strip()))
+                    problem = _external_ref_problem(image_ref)
+                    if problem:
+                        hits.append((path, lineno, raw.strip(), problem))
                 if stage_alias:
                     stage_aliases.add(stage_alias)
                 continue
             copy_match = _COPY_FROM_RE.match(raw)
             if copy_match:
                 ref = copy_match.group(1)
-                if not _is_internal_copy_ref(ref, stage_aliases) and not _PINNED_RE.match(ref):
-                    hits.append((path, lineno, raw.strip()))
+                if not _is_internal_copy_ref(ref, stage_aliases):
+                    problem = _external_ref_problem(ref)
+                    if problem:
+                        hits.append((path, lineno, raw.strip(), problem))
     return hits
 
 
@@ -167,28 +200,36 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    unpinned = find_unpinned(repo_root)
-    if unpinned:
-        print(
-            "ERROR: unpinned external image reference(s) — must be "
-            "name:tag@sha256:<64hex> (FROM and COPY --from external images).",
-            file=sys.stderr,
-        )
-        print(
-            "       A digest pin makes the build reproducible and tamper-evident.",
-            file=sys.stderr,
-        )
-        print(
-            "       Resolve the multi-arch INDEX digest with "
-            "`docker buildx imagetools inspect <image>:<tag>` (NOT `docker inspect`).",
-            file=sys.stderr,
-        )
-        for path, lineno, line in unpinned:
-            rel = path.relative_to(repo_root).as_posix()
-            print(f"  {rel}:{lineno}: {line}", file=sys.stderr)
+    problems = find_problems(repo_root)
+    if problems:
+        unpinned = [p for p in problems if p[3] == _PROBLEM_UNPINNED]
+        central = [p for p in problems if p[3] == _PROBLEM_CENTRAL_HAS_DIGEST]
+        if unpinned:
+            print(
+                "ERROR: unpinned external image reference(s) — must be "
+                "name:tag@sha256:<64hex> (FROM and COPY --from external images).",
+                file=sys.stderr,
+            )
+            print(
+                "       A digest pin makes the build reproducible and tamper-evident. "
+                "Resolve the multi-arch INDEX digest with "
+                "`docker buildx imagetools inspect <image>:<tag>` (NOT `docker inspect`).",
+                file=sys.stderr,
+            )
+            for path, lineno, line, _ in unpinned:
+                print(f"  {path.relative_to(repo_root).as_posix()}:{lineno}: {line}", file=sys.stderr)
+        if central:
+            print(
+                "ERROR: a central-version-managed image carries an @sha256: digest — it "
+                "must be a bare version tag (the version is synced fleet-wide; a digest "
+                "would desync from the tag on the next version bump).",
+                file=sys.stderr,
+            )
+            for path, lineno, line, _ in central:
+                print(f"  {path.relative_to(repo_root).as_posix()}:{lineno}: {line}", file=sys.stderr)
         return 1
 
-    print(f"OK: all external image references are digest-pinned (tag@sha256) across {len(dockerfiles)} Dockerfile(s).")
+    print(f"OK: every external image reference is correctly pinned across {len(dockerfiles)} Dockerfile(s).")
     return 0
 
 
