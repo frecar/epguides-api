@@ -30,11 +30,23 @@ It covers two kinds of external reference:
 One **named exception** (``_CENTRAL_VERSION_MANAGED_PREFIXES``): an image whose
 version is the single source of record, rewritten fleet-wide by an external sync
 on a reviewed bump (currently ``ghcr.io/astral-sh/uv``). Such an image must be
-pinned by an exact version tag and must **NOT** carry a digest: that sync only
-rewrites the version, so a digest would desync from the tag on the next bump
-(the build would keep the old digest's bytes under a new version label, with the
-guard and CI both green). A digest on one of these lines is therefore a hard
-ERROR — the exact version tag + reviewed bump is its reproducibility control.
+pinned by an **exact version tag** and must **NOT** carry a digest:
+
+- **No digest.** That sync only rewrites the version, so a digest would desync
+  from the tag on the next bump (the build would keep the old digest's bytes
+  under a new version label, with the guard and CI both green). A digest on one
+  of these lines is therefore a hard ERROR — the exact version tag + reviewed
+  bump is its reproducibility control.
+- **Exact version tag only.** The tag must be a concrete version
+  (``0.11.21`` — or a version with a build/variant suffix like
+  ``0.11.21-python3.14`` / ``0.11.21-bookworm``). A moving tag (``:latest`` /
+  ``:main`` / ``:edge``), an empty tag, or any non-version tag is a hard ERROR:
+  it defeats the reproducibility the whole pin exists for (``:latest`` adopts
+  whatever the registry serves at build time — exactly the mutable-tag hazard
+  the digest pin closes for every other image), and the version sync only
+  rewrites a concrete version, so it would silently leave a moving tag in place.
+  The carve-out enforces "no digest" AND "exact version tag" together — enforcing
+  only one is fail-open on the other.
 
 Intentionally NOT flagged (skipped, not failed):
 
@@ -89,23 +101,33 @@ _COPY_FROM_RE = re.compile(r"^\s*COPY\b.*?--from=(\S+)", re.IGNORECASE)
 
 # Images whose VERSION is the single source of record, kept in lockstep across
 # repos by an external sync that rewrites only the version tag on a reviewed
-# bump. These must be pinned by an exact version tag and must NOT carry an
-# `@sha256:` digest: that sync does not update a digest, so a digest here would
-# desync from the tag on the next version bump (the build would keep the old
-# digest's bytes under a new version label). The exact version tag + reviewed
-# bump is the reproducibility control for these; a digest fights it.
+# bump. These must be pinned by an EXACT VERSION TAG and must NOT carry an
+# `@sha256:` digest (see the module docstring for both halves of the rule).
 _CENTRAL_VERSION_MANAGED_PREFIXES = ("ghcr.io/astral-sh/uv:",)
+
+# The exact-version-tag shape a central-version-managed image must carry: a
+# concrete version (`0.11.21`), optionally with one or more build/variant
+# suffixes (`-python3.14`, `-bookworm`, `-debian-slim`). It REJECTS a moving tag
+# (`latest` / `main` / `edge`), an empty tag, and any non-version tag. The
+# leading `\d+(?:\.\d+)*` anchors on a numeric version, and each suffix must
+# start with `-` so a bare word like `latest` (or `0latest`) cannot pass.
+_CENTRAL_VERSION_TAG_RE = re.compile(r"^\d+(?:\.\d+)*(?:-[\w.]+)*$")
 
 # Problem categories a single external image reference can have.
 _PROBLEM_UNPINNED = "unpinned"
 _PROBLEM_CENTRAL_HAS_DIGEST = "central_has_digest"
+_PROBLEM_CENTRAL_NON_VERSION_TAG = "central_non_version_tag"
 
 
 def _external_ref_problem(ref: str) -> str | None:
     """Classify an EXTERNAL image reference; return a problem key or ``None`` if OK."""
-    if any(ref.startswith(prefix) for prefix in _CENTRAL_VERSION_MANAGED_PREFIXES):
-        # Central-version-managed: must be a bare version tag, never a digest.
-        return _PROBLEM_CENTRAL_HAS_DIGEST if "@sha256:" in ref else None
+    for prefix in _CENTRAL_VERSION_MANAGED_PREFIXES:
+        if ref.startswith(prefix):
+            # Central-version-managed: an exact version tag, never a digest.
+            if "@sha256:" in ref:
+                return _PROBLEM_CENTRAL_HAS_DIGEST
+            tag = ref[len(prefix) :]
+            return None if _CENTRAL_VERSION_TAG_RE.match(tag) else _PROBLEM_CENTRAL_NON_VERSION_TAG
     return None if _PINNED_RE.match(ref) else _PROBLEM_UNPINNED
 
 
@@ -203,7 +225,8 @@ def main(argv: list[str] | None = None) -> int:
     problems = find_problems(repo_root)
     if problems:
         unpinned = [p for p in problems if p[3] == _PROBLEM_UNPINNED]
-        central = [p for p in problems if p[3] == _PROBLEM_CENTRAL_HAS_DIGEST]
+        central_digest = [p for p in problems if p[3] == _PROBLEM_CENTRAL_HAS_DIGEST]
+        central_tag = [p for p in problems if p[3] == _PROBLEM_CENTRAL_NON_VERSION_TAG]
         if unpinned:
             print(
                 "ERROR: unpinned external image reference(s) — must be "
@@ -218,14 +241,25 @@ def main(argv: list[str] | None = None) -> int:
             )
             for path, lineno, line, _ in unpinned:
                 print(f"  {path.relative_to(repo_root).as_posix()}:{lineno}: {line}", file=sys.stderr)
-        if central:
+        if central_digest:
             print(
                 "ERROR: a central-version-managed image carries an @sha256: digest — it "
                 "must be a bare version tag (the version is synced fleet-wide; a digest "
                 "would desync from the tag on the next version bump).",
                 file=sys.stderr,
             )
-            for path, lineno, line, _ in central:
+            for path, lineno, line, _ in central_digest:
+                print(f"  {path.relative_to(repo_root).as_posix()}:{lineno}: {line}", file=sys.stderr)
+        if central_tag:
+            print(
+                "ERROR: a central-version-managed image is not pinned to an exact version "
+                "tag — a moving tag (:latest / :main / :edge), an empty tag, or a "
+                "non-version tag is rejected. It must be a concrete version "
+                "(e.g. 0.11.21, or 0.11.21-python3.14); a moving tag adopts whatever the "
+                "registry serves at build time and defeats the reproducible pin.",
+                file=sys.stderr,
+            )
+            for path, lineno, line, _ in central_tag:
                 print(f"  {path.relative_to(repo_root).as_posix()}:{lineno}: {line}", file=sys.stderr)
         return 1
 
