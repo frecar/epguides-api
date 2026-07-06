@@ -22,7 +22,7 @@ dependencies = [
     "prometheus-client==0.25.0",
     "sentry-sdk==2.64.0",  # optional — only active when SENTRY_DSN is set
     "orjson==3.11.9",
-    "setuptools==82.0.1",  # keep setuptools current — security floor for transitives
+    "setuptools==83.0.0",  # keep setuptools current — security floor for transitives
     "msgpack>=1.2.1",
 ]
 
