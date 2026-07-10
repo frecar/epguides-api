@@ -34,6 +34,47 @@ def no_host_enforcement(monkeypatch):
     monkeypatch.setattr(llm_service, "_ALLOWED_LLM_HOSTS", frozenset())
 
 
+def _configure_settings(mock_settings):
+    """Apply the common enabled-LLM settings used by the HTTP-level tests."""
+    mock_settings.LLM_ENABLED = True
+    mock_settings.LLM_API_URL = _TEST_LLM_URL
+    mock_settings.LLM_API_KEY = "test-key"
+    mock_settings.LLM_ALLOW_EXTERNAL = False
+    mock_settings.LLM_MODEL_NAME = "auto"
+
+
+def _make_response(status_code, *, content=None, headers=None):
+    """Build a mock httpx response with a synchronous `.json()` and real `.headers`."""
+    response = AsyncMock()
+    response.status_code = status_code
+    response.headers = headers or {}
+    if content is not None:
+        response.json = lambda: {"choices": [{"message": {"content": content}}]}
+    return response
+
+
+def _make_client(mock_client_class, *, post):
+    """Wire a mock async-context-manager httpx client whose `.post` is `post`."""
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.post = post
+    mock_client_class.return_value = mock_client
+    return mock_client
+
+
+def _content_response(content):
+    """Wrap raw model `content` in the OpenAI-style chat-completion envelope."""
+    return {"choices": [{"message": {"content": content}}]}
+
+
+_PARSE_EPISODES = [
+    {"season": 1, "number": 1, "title": "Pilot"},
+    {"season": 1, "number": 2, "title": "Cat"},
+    {"season": 2, "number": 1, "title": "Seven"},
+]
+
+
 @pytest.mark.asyncio
 @patch("app.services.llm_service.settings")
 async def test_llm_disabled_returns_none(mock_settings, no_host_enforcement):
@@ -227,6 +268,8 @@ async def test_llm_successful_query(mock_client_class, mock_settings, no_host_en
     assert call_args[1]["headers"]["Authorization"] == expected_auth
     assert "messages" in call_args[1]["json"]
     assert call_args[1]["json"]["model"] == "auto"
+    # Structured-output mode is requested so the gateway returns a JSON object.
+    assert call_args[1]["json"]["response_format"] == {"type": "json_object"}
 
 
 @pytest.mark.asyncio
@@ -261,10 +304,11 @@ async def test_llm_no_api_key(mock_client_class, mock_settings, no_host_enforcem
 
 
 @pytest.mark.asyncio
+@patch("app.services.llm_service.asyncio.sleep", new_callable=AsyncMock)
 @patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_llm_api_error(mock_client_class, mock_settings, no_host_enforcement):
-    """Test LLM API error handling."""
+async def test_llm_api_error(mock_client_class, mock_settings, mock_sleep, no_host_enforcement):
+    """A persistent 5xx is retried once, then falls back cleanly (two attempts, None)."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = _TEST_LLM_URL
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
@@ -275,6 +319,7 @@ async def test_llm_api_error(mock_client_class, mock_settings, no_host_enforceme
 
     mock_response = AsyncMock()
     mock_response.status_code = 500  # Server error
+    mock_response.headers = {}
 
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -284,6 +329,8 @@ async def test_llm_api_error(mock_client_class, mock_settings, no_host_enforceme
 
     result = await llm_service.parse_natural_language_query("test", episodes)
     assert result is None
+    assert mock_client.post.call_count == 2  # one retry after the first 500
+    mock_sleep.assert_awaited_once_with(0.5)
 
 
 @pytest.mark.asyncio
@@ -348,10 +395,11 @@ async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings, no_h
 
 
 @pytest.mark.asyncio
+@patch("app.services.llm_service.asyncio.sleep", new_callable=AsyncMock)
 @patch("app.services.llm_service.settings")
 @patch("httpx.AsyncClient")
-async def test_llm_http_exception_handling(mock_client_class, mock_settings, no_host_enforcement):
-    """Test LLM handles HTTP exceptions gracefully."""
+async def test_llm_http_exception_handling(mock_client_class, mock_settings, mock_sleep, no_host_enforcement):
+    """A persistent network error is retried once, then handled gracefully (None)."""
     mock_settings.LLM_ENABLED = True
     mock_settings.LLM_API_URL = _TEST_LLM_URL
     mock_settings.LLM_API_KEY = settings.LLM_API_KEY
@@ -368,3 +416,118 @@ async def test_llm_http_exception_handling(mock_client_class, mock_settings, no_
 
     result = await llm_service.parse_natural_language_query("test", episodes)
     assert result is None
+    assert mock_client.post.call_count == 2  # one retry after the first network error
+    mock_sleep.assert_awaited_once_with(0.5)
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service.asyncio.sleep", new_callable=AsyncMock)
+@patch("app.services.llm_service.settings")
+@patch("httpx.AsyncClient")
+async def test_llm_retries_on_5xx_then_succeeds(mock_client_class, mock_settings, mock_sleep, no_host_enforcement):
+    """A transient 5xx is retried once; the second (200) response is used."""
+    _configure_settings(mock_settings)
+    episodes = [
+        {"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"},
+        {"season": 1, "number": 2, "title": "Cat", "release_date": "2008-01-27"},
+    ]
+    post = AsyncMock(side_effect=[_make_response(503), _make_response(200, content="[0]")])
+    client = _make_client(mock_client_class, post=post)
+
+    result = await llm_service.parse_natural_language_query("test", episodes)
+
+    assert [ep["title"] for ep in result] == ["Pilot"]
+    assert client.post.call_count == 2
+    mock_sleep.assert_awaited_once_with(0.5)
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service.asyncio.sleep", new_callable=AsyncMock)
+@patch("app.services.llm_service.settings")
+@patch("httpx.AsyncClient")
+async def test_llm_retries_on_429_and_honors_retry_after(
+    mock_client_class, mock_settings, mock_sleep, no_host_enforcement
+):
+    """A 429 is retried, waiting for the numeric `Retry-After` header before the retry."""
+    _configure_settings(mock_settings)
+    episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
+    post = AsyncMock(
+        side_effect=[
+            _make_response(429, headers={"Retry-After": "1"}),
+            _make_response(200, content='{"idx": [0]}'),
+        ]
+    )
+    client = _make_client(mock_client_class, post=post)
+
+    result = await llm_service.parse_natural_language_query("test", episodes)
+
+    assert [ep["title"] for ep in result] == ["Pilot"]
+    assert client.post.call_count == 2
+    mock_sleep.assert_awaited_once_with(1.0)
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service.asyncio.sleep", new_callable=AsyncMock)
+@patch("app.services.llm_service.settings")
+@patch("httpx.AsyncClient")
+async def test_llm_retry_after_non_numeric_falls_back_to_backoff(
+    mock_client_class, mock_settings, mock_sleep, no_host_enforcement
+):
+    """A non-numeric `Retry-After` is ignored and the default backoff is used."""
+    _configure_settings(mock_settings)
+    episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
+    post = AsyncMock(
+        side_effect=[
+            _make_response(429, headers={"Retry-After": "soon"}),
+            _make_response(200, content="[0]"),
+        ]
+    )
+    _make_client(mock_client_class, post=post)
+
+    result = await llm_service.parse_natural_language_query("test", episodes)
+
+    assert [ep["title"] for ep in result] == ["Pilot"]
+    mock_sleep.assert_awaited_once_with(0.5)
+
+
+@pytest.mark.asyncio
+@patch("app.services.llm_service.settings")
+@patch("httpx.AsyncClient")
+async def test_llm_no_retry_on_client_error(mock_client_class, mock_settings, no_host_enforcement):
+    """A non-retryable 4xx (400) fails fast with no retry."""
+    _configure_settings(mock_settings)
+    episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
+    post = AsyncMock(return_value=_make_response(400))
+    client = _make_client(mock_client_class, post=post)
+
+    result = await llm_service.parse_natural_language_query("test", episodes)
+
+    assert result is None
+    assert client.post.call_count == 1
+
+
+@pytest.mark.parametrize(
+    ("content", "expected_titles"),
+    [
+        ("[0, 2]", ["Pilot", "Seven"]),  # bare array (back-compat)
+        ('{"idx": [0, 2]}', ["Pilot", "Seven"]),  # json_object mode
+        ('{"indices": [1]}', ["Cat"]),  # alternate key
+        ('<think>reasoning</think>{"idx": [0]}', ["Pilot"]),  # think-tag strip + object
+        ("[]", []),  # empty array
+        ('{"idx": []}', []),  # empty object
+    ],
+)
+def test_parse_llm_response_accepts_array_and_object_shapes(content, expected_titles):
+    """Both a bare array and a `{"idx": [...]}` / `{"indices": [...]}` object parse correctly."""
+    result = llm_service._parse_llm_response(_content_response(content), _PARSE_EPISODES, "q")
+    assert result is not None
+    assert [ep["title"] for ep in result] == expected_titles
+
+
+@pytest.mark.parametrize(
+    "content",
+    ['{"foo": 1}', '{"idx": "nope"}', '"scalar"', "5", "null", "not json at all"],
+)
+def test_parse_llm_response_rejects_unusable_shapes(content):
+    """Missing keys, non-list values, scalars, and unparsable text all return None."""
+    assert llm_service._parse_llm_response(_content_response(content), _PARSE_EPISODES, "q") is None
