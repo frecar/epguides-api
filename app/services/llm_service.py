@@ -7,6 +7,7 @@ simple regex patterns cannot handle.
 Only used when LLM_ENABLED is True in settings.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -25,6 +26,12 @@ _THINK_TAG_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
 # LLM configuration
 _LLM_TIMEOUT_SECONDS = 30.0  # Longer timeout for processing episode summaries
 _MAX_EPISODES_FOR_CONTEXT = 100  # Include more episodes since we have summaries
+
+# Transient-failure retry policy: one retry (two attempts total) on 429/5xx
+# responses and network/timeout errors, then a clean fallback to non-LLM
+# filtering (return None). Non-retryable statuses (4xx other than 429) fail fast.
+_LLM_MAX_ATTEMPTS = 2
+_LLM_RETRY_BACKOFF_SECONDS = 0.5
 
 
 def _parse_allowed_hosts(value: str) -> frozenset[str]:
@@ -167,22 +174,55 @@ async def _query_llm(
         return None
 
     async with httpx.AsyncClient(timeout=_LLM_TIMEOUT_SECONDS) as client:
-        response = await client.post(
-            f"{llm_base_url}/chat/completions",
-            headers=_build_headers(),
-            json={
-                "model": settings.LLM_MODEL_NAME,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
-                "max_tokens": 100,
-            },
-        )
+        for attempt in range(1, _LLM_MAX_ATTEMPTS + 1):
+            try:
+                response = await client.post(
+                    f"{llm_base_url}/chat/completions",
+                    headers=_build_headers(),
+                    json={
+                        "model": settings.LLM_MODEL_NAME,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.1,
+                        "max_tokens": 100,
+                        "response_format": {"type": "json_object"},
+                    },
+                )
+            except httpx.RequestError as exc:
+                # Network/timeout error: retry once, then fall back cleanly.
+                if attempt >= _LLM_MAX_ATTEMPTS:
+                    logger.warning("LLM request failed after %d attempt(s): %s", attempt, exc)
+                    return None
+                await asyncio.sleep(_LLM_RETRY_BACKOFF_SECONDS)
+                continue
 
-        if response.status_code != 200:
-            logger.warning("LLM API returned status %d", response.status_code)
+            status = response.status_code
+            if status == 200:
+                return _parse_llm_response(response.json(), episodes, query)
+
+            # Retry only transient upstream failures (429 rate-limit, 5xx server
+            # errors); other non-200s (400/401/404, ...) are not retryable.
+            if (status == 429 or 500 <= status < 600) and attempt < _LLM_MAX_ATTEMPTS:
+                logger.warning(
+                    "LLM API returned status %d (attempt %d/%d), retrying", status, attempt, _LLM_MAX_ATTEMPTS
+                )
+                await asyncio.sleep(_retry_delay(response))
+                continue
+
+            logger.warning("LLM API returned status %d", status)
             return None
 
-        return _parse_llm_response(response.json(), episodes, query)
+    return None  # pragma: no cover - unreachable (loop always returns for _LLM_MAX_ATTEMPTS >= 1)
+
+
+def _retry_delay(response: httpx.Response) -> float:
+    """Seconds to wait before the next retry, honoring a numeric `Retry-After` header."""
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return max(0.0, float(retry_after))
+        except TypeError, ValueError:
+            pass
+    return _LLM_RETRY_BACKOFF_SECONDS
 
 
 def _build_prompt(query: str, episode_summaries: list[dict[str, Any]]) -> str:
@@ -197,7 +237,7 @@ def _build_prompt(query: str, episode_summaries: list[dict[str, Any]]) -> str:
 
     season_info = ", ".join([f"S{s}: eps {min(eps)}-{max(eps)}" for s, eps in sorted(seasons.items())])
 
-    return f"""Find episodes matching the query. Return their idx values as a JSON array.
+    return f"""Find episodes matching the query. Return their idx values as a JSON object.
 
 DATA FIELDS: idx (use this for output), s (season), e (episode number), title, date, plot
 
@@ -208,14 +248,14 @@ RULES:
 - "season premiere" = episode 1 of each season
 - "pilot" = first episode ever (idx 0)
 - For plot searches, check the "plot" field
-- BE STRICT: Return [] if no clear match
+- BE STRICT: Return {{"idx": []}} if no clear match
 
 Query: "{query}"
 
 Episodes:
 {json.dumps(episode_summaries)}
 
-Return ONLY a JSON array of idx values, e.g. [0,5,12] or []. No text."""
+Return ONLY a JSON object with an "idx" array, e.g. {{"idx": [0,5,12]}} or {{"idx": []}}. No text."""
 
 
 def _build_headers() -> dict[str, str]:
@@ -248,9 +288,19 @@ def _parse_llm_response(
     content = _THINK_TAG_RE.sub("", content).strip()
 
     try:
-        indices = json.loads(content)
+        parsed = json.loads(content)
     except json.JSONDecodeError:
         logger.warning("Failed to parse LLM response as JSON: %s", content)
+        return None
+
+    # Accept both `response_format: json_object` output `{"idx": [...]}` and a
+    # bare top-level `[...]` array (back-compat + gateways that ignore the
+    # response_format hint). Anything else is unusable -> clean fallback.
+    if isinstance(parsed, dict):
+        indices = parsed.get("idx", parsed.get("indices"))
+    elif isinstance(parsed, list):
+        indices = parsed
+    else:
         return None
 
     if not isinstance(indices, list):
