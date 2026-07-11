@@ -55,7 +55,6 @@ ALLOWED_PATH_COMPONENTS = (
 )
 ALLOWED_FILENAMES = {
     "check_no_external_llm.py",
-    "benchmark_llm.py",
 }
 # File extensions we DO want to check. Skip binaries, lockfiles, etc.
 CHECKED_EXTENSIONS = {
