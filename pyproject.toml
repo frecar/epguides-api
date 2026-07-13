@@ -12,7 +12,7 @@ keywords = ["tv", "shows", "api", "epguides", "fastapi"]
 # uv.lock pins transitives. Bump deliberately, not via floating ranges.
 dependencies = [
     "fastapi==0.139.0",
-    "uvicorn[standard]==0.50.1",
+    "uvicorn[standard]==0.51.0",
     "redis==8.0.1",
     "pydantic==2.13.4",
     "pydantic-settings==2.14.2",
@@ -33,9 +33,9 @@ dev = [
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
-    "ruff==0.15.20",
+    "ruff==0.15.21",
     "pre-commit==4.6.0",
-    "mypy==2.1.0",
+    "mypy==2.2.0",
     "pip-audit==2.10.1",
     # Drives the in-process OpenAPI route-contract gate (app/contract.py +
     # app/tests/test_api_contract.py) — test-only, never imported at runtime.
