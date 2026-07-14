@@ -43,6 +43,11 @@ jobs:
       - name: Private reference check
         run: bash scripts/check-no-internal-refs.sh
 
+      - name: Non-public Git dependency check
+        run: |
+          python3 scripts/check_no_private_git_deps.py
+          python3 scripts/check_no_private_git_deps.py --self-test
+
       - name: Isolate uv cache
         run: |
           echo "UV_CACHE_DIR=${RUNNER_TEMP}/uv-cache" >> "$GITHUB_ENV"

@@ -130,6 +130,14 @@ repos:
         pass_filenames: true
         stages: [pre-commit]
 
+      - id: no-private-git-deps
+        name: Non-public Git dependency check
+        entry: python3 scripts/check_no_private_git_deps.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
       - id: ci-parity
         name: "CI parity — deterministic CI checks"
         # Closes the local-vs-CI check-parity gap. Runs the exact subset of
