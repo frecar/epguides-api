@@ -197,6 +197,8 @@ coverage:
 # already fires locally before any push.
 ci-parity: format-check lint typecheck
 	$(RUN) python scripts/check_no_external_llm.py
+	$(RUN) python scripts/check_no_private_git_deps.py
+	$(RUN) python scripts/check_no_private_git_deps.py --self-test
 	$(RUN) python scripts/check_base_image_digest_pin_drift.py
 	uv run --python 3.12 --no-project python -m py_compile scripts/*.py
 
