@@ -2,6 +2,14 @@ name: Dependabot Auto-Merge
 
 on:
   pull_request:
+  # Hourly sweep to rebase auto-merge-enabled PRs that fell behind main.
+  # Dependabot doesn't refire pull_request when main moves, so an
+  # `auto-merge enabled + behind main` PR stalls indefinitely without
+  # this. The rebase-stale job below re-triggers a branch update so
+  # auto-merge can fire once CI is green again.
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -9,10 +17,12 @@ permissions:
 
 jobs:
   auto-merge:
+    # Runs on PR-event (the original path). Skip during scheduled
+    # sweeps — the rebase-stale job below handles those.
+    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
     # GitHub-hosted: public-repo, pull_request-reachable. Pure GitHub API
     # calls (approve + enable auto-merge) — no self-hosted runner needed.
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
     # Bounded ceiling so a wedged runner (hung gh API / metadata fetch /
     # auto-merge wait) fails fast.
     timeout-minutes: 15
@@ -46,3 +56,27 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  rebase-stale:
+    # Hourly sweep: find auto-merge-enabled dependabot PRs that are
+    # behind main and trigger a branch update. Updating the branch
+    # retriggers CI; once green, GitHub's auto-merge fires the squash.
+    # `pull_request_target` would be an alternative but introduces
+    # security pitfalls (untrusted refs running with write perms);
+    # the explicit cron sweep + GH API is cleaner.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # GitHub-hosted: scheduled/dispatch GitHub API sweep — no self-hosted
+    # runner needed.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rebase behind-main dependabot PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr list --author "app/dependabot" --state open \
+            --json number,autoMergeRequest,mergeStateStatus \
+            | jq -r '.[] | select(.autoMergeRequest != null and .mergeStateStatus == "BEHIND") | .number' \
+            | while read -r pr; do
+                echo "Rebasing behind-main PR #$pr"
+                gh pr update-branch "$pr" || echo "  (update-branch failed for #$pr, will retry next sweep)"
+              done
