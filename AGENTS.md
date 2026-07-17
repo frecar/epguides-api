@@ -53,7 +53,8 @@ REST API for TV show metadata, episodes, air dates, and summaries. Also provides
 
 ## Git Workflow (Standard)
 - **Commit Messages:** Use descriptive prefixes (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`).
-- **Branching:** Work primarily on `main`. Always pull latest before starting.
+- **Branching:** Work on feature branches from latest `origin/main`; never push directly to `main`.
+- **Merge:** Follow the synced CORE merge discipline above: merge only through the project's gated path after required checks are green.
 - **Pre-commit:** Ensure pre-commit hooks pass before pushing.
 
 ## LLM Policy
