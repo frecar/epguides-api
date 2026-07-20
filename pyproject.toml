@@ -11,7 +11,7 @@ keywords = ["tv", "shows", "api", "epguides", "fastapi"]
 # Pinned exact versions matching the previous requirements.txt floor.
 # uv.lock pins transitives. Bump deliberately, not via floating ranges.
 dependencies = [
-    "fastapi==0.139.0",
+    "fastapi==0.139.2",
     "uvicorn[standard]==0.51.0",
     "redis==8.0.1",
     "pydantic==2.13.4",
@@ -20,7 +20,7 @@ dependencies = [
     "httpx==0.28.1",
     "python-dateutil==2.9.0.post0",
     "prometheus-client==0.25.0",
-    "sentry-sdk==2.64.0",  # optional — only active when SENTRY_DSN is set
+    "sentry-sdk==2.66.0",  # optional — only active when SENTRY_DSN is set
     "orjson==3.11.9",
     "setuptools==83.0.0",  # keep setuptools current — security floor for transitives
     "msgpack>=1.2.1",
@@ -33,9 +33,9 @@ dev = [
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
-    "ruff==0.15.21",
+    "ruff==0.15.22",
     "pre-commit==4.6.0",
-    "mypy==2.2.0",
+    "mypy==2.3.0",
     "pip-audit==2.10.1",
     # Drives the in-process OpenAPI route-contract gate (app/contract.py +
     # app/tests/test_api_contract.py) — test-only, never imported at runtime.
