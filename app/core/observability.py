@@ -27,4 +27,15 @@ def init_observability(release: str) -> None:
         trace_propagation_targets=["epguides.com", "api.tvmaze.com", "localhost"],
         release=release,
         environment=settings.SENTRY_ENVIRONMENT,
+        # The sentry-sdk default is True, which attaches every local
+        # variable of every stack frame to captured exceptions. There is no
+        # name-based filtering on that capture, so anything that transits a
+        # local on an error path (tokens, request data, etc.) is shipped to
+        # Sentry. Keep it off explicitly rather than relying on whatever the
+        # SDK's default happens to be.
+        include_local_variables=False,
+        # Default is None, which the SDK already treats as False (no
+        # cookies/PII attached). Pinning it explicitly means a future
+        # sentry-sdk default change can't silently start attaching PII here.
+        send_default_pii=False,
     )
