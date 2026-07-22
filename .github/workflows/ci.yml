@@ -58,6 +58,7 @@ jobs:
         with:
           version: "0.11.23"
           enable-cache: true
+          prune-cache: true
 
       - name: Export deps to requirements.txt (third-party only)
         # epguides-api is not published to PyPI, so we can't audit the
@@ -112,6 +113,7 @@ jobs:
         with:
           version: "0.11.23"
           enable-cache: true
+          prune-cache: true
 
       - name: Sync dev dependencies
         run: uv sync --frozen --only-dev
@@ -168,6 +170,7 @@ jobs:
         with:
           version: "0.11.23"
           enable-cache: true
+          prune-cache: true
 
       - name: Sync dependencies
         run: uv sync --frozen
@@ -207,6 +210,7 @@ jobs:
         with:
           version: "0.11.23"
           enable-cache: true
+          prune-cache: true
 
       - name: Sync dependencies
         run: uv sync --frozen
