@@ -21,6 +21,11 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 - Claim atomically: assign yourself, flip `status:ready`→`status:in-progress`, push an agent-name-prefixed branch, and post a claim comment. Then **wait ~60s and re-read** — if another agent's claim landed in the gap, back off and undo yours.
 - One issue per agent. Never edit, review, or push to another agent's claimed issue / PR / branch. Stamp your agent identity on branches and comments so ownership is visible.
 
+### Engineering autonomy and PM boundary
+- Engineers own the ordinary end-to-end delivery loop: `claim -> inspect -> implement -> focused/full tests as appropriate -> commit -> normal pre-push -> push -> PR -> fix exact-head CI -> green review outcome`. Those offline development steps are autonomous and do not require PM approval between them; fix directly in-scope failures without waiting for another permission comment.
+- PM owns prioritization, backlog/dependency state, and outcome/risk review; PM-only sessions do not implement code. An explicitly required causal design checkpoint may be appropriate once for a named high-risk shared-infrastructure/performance boundary. Once accepted, it releases the normal delivery loop; it is not a standing or repeated approval gate.
+- An issue-specific checkpoint constrains only its named boundary. Continue normal development unless an instruction explicitly and justifiably holds a later live/merge action. Stop and escalate only for a material scope/architecture expansion, secrets/security/legal/policy judgment, destructive/live action, an active incident/machine/review blocker, or a genuinely unresolvable blocker — not for routine edits, commits, pushes, PRs, or in-scope CI fixes.
+
 ### Merge discipline
 - `main` is protected on every repo: **never** `git push` to it, **never** raw `gh pr merge` or web-merge.
 - Merge **only** via the project's gated merge wrapper, which refuses unless every required check has concluded `success`.
