@@ -16,8 +16,12 @@ on:
   pull_request:
     branches: [main]
 
+# Keyed on the PR number when present (always distinct from any
+# push-to-main group) instead of github.ref alone, so a delayed
+# pull_request run can never collide with, and cancel, a push run on
+# main. push events fall through to github.ref unchanged.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
