@@ -26,7 +26,7 @@ repos:
     # [dependency-groups].dev ruff pin (ruff==0.15.17) in pyproject.toml
     # so pre-commit and CI never format/lint against different ruff
     # versions (the classic drift trap).
-    rev: v0.15.17
+    rev: v0.15.22
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
