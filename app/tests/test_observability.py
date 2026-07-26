@@ -1,7 +1,10 @@
+import json
 from unittest.mock import Mock, patch
 
 import sentry_sdk
 import sentry_sdk.transport as transport_mod
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sentry_sdk.transport import Transport
 
 from app.core import observability
@@ -29,8 +32,9 @@ def test_observability_initialises_sentry_when_configured(monkeypatch):
 
     # Assert against the exact kwargs the app really passes to
     # sentry_sdk.init, not a constant defined elsewhere in this file --
-    # this is what actually proves include_local_variables can't be
-    # silently dropped or re-inherited from the SDK default.
+    # this is what actually proves include_local_variables and
+    # max_request_body_size can't be silently dropped or re-inherited from
+    # the SDK default.
     sentry_sdk_mock.init.assert_called_once_with(
         dsn="https://example.invalid/1",
         traces_sample_rate=0.25,
@@ -40,6 +44,7 @@ def test_observability_initialises_sentry_when_configured(monkeypatch):
         environment="test",
         include_local_variables=False,
         send_default_pii=False,
+        max_request_body_size="never",
     )
 
 
@@ -102,3 +107,69 @@ def test_real_captured_event_has_no_frame_locals(monkeypatch):
     assert transport.envelopes, "expected at least one captured envelope"
     leaked = _frames_with_vars(transport.envelopes)
     assert not leaked, f"frame locals leaked into the Sentry event: {leaked}"
+
+
+def _request_dicts(envelopes):
+    """Return the `request` sub-object of every captured exception event.
+
+    With max_request_body_size="never", the SDK still emits a request.data
+    key, but as an empty string with a `_meta` annotation recording that it
+    was stripped by config -- so "no leaked body" means the value is falsy,
+    not that the key is absent. Scoped to `request` (not the whole payload)
+    because unrelated fields -- e.g. in-app stack frame source context --
+    legitimately echo nearby test source lines and would otherwise produce
+    false positives unrelated to request-body capture.
+    """
+    found = []
+    for envelope in envelopes:
+        for item in envelope.items:
+            payload = item.payload.json
+            if not payload or "exception" not in payload:
+                continue
+            found.append(payload.get("request", {}))
+    return found
+
+
+def test_real_captured_event_has_no_request_body(monkeypatch):
+    """End-to-end check using the real sentry_sdk (not mocked) and a real
+    FastAPI request/response cycle: POST a JSON-RPC-shaped body to an
+    endpoint that raises, and inspect the literal event payload the SDK
+    builds. This proves the *behavior* -- no request body content in the
+    captured event's request context, and the secret-looking marker in the
+    posted body never appears there -- rather than just asserting the
+    init() option value, which a downstream override could silently defeat.
+    """
+    monkeypatch.setattr(transport_mod, "HttpTransport", _CapturingTransport)
+    monkeypatch.setattr(observability.settings, "SENTRY_DSN", "https://public@sentry.example.invalid/1")
+    monkeypatch.setattr(observability.settings, "SENTRY_TRACES_SAMPLE_RATE", 0.0)
+    monkeypatch.setattr(observability.settings, "SENTRY_PROFILES_SAMPLE_RATE", 0.0)
+    monkeypatch.setattr(observability.settings, "SENTRY_ENVIRONMENT", "test")
+
+    observability.init_observability(release="test-release")
+    client = sentry_sdk.get_client()
+    transport = client.transport
+    assert isinstance(transport, _CapturingTransport)
+
+    app = FastAPI()
+
+    @app.post("/mcp")
+    async def _mcp_stub(payload: dict):
+        raise ValueError("boom")
+
+    secret_marker = "should-never-be-shipped-to-sentry"
+    http_client = TestClient(app, raise_server_exceptions=False)
+    response = http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "method": "search_shows", "params": {"query": secret_marker}},
+    )
+    assert response.status_code == 500
+    sentry_sdk.flush()
+
+    assert transport.envelopes, "expected at least one captured envelope"
+    requests = _request_dicts(transport.envelopes)
+    assert requests, "expected at least one captured event with a request context"
+    for request in requests:
+        assert not request.get("data"), f"request body data leaked into the Sentry event: {request}"
+        assert secret_marker not in json.dumps(request), (
+            f"request body marker leaked into the Sentry event's request context: {request}"
+        )

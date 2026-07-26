@@ -38,4 +38,11 @@ def init_observability(release: str) -> None:
         # cookies/PII attached). Pinning it explicitly means a future
         # sentry-sdk default change can't silently start attaching PII here.
         send_default_pii=False,
+        # The sentry-sdk default is "medium", which attaches up to ~10KB of
+        # the raw request body to captured events. That capture happens
+        # independently of send_default_pii (only cookies are gated by that
+        # flag). This API's one POST endpoint, /mcp, accepts arbitrary
+        # user-supplied JSON-RPC tool-call input, so leave body capture off
+        # entirely rather than shipping request payloads to Sentry.
+        max_request_body_size="never",
     )
