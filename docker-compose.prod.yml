@@ -92,7 +92,7 @@ services:
         max-file: "3"
 
   redis:
-    image: redis:7
+    image: redis:7.4.10-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     command: >
       redis-server
       --maxmemory 3gb
