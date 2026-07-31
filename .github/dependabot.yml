@@ -31,6 +31,26 @@ updates:
     labels:
       - "dependencies"
       - "ci"
+    # actions/checkout and docker/login-action are centrally managed by an
+    # upstream template-sync bot (a marker-region block inside ci.yml plus
+    # the whole trivy-fs-nightly.yml file), not maintained directly in this
+    # repo. Without this ignore, dependabot bumps the pin here directly,
+    # then the next sync run reverts it back to the (until-then-stale)
+    # upstream template, and dependabot re-opens the same bump the
+    # following week — an infinite ping-pong observed live over two
+    # consecutive days. These two pins now only move via the upstream
+    # template (bumped there) plus the sync it drives.
+    #
+    # Trade-off, accepted deliberately: this ignore is dependency-name-
+    # scoped for the whole repo, not just the synced marker region — the
+    # non-templated actions/checkout uses elsewhere in ci.yml also stop
+    # getting automatic dependabot bumps. Compensating control: a periodic
+    # dependency-freshness audit still catches a stale pin there.
+    # docker/login-action has no such collateral: it is only used inside
+    # the synced marker region in this repo.
+    ignore:
+      - dependency-name: "actions/checkout"
+      - dependency-name: "docker/login-action"
 
   # docker ecosystem — tracks the Dockerfile's `FROM` + `COPY --from` image
   # digests so a pinned `tag@sha256:` stays fresh via a reviewed bump rather
