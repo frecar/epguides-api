@@ -105,6 +105,18 @@ repos:
         files: '(Dockerfile.*|scripts/check_base_image_digest_pin_drift\.py)$'
         stages: [pre-commit]
 
+      - id: ci-resource-sizing
+        name: "CI resource-sizing guard"
+        # Fail-closed: no workflow step may hardcode a topology-specific
+        # worker/CPU/memory ceiling (`pytest -n 16`, `--maxprocesses=16`,
+        # `--memory=8g`). The script scans every workflow file itself, so
+        # filenames are not passed.
+        entry: python3 scripts/check_ci_resource_sizing.py
+        language: system
+        pass_filenames: false
+        files: '(\.github/workflows/.*\.ya?ml|scripts/check_ci_resource_sizing\.py)$'
+        stages: [pre-commit]
+
       - id: host-python312-syntax
         name: "Host-interpreter syntax guard (Python 3.12)"
         # scripts/ runs under the system `python3` (a developer's machine / CI
