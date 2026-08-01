@@ -191,6 +191,9 @@ coverage:
 #                             scripts must stay parseable under), mirroring the
 #                             "Host-interpreter syntax guard" CI step +
 #                             pre-commit hook.
+#   check_ci_resource_sizing -> no workflow step hardcodes a topology-specific
+#                             worker/CPU/memory ceiling, mirroring the "CI
+#                             resource-sizing guard" CI step.
 #
 # Coverage is NOT duplicated here: the `tests-coverage` pre-commit hook
 # already enforces `--cov-fail-under=95` on every commit, so the floor
@@ -200,6 +203,8 @@ ci-parity: format-check lint typecheck
 	$(RUN) python scripts/check_no_private_git_deps.py
 	$(RUN) python scripts/check_no_private_git_deps.py --self-test
 	$(RUN) python scripts/check_base_image_digest_pin_drift.py
+	$(RUN) python scripts/check_ci_resource_sizing.py
+	$(RUN) python scripts/check_ci_resource_sizing.py --self-test
 	uv run --python 3.12 --no-project python -m py_compile scripts/*.py
 
 ci: format-check lint test

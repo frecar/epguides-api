@@ -138,6 +138,17 @@ jobs:
         # docker-less, so it also runs in `make ci-parity` / pre-commit.
         run: python3 scripts/check_base_image_digest_pin_drift.py
 
+      - name: CI resource-sizing guard
+        # Fail-closed: no workflow step may hardcode a topology-specific
+        # worker/CPU/memory ceiling (`pytest -n 16`, `--maxprocesses=16`,
+        # `--memory=8g`). A literal number only ever matches the runner it
+        # was tuned on; the value must instead be derived from whatever
+        # capacity the assigned runner reports at run time (`auto` /
+        # `logical` / a computed fraction of scheduler-visible CPU or
+        # memory). Stdlib-only, so it also runs in `make ci-parity` /
+        # pre-commit.
+        run: python3 scripts/check_ci_resource_sizing.py
+
       - name: Host-interpreter syntax guard (Python 3.12)
         # Everything under scripts/ is run by the system `python3` (a
         # developer's machine / CI runner, possibly older than 3.14) via the
@@ -220,6 +231,34 @@ jobs:
         run: uv sync --frozen
 
       - name: Run tests with coverage
+        # Resource sizing here is deliberately capacity-relative, not a
+        # hardcoded host-size number (enforced by the "CI resource-sizing
+        # guard" step above, which fails the build on a literal worker/CPU/
+        # memory ceiling such as `-n 16` or `--maxprocesses=16`):
+        #
+        #  - Runner: always GitHub-hosted `ubuntu-latest`, every job, no
+        #    exception — this is a public repository, so untrusted fork-PR
+        #    code must never reach a shared/self-hosted runner or its
+        #    secrets and network (see `audit` above). A trusted-only
+        #    self-hosted path was considered and intentionally NOT adopted:
+        #    it would need its own event/permission/isolation-tested split
+        #    between untrusted PR jobs and trusted branch/dependabot jobs,
+        #    which is a materially bigger trust-boundary surface than this
+        #    workflow currently carries. GitHub-hosted is the documented
+        #    exception for this repo, not a gap.
+        #  - Parallelism: this suite's caching layer is a single shared
+        #    Redis instance keyed by test-supplied identifiers, with no
+        #    per-test/per-worker isolation today. Running tests across
+        #    multiple concurrent processes (pytest-xdist) was profiled and
+        #    found to risk cross-test cache-key collisions that serial,
+        #    one-test-at-a-time execution never hits — a correctness
+        #    regression, not just a speed trade-off. Enabling it safely
+        #    needs dedicated worker-scoped cache isolation first, which is
+        #    out of scope here. The suite itself is small and I/O-bound
+        #    (well under the runner's single-core capacity even serially),
+        #    so a fixed low-parallelism runner is already the
+        #    capacity-appropriate choice for this workload, not a ceiling
+        #    that needs raising.
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
