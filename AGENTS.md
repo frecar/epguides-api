@@ -42,16 +42,19 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 - Docker-first — run tooling in containers, not on the host. Keep secrets in environment variables or a secrets manager, never committed to the repo.
 - Do not hard-code external LLM API endpoints (OpenAI, Anthropic, etc.) in source. Route model calls through the endpoint configured via environment variable.
 - **Ad-hoc Python via a shell tool:** do NOT backslash-escape quotes inside a heredoc f-string (`peak[\"run\"]` → `SyntaxError: unexpected character after line continuation character`). Prefer (a) writing the script to a file and running it, (b) single-quoted dict keys inside a double-quoted f-string (`f"{d['k']}"`), or (c) `%`/`.format()`.
+- **The interactive/Bash-tool shell here is zsh, not bash — it does NOT word-split unquoted `$vars`.** `flags="--a --b"; cmd $flags` passes ONE argument in zsh (bash would split it), so `gh issue create $flags` fails `unknown flag: --a --b` — a multi-step script can silently do nothing before anyone notices. Pass flags explicitly, or build an **array** (`args=(--label a --label b); cmd "${args[@]}"`), or force one split with `cmd ${=flags}`. Also: an unquoted empty `$x` expands to nothing (no empty-string arg), and unmatched globs **error** (`no matches found`) rather than passing through literally — quote literal globs, or `setopt NULL_GLOB` locally. Prefer `[[ … ]]` over `[ … ]`.
 - **Never write scratch into `$HOME` root.** Temporary files, one-off scripts, dumps, and logs go in the session scratch dir or a repo-local gitignored path — never `~/`. If your cwd is `$HOME`, that is a bug: change directory first.
 
 ### GitHub issues
 - Any non-trivial plan or task becomes a GH issue, before or as you start — the issue is the durable record. Apply **exactly one each** of `type:` (bug/feature/chore/docs/infra), `severity:` (critical/high/medium/low), `status:` (triage/ready/in-progress/blocked/burn-in) at file time.
 - Self-filed issue → `Closes #N` in the PR. **External-reporter** issue → `Refs #N` (never auto-close on merge; the reporter verifies first).
+- **GitHub does not parse negation.** `Closes #N` / `Fixes #N` / `Resolves #N` anywhere in a commit or PR body closes #N on merge — even inside "this does **not** close #N". Never put a closing keyword next to an issue number you are not closing; write `Refs #N` or spell the number out ("issue N") instead.
 - This is a public repo — never reference internal hostnames, IPs, private repos, or private deployment details in issues/PRs/comments.
 
 ### Quality gates
 - Pre-commit and pre-push run automatically; **never** `--no-verify`. Fix the failure instead.
 - Wait for CI green before merging. The coverage floor is a fixed **95%** — never lower a gate to pass.
+- **A registry/catalog CI guard rejecting your push is the guard working, not a bug to route around.** Many guards enumerate a governed artifact class (a script, config unit, workflow step, collector) against a companion registry; a red run here almost always means "go add the entry," not "fight the check." If you are the one *writing* such a guard, derive membership from the authoritative source (a template, generator, or import closure) rather than hand-enumerating literal string occurrences — a literal match is blind to templated/generated instances of the same real artifact.
 
 > Detail and rationale live in this repo's own `AGENTS.md` below. This CORE is the non-negotiable shared minimum.
 <!-- AGENTS-CORE:END -->
