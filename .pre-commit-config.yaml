@@ -57,7 +57,19 @@ repos:
 
       - id: tests-coverage
         name: Run tests (95% coverage floor)
-        entry: uv run pytest --cov=app --cov-fail-under=95 -q
+        # COVERAGE_FILE isolated to a fresh per-run temp dir (epguides-api#414):
+        # [tool.coverage.run] has no `data_file` override, so coverage writes to
+        # the default `.coverage` in this worktree's CWD. Without isolation, this
+        # hook (firing on every commit) collides with any concurrent `make test`,
+        # `make coverage`, or ad-hoc scoped `pytest --cov=app.x` run in the SAME
+        # worktree — pytest-cov's combine() step globs and DELETES sibling
+        # `.coverage.*` files, so a concurrent run's data gets silently absorbed
+        # or wiped, producing a wrong-but-plausible coverage total with ZERO test
+        # failures. Isolates via a fresh `mktemp -d` per invocation.
+        entry: >-
+          bash -c 'd=$(mktemp -d);
+          COVERAGE_FILE="$d/.coverage" uv run pytest --cov=app --cov-fail-under=95 -q;
+          rc=$?; rm -rf "$d"; exit $rc'
         language: system
         pass_filenames: false
         always_run: true

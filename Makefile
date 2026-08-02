@@ -148,8 +148,19 @@ cache-clear:
 # CODE QUALITY
 # =============================================================================
 
+# COVERAGE_FILE isolated to a fresh per-run temp dir (epguides-api#414):
+# [tool.coverage.run] has no `data_file` override, so coverage writes to the
+# default `.coverage` in the worktree CWD. Without isolation, two concurrent
+# invocations in the same worktree (this target, `make coverage`, the
+# pre-commit `tests-coverage` hook, or an ad-hoc scoped `pytest --cov=app.x`)
+# collide on it — pytest-cov's combine() step globs and DELETES sibling
+# `.coverage.*` files, silently corrupting the other run's total. Mirrors
+# Isolates via a fresh `mktemp -d` per invocation; POSIX mktemp/$?/rm -rf
+# need no `bash -c` wrapper under Make's default /bin/sh.
 test:
-	$(RUN) pytest --cov=app --cov-report=term-missing
+	d=$$(mktemp -d); \
+	COVERAGE_FILE="$$d/.coverage" $(RUN) pytest --cov=app --cov-report=term-missing; \
+	rc=$$?; rm -rf "$$d"; exit $$rc
 
 format:
 	$(RUN) ruff format app/
@@ -170,8 +181,12 @@ check: format-check lint
 typecheck:
 	$(RUN) mypy app/ --config-file pyproject.toml --exclude 'app/tests/'
 
+# COVERAGE_FILE isolated to a fresh per-run temp dir (epguides-api#414) —
+# same rationale as `test` above.
 coverage:
-	$(RUN) pytest --cov=app --cov-report=term-missing --cov-report=html
+	d=$$(mktemp -d); \
+	COVERAGE_FILE="$$d/.coverage" $(RUN) pytest --cov=app --cov-report=term-missing --cov-report=html; \
+	rc=$$?; rm -rf "$$d"; exit $$rc
 	@echo "HTML report: htmlcov/index.html"
 
 # Local-vs-CI check PARITY target. Runs the exact DETERMINISTIC, locally
