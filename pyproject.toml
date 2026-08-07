@@ -40,6 +40,7 @@ dev = [
     # Drives the in-process OpenAPI route-contract gate (app/contract.py +
     # app/tests/test_api_contract.py) — test-only, never imported at runtime.
     "jsonschema==4.26.0",
+    "pytest-xdist==3.8.0",
 ]
 
 [build-system]

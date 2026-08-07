@@ -246,23 +246,84 @@ jobs:
         #    which is a materially bigger trust-boundary surface than this
         #    workflow currently carries. GitHub-hosted is the documented
         #    exception for this repo, not a gap.
-        #  - Parallelism: this suite's caching layer is a single shared
-        #    Redis instance keyed by test-supplied identifiers, with no
-        #    per-test/per-worker isolation today. Running tests across
-        #    multiple concurrent processes (pytest-xdist) was profiled and
-        #    found to risk cross-test cache-key collisions that serial,
-        #    one-test-at-a-time execution never hits — a correctness
-        #    regression, not just a speed trade-off. Enabling it safely
-        #    needs dedicated worker-scoped cache isolation first, which is
-        #    out of scope here. The suite itself is small and I/O-bound
-        #    (well under the runner's single-core capacity even serially),
-        #    so a fixed low-parallelism runner is already the
-        #    capacity-appropriate choice for this workload, not a ceiling
-        #    that needs raising.
+        #  - Parallelism: `-n auto` is overridden by the tested hook in
+        #    app/tests/conftest.py. It takes the lower of 80% of affinity /
+        #    cgroup-quota-visible CPU, 80% of finite available memory at the
+        #    measured 256 MiB/worker bound, and the suite's same-commit
+        #    eight-worker scaling knee. Each worker uses a separate Redis DB,
+        #    so fixed cache keys cannot race across processes. Discovery
+        #    failure selects one worker and prints the reason.
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-        run: uv run pytest --cov=app --cov-fail-under=95 --cov-report=term-missing -q
+        run: uv run pytest -n auto --dist=worksteal --cov=app --cov-fail-under=95 --cov-report=term-missing -q
+
+  # Temporary same-commit evidence job for #393. Remove after the serial and
+  # capacity-relative results have completed and their GitHub job IDs are
+  # recorded on the issue.
+  capacity-benchmark:
+    name: Capacity benchmark (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [serial, capacity]
+    services:
+      redis:
+        image: redis:7.4.10-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Isolate uv and coverage state
+        run: |
+          {
+            echo "UV_CACHE_DIR=${RUNNER_TEMP}/uv-cache"
+            echo "UV_PYTHON_INSTALL_DIR=${RUNNER_TEMP}/uv-python"
+            echo "COVERAGE_FILE=${RUNNER_TEMP}/.coverage-${{ matrix.mode }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.23"
+          enable-cache: true
+          prune-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Run measured test execution
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+        run: |
+          cgroup_path="$(awk -F: '$1 == "0" { print $3 }' /proc/self/cgroup)"
+          cgroup_root="/sys/fs/cgroup${cgroup_path}"
+          echo "mode=${{ matrix.mode }}"
+          echo "cpu_pressure_before=$(tr '\n' ';' < /proc/pressure/cpu)"
+          echo "memory_pressure_before=$(tr '\n' ';' < /proc/pressure/memory)"
+          [[ ! -r "${cgroup_root}/memory.events" ]] || sed 's/^/memory_event_before_/' "${cgroup_root}/memory.events"
+          [[ ! -r "${cgroup_root}/memory.swap.current" ]] || echo "swap_bytes_before=$(<"${cgroup_root}/memory.swap.current")"
+          if [[ "${{ matrix.mode }}" == "serial" ]]; then
+            /usr/bin/time -v uv run pytest --cov=app --cov-fail-under=95 --cov-report= -q
+          else
+            /usr/bin/time -v uv run pytest -n auto --dist=worksteal --cov=app --cov-fail-under=95 --cov-report= -q
+          fi
+          echo "cpu_pressure_after=$(tr '\n' ';' < /proc/pressure/cpu)"
+          echo "memory_pressure_after=$(tr '\n' ';' < /proc/pressure/memory)"
+          [[ ! -r "${cgroup_root}/memory.events" ]] || sed 's/^/memory_event_after_/' "${cgroup_root}/memory.events"
+          [[ ! -r "${cgroup_root}/memory.swap.current" ]] || echo "swap_bytes_after=$(<"${cgroup_root}/memory.swap.current")"
+
+      - name: Measure coverage report
+        run: /usr/bin/time -v uv run coverage report --fail-under=95
 
   # The three jobs below (trivy-fs, docker-build, trivy-image) are a managed
   # copy kept byte-identical to the canonical CI template. Hand-edits between
