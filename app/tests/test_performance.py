@@ -11,6 +11,7 @@ not external service latency.
 
 import time
 import warnings
+from statistics import median
 from unittest.mock import patch
 
 import pytest
@@ -25,6 +26,7 @@ from app.models.schemas import EpisodeSchema, SeasonSchema, create_show_schema
 
 PERF_TARGET_MS = 20  # Target response time (warning if exceeded)
 PERF_LIMIT_MS = 50  # Hard limit (fail if exceeded)
+PERF_SAMPLES = 5
 
 
 # =============================================================================
@@ -117,19 +119,28 @@ def assert_performance(elapsed_ms: float, endpoint: str) -> None:
 
 
 async def measure_endpoint(client: AsyncClient, method: str, url: str, **kwargs) -> float:
-    """
-    Measure endpoint response time.
+    """Measure steady-state endpoint latency using a warmup and median.
 
     Returns:
-        Response time in milliseconds.
+        Median response time in milliseconds across ``PERF_SAMPLES`` calls.
     """
-    start = time.perf_counter()
     if method.upper() == "GET":
-        await client.get(url, **kwargs)
+        request = client.get
     elif method.upper() == "POST":
-        await client.post(url, **kwargs)
-    elapsed = (time.perf_counter() - start) * 1000
-    return elapsed
+        request = client.post
+    else:
+        raise ValueError(f"unsupported HTTP method: {method}")
+
+    # Exclude one-time framework/schema initialization. A single cold sample
+    # is dominated by shared-runner scheduling and made the 50 ms assertion
+    # flaky; the median still catches sustained endpoint regressions.
+    await request(url, **kwargs)
+    samples: list[float] = []
+    for _ in range(PERF_SAMPLES):
+        start = time.perf_counter()
+        await request(url, **kwargs)
+        samples.append((time.perf_counter() - start) * 1000)
+    return median(samples)
 
 
 # =============================================================================

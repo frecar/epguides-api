@@ -52,6 +52,17 @@ def test_repo_workflows_pass_the_guard() -> None:
     )
 
 
+def test_ci_test_job_uses_capacity_relative_xdist() -> None:
+    config = yaml.safe_load((_REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    test_job = config["jobs"]["test"]
+    test_commands = [step["run"] for step in test_job["steps"] if "run" in step]
+
+    assert test_job["runs-on"] == "ubuntu-latest"
+    assert any("pytest -n auto --dist=worksteal" in command for command in test_commands), (
+        "the public CI test job must use the tested capacity-relative xdist selector"
+    )
+
+
 def test_guard_self_test_passes() -> None:
     result = subprocess.run(
         [sys.executable, str(_GUARD), "--self-test"],

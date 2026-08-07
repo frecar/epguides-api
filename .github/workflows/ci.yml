@@ -246,23 +246,17 @@ jobs:
         #    which is a materially bigger trust-boundary surface than this
         #    workflow currently carries. GitHub-hosted is the documented
         #    exception for this repo, not a gap.
-        #  - Parallelism: this suite's caching layer is a single shared
-        #    Redis instance keyed by test-supplied identifiers, with no
-        #    per-test/per-worker isolation today. Running tests across
-        #    multiple concurrent processes (pytest-xdist) was profiled and
-        #    found to risk cross-test cache-key collisions that serial,
-        #    one-test-at-a-time execution never hits — a correctness
-        #    regression, not just a speed trade-off. Enabling it safely
-        #    needs dedicated worker-scoped cache isolation first, which is
-        #    out of scope here. The suite itself is small and I/O-bound
-        #    (well under the runner's single-core capacity even serially),
-        #    so a fixed low-parallelism runner is already the
-        #    capacity-appropriate choice for this workload, not a ceiling
-        #    that needs raising.
+        #  - Parallelism: `-n auto` is overridden by the tested hook in
+        #    app/tests/conftest.py. It takes the lower of 80% of affinity /
+        #    cgroup-quota-visible CPU, 80% of finite available memory at the
+        #    measured 256 MiB/worker bound, and the suite's same-commit
+        #    eight-worker scaling knee. Each worker uses a separate Redis DB,
+        #    so fixed cache keys cannot race across processes. Discovery
+        #    failure selects one worker and prints the reason.
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-        run: uv run pytest --cov=app --cov-fail-under=95 --cov-report=term-missing -q
+        run: uv run pytest -n auto --dist=worksteal --cov=app --cov-fail-under=95 --cov-report=term-missing -q
 
   # The three jobs below (trivy-fs, docker-build, trivy-image) are a managed
   # copy kept byte-identical to the canonical CI template. Hand-edits between

@@ -10,7 +10,19 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from app.main import app
+from scripts.compute_xdist_workers import current_selection, redis_db_for_worker
+
+# Each xdist worker gets its own Redis database. The suite deliberately uses
+# fixed cache keys to exercise production caching behavior, so sharing DB 0
+# makes otherwise-independent tests overwrite one another when they run in
+# parallel. The capacity selector caps the normal path at eight workers, safely
+# within Redis's default 16 logical databases.
+_XDIST_WORKER = os.environ.get("PYTEST_XDIST_WORKER", "")
+_XDIST_REDIS_DB = redis_db_for_worker(_XDIST_WORKER)
+if _XDIST_REDIS_DB is not None:
+    os.environ["REDIS_DB"] = str(_XDIST_REDIS_DB)
+
+from app.main import app  # noqa: E402
 
 
 @pytest_asyncio.fixture
@@ -19,6 +31,20 @@ async def async_client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+
+def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
+    """Make ``pytest -n auto`` capacity-relative and fail-closed."""
+    del config
+    selection = current_selection()
+    print(
+        "epguides xdist capacity: "
+        f"workers={selection.workers} visible_cpus={selection.visible_cpus or 'unknown'} "
+        f"cpu_budget={selection.cpu_budget} memory_budget={selection.memory_budget} "
+        f"reason={selection.reason}",
+        flush=True,
+    )
+    return selection.workers
 
 
 def pytest_configure(config: pytest.Config) -> None:
