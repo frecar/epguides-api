@@ -12,10 +12,10 @@ keywords = ["tv", "shows", "api", "epguides", "fastapi"]
 # uv.lock pins transitives. Bump deliberately, not via floating ranges.
 dependencies = [
     "fastapi==0.141.1",
-    "uvicorn[standard]==0.52.0",
+    "uvicorn[standard]==0.52.1",
     "redis==8.1.0",
     "pydantic==2.13.4",
-    "pydantic-settings==2.14.2",
+    "pydantic-settings==2.15.0",
     "python-multipart==0.0.32",
     "httpx==0.28.1",
     "python-dateutil==2.9.0.post0",
