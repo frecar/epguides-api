@@ -39,7 +39,7 @@ AUDIT_SCRIPT = _REPO_ROOT / "scripts" / "audit_osv.sh"
 
 # The pinned OSV-Scanner action ref that CI uses as the authoritative
 # online dependency-CVE backstop.
-_OSV_ACTION = "google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2"
+_OSV_ACTION = "google/osv-scanner-action/osv-scanner-action@8deb546fdb875b9996d27d4950be7312dac076a1"
 
 
 def _local_hooks() -> dict[str, dict]:
