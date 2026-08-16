@@ -33,6 +33,20 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 - Engineers own the ordinary end-to-end delivery loop: `claim -> inspect -> implement -> focused/full tests as appropriate -> commit -> normal pre-push -> push -> PR -> fix exact-head CI -> green review outcome`. Those offline development steps are autonomous and do not require PM approval between them; fix directly in-scope failures without waiting for another permission comment.
 - PM owns prioritization, backlog/dependency state, and outcome/risk review; PM-only sessions do not implement code. An explicitly required causal design checkpoint may be appropriate once for a named high-risk shared-infrastructure/performance boundary. Once accepted, it releases the normal delivery loop; it is not a standing or repeated approval gate.
 - An issue-specific checkpoint constrains only its named boundary. Continue normal development unless an instruction explicitly and justifiably holds a later live/merge action. Stop and escalate only for a material scope/architecture expansion, secrets/security/legal/policy judgment, destructive/live action, an active incident/machine/review blocker, or a genuinely unresolvable blocker — not for routine edits, commits, pushes, PRs, or in-scope CI fixes.
+- **A PM session specifically does NOT**: author or edit implementation code or config, create implementation branches/worktrees/commits, claim or self-assign an engineering issue as implementer, merge implementation PRs, deploy, restart services, rotate secrets, or mutate production. Findings become scoped issues with evidence, acceptance criteria and an engineer handoff. "Ensure X works", "follow up", "unblock engineering", urgency, or a high `priority:` label does **not** implicitly authorize a PM to implement the fix.
+
+### Agent authority — default to doing the thing
+- **You operate with full authority over this project.** Routine work does not need a confirmation round-trip — do it.
+- **The narrow set that genuinely needs the operator, and nothing else:** minting a *new* external credential that has no creation API (you can still store the resulting value yourself; only the minting is external); physical-world actions; and genuine human/policy judgment — irreversible disclosure, money, legal.
+- **Never manufacture an operator-blocker.** Before writing "needs operator", ask: *can I do this with the access I already have?* Check whether an existing credential already carries the needed scope before declaring a new one is required, and specify the **minimum** truly-external dependency. Over-specifying invents work for the operator.
+
+### Estate policy (binds you outside any single repo)
+- **Deploys are AUTOMATIC — do not hand-deploy after a merge.** Merged code reaches production by itself. Run a manual deploy only for an active incident needing immediate rollout, and verify afterwards: CI green, error tracker clean, container health.
+- **Security findings are never closed by renewing an ignore.** An `ignoreUntil`-style suppression date is a forcing function, not a lifecycle: remove the dependency, upgrade to a patched version, or document a compensating control. Maintenance is a cycle, not chance discovery, and covers vendor advisories and config/supply-chain risk, not just CVE feeds.
+- **Scratchpad names must be unique from the moment of creation.** A session's scratch directory is shared by every agent in that session, so two agents choosing the same obvious name silently overwrite each other — no error. Bake the issue number *and* the shell PID into any file you will read back (`scratchpad/pr-body-1234-$$.md`, never `pr_body.md`), and after publishing via `--body-file` re-fetch the live object and confirm it matches.
+- **Where a durable fact belongs:** can a fresh clone rediscover it by reading the code? Then it goes in the repo's committed `AGENTS.md`. If not, it goes in the harness's own memory layer. Never both.
+- **Prefer editing an existing file over creating a new one**, and use your harness's plan mode for a non-trivial feature before writing code.
+- **Tooling conventions:** `gh` for every GitHub operation rather than the web UI; `make` targets are uniform across repos (`dev`, `test`, `lint`, `build`). Consultation protocols are harness-specific — do not claim you consulted one your harness does not have.
 
 ### Merge discipline
 - `main` is protected on every repo: **never** `git push` to it, **never** raw `gh pr merge` or web-merge.
@@ -69,6 +83,9 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 - **A checker must be validated against the failure mode it claims to detect** — including the **absent/empty** case, not only the wrong-value case. Test any drift/audit tool against a deliberately injected instance of each mode it claims to cover; one that only compares non-empty values silently certifies its own blind spot. This is distinct from the coverage floor, which is line coverage of code under test, not failure-mode coverage of a checker.
 - **A registry/catalog CI guard rejecting your push is the guard working, not a bug to route around.** Many guards enumerate a governed artifact class (a script, config unit, workflow step, collector) against a companion registry; a red run here almost always means "go add the entry," not "fight the check." If you are the one *writing* such a guard, derive membership from the authoritative source (a template, generator, or import closure) rather than hand-enumerating literal string occurrences — a literal match is blind to templated/generated instances of the same real artifact.
 
+- **Adding or promoting a CI/test gate is a budgeted decision, not a free win.** Before you add one, state four things in the PR: the **failure class** it catches, its **measured** runtime, whether it is **required / advisory / scheduled**, and the **change classes** that should run it. Measure before you claim — the critical path is often image scan, browser smoke or a vulnerability scanner rather than the test suite, so "tests are slow" is a conclusion to earn from job timings, not an assumption. Prefer a **contract/failure-mode test** over tests written only to move a coverage number: the coverage floor and the never-merge-red rule are not negotiable, but neither is satisfied by a gate whose failures nobody can attribute. Prefer focused, change-aware lanes for Docker/image/browser work where that does not drop a required context. If a gate is expected to be temporary, write its **retirement condition** down with it — an incident-driven rule with no exit condition never gets one.
+- **README files are agent-facing operational documentation — update them in the SAME PR** that changes commands, paths, the merge or deploy flow, package consumption, or onboarding. A README must never teach an ungated merge, a direct deploy, or point a reader at `CLAUDE.md` as the deeper project doc (those are `@AGENTS.md` shims, and some agents treat `@import` as literal text — the canonical agent guidance is `AGENTS.md`). Defer agent rules to `AGENTS.md` rather than restating them; a second copy drifts.
+
 > Detail and rationale live in this repo's own `AGENTS.md` below. This CORE is the non-negotiable shared minimum.
 <!-- AGENTS-CORE:END -->
 
@@ -77,18 +94,49 @@ Canonical agent instructions for this repository. Compatibility files (`CLAUDE.m
 
 REST API for TV show metadata, episodes, air dates, and summaries. Also provides an MCP server for AI assistants.
 
-## Git Workflow (Standard)
-- **Commit Messages:** Use descriptive prefixes (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`).
-- **Branching:** Work on feature branches from latest `origin/main`; never push directly to `main`.
-- **Merge:** Follow the synced CORE merge discipline above: merge only through the project's gated path after required checks are green.
-- **Pre-commit:** Ensure pre-commit hooks pass before pushing.
+## Overview
+
+REST API for TV show metadata, episodes, air dates, and summaries. Also
+provides an MCP server for AI assistants.
+
+Canonical agent instructions for this repository. Compatibility files
+(`CLAUDE.md`, `.github/copilot-instructions.md`) point here.
 
 ## LLM Policy
 - Natural-language queries are routed through whatever OpenAI-compatible gateway is set in `LLM_API_URL` (local Ollama, vLLM, llama.cpp server, hosted endpoint, ...).
 - Do not add Claude/OpenAI/Anthropic external API endpoints or runtime fallbacks to committed code paths. `scripts/check_no_external_llm.py` enforces this in pre-commit and CI.
 - Optional `ALLOWED_LLM_HOSTS` env var (comma-separated hostnames) gates which hosts the gateway URL may resolve to. Empty/unset (default) means no host enforcement — any configured URL is accepted.
 
-## Deployment
+## Architecture
+
+```
+app/
+├── api/endpoints/       # REST routes
+│   ├── shows.py         # /shows/* endpoints
+│   └── mcp.py           # /mcp JSON-RPC endpoint
+├── core/
+│   ├── cache.py         # Redis caching, @cached decorator
+│   ├── config.py        # Pydantic settings
+│   └── constants.py     # TTLs, version, URLs
+├── models/
+│   ├── schemas.py       # ShowSchema, EpisodeSchema
+│   └── responses.py     # PaginatedResponse
+├── services/
+│   ├── show_service.py  # Business logic
+│   ├── epguides.py      # External API calls
+│   └── llm_service.py   # Natural language queries
+└── tests/               # 95% coverage floor
+```
+
+**Flow:** Endpoints -> Services -> External APIs, with Redis caching at service layer.
+
+## Git Workflow (Standard)
+- **Commit Messages:** Use descriptive prefixes (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`).
+- **Branching:** Work on feature branches from latest `origin/main`; never push directly to `main`.
+- **Merge:** Follow the synced CORE merge discipline above: merge only through the project's gated path after required checks are green.
+- **Pre-commit:** Ensure pre-commit hooks pass before pushing.
+
+## Deployment Workflow
 
 All changes flow through git. Deployment automation is operator-side and
 not part of this project's published surface — contributors merge a PR
@@ -139,29 +187,6 @@ Run single test:
 ```bash
 pytest app/tests/test_endpoints.py::test_function -v
 ```
-
-## Architecture
-
-```
-app/
-├── api/endpoints/       # REST routes
-│   ├── shows.py         # /shows/* endpoints
-│   └── mcp.py           # /mcp JSON-RPC endpoint
-├── core/
-│   ├── cache.py         # Redis caching, @cached decorator
-│   ├── config.py        # Pydantic settings
-│   └── constants.py     # TTLs, version, URLs
-├── models/
-│   ├── schemas.py       # ShowSchema, EpisodeSchema
-│   └── responses.py     # PaginatedResponse
-├── services/
-│   ├── show_service.py  # Business logic
-│   ├── epguides.py      # External API calls
-│   └── llm_service.py   # Natural language queries
-└── tests/               # 95% coverage floor
-```
-
-**Flow:** Endpoints -> Services -> External APIs, with Redis caching at service layer.
 
 ## REST ↔ MCP coverage matrix
 
@@ -280,3 +305,13 @@ Setup: `make setup` (runs `uv sync` to create `.venv` from `uv.lock`, then insta
 - Python 3.14 (pinned via committed `.python-version`; `requires-python = ">=3.14"`)
 - All I/O async
 - Ruff for linting and formatting
+## Operational Rules
+
+The shared rules are in the AGENTS-CORE block above and are the authority — do
+not restate them here. What is specific to this repo:
+
+- **This repository is public.** Never reference private repositories, internal
+  hostnames, IP addresses, or infrastructure details in code, comments, issues,
+  PRs, or commit messages.
+- **Deployment is automatic** — see `Deployment Workflow` above. Do not deploy
+  by hand except for an active incident needing immediate rollout.
