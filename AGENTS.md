@@ -1,6 +1,6 @@
 # epguides-api — Agent Guidance
 
-<!-- AGENTS-CORE:BEGIN — generated from frecar/dotfiles code/AGENTS-CORE-public.md. Do NOT edit inline; run code/sync-agents-core.sh. -->
+<!-- AGENTS-CORE:BEGIN — generated from frecar/dotfiles agent-harness/policy/AGENTS-CORE-public.md. Do NOT edit inline; run agent-harness/policy/sync-agents-core.sh. -->
 ## Cross-agent core rules
 
 These rules bind **every** agent working in this repo — Claude, Codex, OpenCode — regardless of tool. They are the shared contract; your tool-specific file (`CLAUDE.md` / `AGENTS.md` / your config) adds only tool mechanics on top. This block is machine-synced — do not edit it inline.
