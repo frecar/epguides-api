@@ -172,6 +172,66 @@ This repo defines and adheres to a Python-service quality baseline:
 - **Makefile contract:** `make help / dev / stop / lint / fix / test / ci / build` — same surface as other Python services I maintain (aliases `up`/`down`/`deploy-prod` retained for existing muscle memory).
 - **Deploy:** auto-update timer rebuilds the container daily.
 
+## CI latency baseline — this repo is the fast reference point
+
+Measured 2026-08-17 over the last four successful `ci.yml` runs (mean per job):
+
+| job | mean | note |
+|---|---|---|
+| Trivy image scan | **48s** | the critical path |
+| Test | 39s | pytest + 95% coverage floor |
+| Security Audit | 38s | `pip-audit --strict --require-hashes` |
+| Docker build | 21s | multi-stage |
+| Trivy fs scan | 17s | reads `uv.lock` |
+| Type Check | 16s | mypy |
+| Lint | 12s | ruff |
+| gitleaks | 6s | |
+| ci-gate | 4s | |
+
+Jobs run in parallel, so wall-clock is the slowest lane: **~48s, and it is the
+image scan — not the test suite.** That is worth stating plainly, because "CI is
+slow, cut tests" is the reflex and it would buy nothing here. AGENTS-CORE makes
+the same point generally: measure before claiming, because in sampled runs the
+critical path is usually image scan, browser smoke or Trivy.
+
+**What actually keeps it fast** — none of it is "fewer gates". This repo runs
+pytest with a 95% floor, an OpenAPI contract gate, two Trivy scans, pip-audit,
+mypy, ruff and gitleaks:
+
+- **Small dependency graph**, installed from a committed `uv.lock` with
+  `--frozen`, so no resolution happens at build time.
+- **No frontend and no browser lane.** No npm install, no Playwright download,
+  no browser smoke — the single biggest cost class in the heavier repos.
+- **Small app surface**, so the test suite is genuinely short rather than
+  trimmed.
+- **GitHub-hosted runners.** As a public repo it cannot depend on private
+  reusable workflows or a privately-hosted registry mirror, which turns out to
+  cost less than it saves: no self-hosted queueing, and the tool cache is warm.
+
+That last one is a **constraint, not a choice**, and it cuts both ways. Do not
+"fix" this repo by importing a private-repo CI pattern: private reusable
+workflows and internal mirrors are unavailable here by construction, and a
+change that assumes them will fail for outside contributors, not just for us.
+
+### Adding a gate here has a budget
+
+AGENTS-CORE already requires four things in the PR for any new CI gate: the
+failure class it catches, its **measured** runtime, whether it is
+required/advisory/scheduled, and the change classes that should run it. In this
+repo, two more:
+
+- **State the expected latency against the ~48s wall-clock**, and say which lane
+  it lands in. A 10s addition to `Lint` (12s) is free; the same 10s on `Trivy
+  image scan` moves the critical path and is the only lane where it shows up.
+- **Say how it comes back out.** If it regresses the baseline, what gets
+  reverted, or demoted to advisory, or moved to a schedule. An incident-driven
+  gate with no exit condition never acquires one.
+
+Nothing above is licence to weaken the existing gates. The 95% floor, both Trivy
+scans, pip-audit and the contract gate stay; the point is that this repo is fast
+*with* them, so a proposal to drop one to buy latency is answering the wrong
+question — measure the lane first.
+
 ## Commands
 
 ```bash
