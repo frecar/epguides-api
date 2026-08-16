@@ -195,11 +195,15 @@ uv run pytest app/tests/test_endpoints.py::test_function -v  # one specific test
 1. Branch off `main` with a conventional prefix (`feat/`, `fix/`, `chore/`, `docs/`)
 2. Commit. Pre-commit runs ruff + version bump + 95% coverage tests
 3. Push and open a PR
-4. Squash merge
+4. Merge only once required checks are green — see `AGENTS.md` for the merge
+   workflow. Do not merge from the web UI or with a bare `gh pr merge`: both
+   bypass the required-checks gate.
 
 **Deploy:** the public instance auto-rebuilds daily. Contributors don't deploy manually — merge a PR and the change goes live within a day.
 
-Architecture, caching patterns, and gotchas live in [CLAUDE.md](./CLAUDE.md) — read that before deeper changes.
+Architecture, caching patterns, and gotchas live in [AGENTS.md](./AGENTS.md) — read that
+before deeper changes. (`CLAUDE.md` is only a one-line shim that imports it, and tools
+reading files directly treat that import as literal text, so it is not the doc to follow.)
 
 ## Data Sources
 
