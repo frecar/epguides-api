@@ -30,7 +30,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  audit:
+  scheduled-audit:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
