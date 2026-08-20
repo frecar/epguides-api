@@ -44,10 +44,21 @@ _OSV_ACTION = "google/osv-scanner-action/osv-scanner-action@8deb546fdb875b9996d2
 
 def _local_hooks() -> dict[str, dict]:
     config = yaml.safe_load(PRE_COMMIT.read_text(encoding="utf-8"))
+    # Every `repo: local` block, not just the first. This config has carried
+    # more than one for a long time, so a `return` on the first silently hid
+    # the rest — and a new block added above made hooks look DELETED rather
+    # than shadowed. The duplicate check keeps a real id collision loud
+    # instead of last-one-wins.
+    hooks: dict[str, dict] = {}
     for repo in config["repos"]:
-        if repo.get("repo") == "local":
-            return {hook["id"]: hook for hook in repo["hooks"]}
-    raise AssertionError("no `repo: local` block in .pre-commit-config.yaml")
+        if repo.get("repo") != "local":
+            continue
+        for hook in repo["hooks"]:
+            hook_id = hook["id"]
+            assert hook_id not in hooks, f"duplicate local hook id {hook_id!r} across `repo: local` blocks"
+            hooks[hook_id] = hook
+    assert hooks, "no `repo: local` block in .pre-commit-config.yaml"
+    return hooks
 
 
 # --------------------------------------------------------------------------

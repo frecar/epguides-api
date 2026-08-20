@@ -21,16 +21,33 @@ repos:
       - id: no-commit-to-branch
         args: ['--branch', 'main']
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Single ruff version of record — keep in lockstep with the
-    # [dependency-groups].dev ruff pin (ruff==0.15.17) in pyproject.toml
-    # so pre-commit and CI never format/lint against different ruff
-    # versions (the classic drift trap).
-    rev: v0.15.22
+  # Ruff via `uv run` — uv.lock is the SINGLE ruff version of record.
+  #
+  # The block this replaces carried `rev: v0.15.22` plus a note asking the
+  # reader to "keep in lockstep with the [dependency-groups].dev ruff pin
+  # (ruff==0.15.17)". All three had drifted apart: the note said 0.15.17, the
+  # rev said 0.15.22, and uv.lock resolved 0.16.3. That is the case against a
+  # hand-maintained second pin, written by the pin itself.
+  #
+  # Re-pinning the rev only resets the clock — dependency bumps touch
+  # pyproject/uv.lock and never a mirror rev, so the gap re-opens on every
+  # bump by construction. `repo: local` + `uv run --frozen ruff` removes the
+  # second pin entirely: no `rev:` left to drift, and pre-commit runs the exact
+  # same ruff as CI.
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        name: ruff (uv run)
+        entry: uv run --frozen ruff check --fix --exit-non-zero-on-fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       - id: ruff-format
+        name: ruff-format (uv run)
+        entry: uv run --frozen ruff format
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
 
   # Secret-scanning gate. Runs `gitleaks git --pre-commit --redact --staged`
   # over the STAGED diff on every commit and blocks when a credential is
