@@ -67,16 +67,11 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 
     async with httpx.AsyncClient() as client:
         # Search for shows
-        response = await client.get(
-            "https://epguides.frecar.no/shows/search",
-            params={"query": "breaking bad"}
-        )
+        response = await client.get("https://epguides.frecar.no/shows/search", params={"query": "breaking bad"})
         shows = response.json()
 
         # Get episodes
-        response = await client.get(
-            "https://epguides.frecar.no/shows/BreakingBad/episodes"
-        )
+        response = await client.get("https://epguides.frecar.no/shows/BreakingBad/episodes")
         episodes = response.json()
     ```
 

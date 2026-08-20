@@ -130,6 +130,8 @@ def test_guard_wired_into_all_enforcement_surfaces() -> None:
     assert script in ci, "the lint job must run the digest-pin guard so it gates"
 
     config = yaml.safe_load((_REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
-    local = next(r for r in config["repos"] if r.get("repo") == "local")
+    # Every `repo: local` block, not just the first — this config carries
+    # several, so `next(...)` inspected only the earliest.
+    local = {"hooks": [h for r in config["repos"] if r.get("repo") == "local" for h in r["hooks"]]}
     entries = [h["entry"] for h in local["hooks"]]
     assert any(script in e for e in entries), "a pre-commit hook must run the digest-pin guard"

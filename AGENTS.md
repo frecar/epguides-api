@@ -278,8 +278,7 @@ Last verified 2026-05-10 (#197).
 
 ```python
 @cached("show:{show_id}", ttl=TTL_7_DAYS, model=ShowSchema, key_transform=normalize_show_id)
-async def get_show(show_id: str) -> ShowSchema | None:
-    ...
+async def get_show(show_id: str) -> ShowSchema | None: ...
 ```
 
 TTL constants (`app/core/cache.py`):
