@@ -2,3 +2,5 @@
 mkdocs==1.6.1
 mkdocs-material==9.7.7
 pymdown-extensions>=11.0.1
+# Security floor for MkDocs' transitive dependency (GHSA-65pc-fj4g-8rjx).
+idna>=3.15
