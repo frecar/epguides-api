@@ -532,6 +532,10 @@ jobs:
   # ===== END managed-public-ci-template: ci-trivy-buildx =====
 
   gitleaks:
+    # INTENTIONAL PUBLIC-REPO EXEMPTION: keep this credential-less,
+    # self-contained implementation. Public fork PRs cannot consume private
+    # shared actions, so this job must not be consolidated with the private
+    # consumers' canonical implementation.
     # Server-side secret-scanning BACKSTOP to the local `gitleaks` pre-commit
     # hook. The local hook scans the STAGED diff at commit time but is
     # bypassable (`git commit --no-verify`, `SKIP=gitleaks`, commenting out the
