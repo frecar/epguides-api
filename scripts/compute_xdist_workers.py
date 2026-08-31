@@ -5,6 +5,17 @@ The public CI job runs on GitHub-hosted hardware whose size can change. This
 selector therefore reads scheduler/cgroup-visible capacity instead of assuming
 a runner topology. The final cap is the suite's same-commit measured scaling
 knee, not a machine-size constant.
+
+DELIBERATE, PERMANENT VENDORED COPY (decided 2026-08-31) -- not a pending
+migration. Several sibling private repos have converged the equivalent logic
+into a small shared internal package, consumed as a pinned git dependency.
+This repo is public and ships `scripts/check_no_private_git_deps.py`
+specifically to reject any owner-scoped git dependency other than its own, so
+`uv sync` here must never need to clone a private repository -- doing so would
+fail for every outside contributor and every public fork PR's CI run (no
+injected credential is available there). Keep this file's logic in sync by
+hand with the shared internal module when either changes; do not add a
+private-repo dependency here to "finish" a migration to it.
 """
 
 from __future__ import annotations
