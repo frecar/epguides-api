@@ -20,7 +20,7 @@ dependencies = [
     "httpx==0.28.1",
     "python-dateutil==2.9.0.post0",
     "prometheus-client==0.26.0",
-    "sentry-sdk==2.68.0",  # optional — only active when SENTRY_DSN is set
+    "sentry-sdk==2.68.1",  # optional — only active when SENTRY_DSN is set
     "orjson==3.12.0",
     "setuptools==84.0.0",  # keep setuptools current — security floor for transitives
     "msgpack>=1.2.1",
@@ -33,7 +33,7 @@ dev = [
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
-    "ruff==0.16.4",
+    "ruff==0.16.5",
     "pre-commit==4.6.2",
     "mypy==2.3.1",
     "pip-audit==2.10.1",
