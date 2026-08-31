@@ -308,11 +308,18 @@ def test_redoc_accessible():
     assert response.status_code == 200
 
 
-def test_root_redirects_to_docs():
-    """Test that root URL redirects to /docs."""
+def test_root_index():
+    """Test that root URL returns a terminal API index."""
     response = client.get("/", follow_redirects=False)
-    assert response.status_code == 307
-    assert response.headers["location"] == "/docs"
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["service"] == "epguides-api"
+    assert data["docs_url"] == "/docs"
+    assert data["ready_url"] == "/health/ready"
+
+    head_response = client.head("/", follow_redirects=False)
+    assert head_response.status_code == 200
 
 
 # =============================================================================

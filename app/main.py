@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import JSONResponse, Response
 
 from app.api.endpoints import mcp, shows
 from app.core.cache import (
@@ -320,9 +320,25 @@ app.include_router(mcp.router, tags=["MCP"])
 
 
 @app.get("/", include_in_schema=False)
-def root_redirect() -> RedirectResponse:
-    """Redirect root to API documentation."""
-    return RedirectResponse(url="/docs")
+def root_index() -> dict[str, str]:
+    """Return a terminal API index for browsers and uptime probes."""
+    return {
+        "status": "ok",
+        "service": "epguides-api",
+        "name": settings.PROJECT_NAME,
+        "version": VERSION,
+        "docs_url": "/docs",
+        "openapi_url": "/openapi.json",
+        "health_url": "/health",
+        "ready_url": "/health/ready",
+        "shows_url": "/shows",
+    }
+
+
+@app.head("/", include_in_schema=False)
+def root_head() -> Response:
+    """Return a terminal success for HEAD probes against the API root."""
+    return Response(status_code=status.HTTP_200_OK)
 
 
 @app.get("/health", tags=["Health"], summary="💚 Liveness check")
