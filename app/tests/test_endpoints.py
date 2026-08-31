@@ -23,11 +23,18 @@ async def async_client():
 
 
 @pytest.mark.asyncio
-async def test_root_redirect(async_client: AsyncClient):
-    """Test root URL redirects to docs."""
+async def test_root_index(async_client: AsyncClient):
+    """Test root URL returns a terminal API index."""
     response = await async_client.get("/", follow_redirects=False)
-    assert response.status_code == 307
-    assert response.headers["location"] == "/docs"
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["service"] == "epguides-api"
+    assert data["docs_url"] == "/docs"
+    assert data["openapi_url"] == "/openapi.json"
+
+    head_response = await async_client.head("/", follow_redirects=False)
+    assert head_response.status_code == 200
 
 
 @pytest.mark.asyncio
