@@ -103,6 +103,13 @@ addopts = "-q --tb=short"
 # the cwd to sys.path the way `python -m pytest` does. Without this,
 # `from app.x import y` fails to import in test discovery.
 pythonpath = ["."]
+# Bound /tmp/pytest-of-<user>/ growth on a bare ad-hoc pytest run (outside
+# any TMPDIR-isolating wrapper). tmp_path_retention_count (not
+# _policy="failed", which can eagerly race a Python 3.14 monkeypatched
+# os.fstat/lstat teardown) is the safe lever — cleanup still happens at
+# pytest's own existing safe timing (next session start), just retaining
+# fewer dirs.
+tmp_path_retention_count = 1
 
 [tool.coverage.run]
 source = ["app"]
