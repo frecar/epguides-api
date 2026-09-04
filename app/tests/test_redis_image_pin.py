@@ -5,8 +5,8 @@ upstream on every release within the 7.x line — a fresh pull can silently move
 past (or, via any registry content change, drift off) whatever build was
 audited, with zero record of which bytes actually ran. Redis's July 2026
 patch round (``6.2.23``, ``7.2.15``, ``7.4.10``, ``8.2.8``, ``8.4.5``,
-``8.6.5``, ``8.8.1``) fixed a set of post-auth memory-safety CVEs; ``7.4.10``
-is the fixed release for this repo's 7.4 line. ``7.4.9`` was itself a named
+``8.6.5``, ``8.8.1``) fixed a set of post-auth memory-safety CVEs; ``7.4.11``
+adds the fix required by this repo's 7.4 line. ``7.4.9`` was itself a named
 vulnerable stock build (Streams shared-NACK use-after-free) targeted by public
 authenticated RCE proofs of concept.
 
@@ -16,7 +16,7 @@ workflow's ``redis`` service container):
 
   * the image is pinned to an exact ``tag@sha256:<64hex>`` — never a bare/
     floating tag, so the digest is reproducible and tamper-evident; and
-  * the pinned version is ``>= 7.4.10`` (the CVE-2026 fixed floor) — so a
+  * the pinned version is ``>= 7.4.11`` (the CVE-2026 fixed floor) — so a
     future edit can't silently regress to a pre-fix build.
 
 A future major-line bump (e.g. redis 8.x) only needs ``MIN_REDIS_VERSION``
@@ -32,7 +32,7 @@ import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
-MIN_REDIS_VERSION = (7, 4, 10)
+MIN_REDIS_VERSION = (7, 4, 11)
 
 # name:tag@sha256:<64hex> — both a human-reviewable tag AND an immutable digest.
 _PINNED_RE = re.compile(r"^[^@\s:]+:[^@\s]+@sha256:[0-9a-f]{64}$")
@@ -91,7 +91,7 @@ def test_redis_images_are_digest_pinned() -> None:
 
 
 def test_redis_images_are_at_or_above_the_cve_2026_fixed_floor() -> None:
-    """CVE-2026 fixed 7.x floor is 7.4.10 — see the module docstring for the CVE list."""
+    """CVE-2026 fixed 7.x floor is 7.4.11 — see the module docstring for the CVE list."""
     sources = _redis_image_sources()
     assert sources
 
