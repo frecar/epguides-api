@@ -1,4 +1,4 @@
-name: Trivy fs nightly sweep
+name: EPGuides API Trivy fs nightly sweep
 # managed-public-ci-template: trivy-fs-nightly — DO NOT HAND-EDIT.
 # This file is a managed copy kept byte-identical to the canonical CI
 # template. Hand-edits are overwritten by the next template sync; change
