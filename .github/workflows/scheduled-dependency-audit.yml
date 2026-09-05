@@ -1,4 +1,4 @@
-name: Scheduled dependency audit
+name: EPGuides API scheduled dependency audit
 
 # OSV-Scanner runs per-PR in ci.yml, which catches a vulnerability a PR
 # INTRODUCES and nothing else. A repo with no PR activity accumulates live CVEs
