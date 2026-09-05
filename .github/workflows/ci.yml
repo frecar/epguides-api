@@ -1,4 +1,4 @@
-name: CI
+name: EPGuides API CI
 
 on:
   push:
