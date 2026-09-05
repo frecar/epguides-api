@@ -1,4 +1,4 @@
-name: Strip closed-issue status label
+name: EPGuides API strip closed-issue status label
 
 # A closed issue must never carry an active status:* label
 # (triage/ready/in-progress/blocked/burn-in) — a status-scoped search, a project

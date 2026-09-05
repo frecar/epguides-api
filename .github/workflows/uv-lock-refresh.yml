@@ -1,4 +1,4 @@
-name: uv lock refresh
+name: EPGuides API uv lock refresh
 
 # Dependabot widens pyproject.toml constraints, but uv.lock isn't regenerated.
 # `uv sync --frozen` then keeps installing the OLD locked version even though
