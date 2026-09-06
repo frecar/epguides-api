@@ -92,6 +92,18 @@ UPSTREAM_REQUESTS = Counter(
     labelnames=["source", "outcome"],
 )
 
+BY_IMDB_BRIDGE_MISS = Counter(
+    "epguides_by_imdb_bridge_miss_total",
+    "GET /shows/by-imdb/{imdb_id} requests that 404'd after both the local "
+    "reverse-index and the TVMaze bridge missed. Neither stage covers a show "
+    "that has never been fetched by key AND that TVMaze's dedicated "
+    "/lookup/shows?imdb= endpoint doesn't have indexed (a confirmed gap in "
+    "that endpoint even for well-known shows — see #474). This counter is "
+    "the volume signal for whether that gap is worth closing with a bulk "
+    "reverse-index build; it carries no labels because the failure is "
+    "structural, not per-source.",
+)
+
 UPSTREAM_RESPONSE_AGE = Histogram(
     "epguides_upstream_response_age_seconds",
     "Round-trip time for successful upstream HTTP requests (fetch start → response received)",
@@ -210,6 +222,11 @@ def record_upstream_request(source: str, outcome: str) -> None:
 def observe_upstream_response_age(source: str, duration_seconds: float) -> None:
     """Record an upstream response latency observation."""
     UPSTREAM_RESPONSE_AGE.labels(source=source).observe(duration_seconds)
+
+
+def record_by_imdb_bridge_miss() -> None:
+    """Increment the by-imdb bridge-miss counter (both lookup stages exhausted)."""
+    BY_IMDB_BRIDGE_MISS.inc()
 
 
 def render_metrics() -> tuple[bytes, str]:

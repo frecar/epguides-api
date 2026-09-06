@@ -32,6 +32,7 @@ from app.core.cache import (
 )
 from app.core.config import settings
 from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
+from app.core.metrics import record_by_imdb_bridge_miss
 from app.models.schemas import EpisodeSchema, SeasonSchema, ShowSchema, create_show_schema
 from app.services import epguides
 
@@ -211,6 +212,19 @@ async def _lookup_local_by_imdb(imdb_id: str) -> ShowSchema | None:
     return await get_show(epguides_key)
 
 
+def _record_by_imdb_miss(imdb_id: str, reason: str) -> None:
+    """Log + count a by-imdb bridge miss (both lookup stages exhausted).
+
+    `reason` distinguishes where Stage 2 gave up (log-only — the counter
+    itself carries no labels, see `record_by_imdb_bridge_miss`) so a log
+    search can tell "TVMaze doesn't have this ID" apart from "TVMaze had
+    it but we couldn't bridge the title to our catalog" without needing a
+    new metric label per case.
+    """
+    logger.info("by-imdb bridge miss for %s (%s)", imdb_id, reason)
+    record_by_imdb_bridge_miss()
+
+
 async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
     """
     Look up a show by its IMDB ID and bridge to the local epguides catalog.
@@ -239,7 +253,35 @@ async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
     any show that's been visited via the standard /shows/{key} endpoint.
 
     Returns None only when both stages fail. The endpoint maps None to
-    a 404.
+    a 404, and this records `epguides_by_imdb_bridge_miss_total` so the
+    gap's real volume is measurable (#474).
+
+    ## No cheap "Stage 1.5" exists (#474)
+
+    #474 proposed a Stage 1.5 that scans `get_all_shows()` for a matching
+    `imdb_id` before falling back to TVMaze, on the premise that "the full
+    catalogue already carries each show's own imdb_id field." That premise
+    does not hold: `_get_all_shows_raw()` builds the catalogue from the
+    epguides master-list CSV via `_map_csv_row_to_dict`, which hardcodes
+    `imdb_id=None` (the master CSV has no imdb column). `imdb_id` is only
+    ever populated per-show, lazily, by `_enrich_show_metadata` scraping
+    that show's own epguides page inside `get_show()` — and that value
+    lives solely in the per-show `show:{id}` cache, never written back to
+    `shows:all:raw` or `show_index`. So `get_all_shows()` never carries a
+    populated `imdb_id`, for any show, and a scan over it can never match.
+
+    Separately confirmed (live, against the real TVMaze API): TVMaze's own
+    dedicated `/lookup/shows?imdb=` index (Stage 2) is measurably less
+    complete than TVMaze's *general* show search — `/singlesearch/shows`
+    returns the correct `externals.imdb` for shows the dedicated lookup
+    endpoint returns null for (reproduced for tt13443470, tt2699128,
+    tt0434665). A bulk index built from TVMaze's full show database (or
+    an equivalent external dataset) would close more of the gap, but is a
+    materially bigger feature — new external bulk ingestion, rate
+    limiting, and a resumable background build — than a per-request
+    lookup stage, and isn't justified without volume data. Hence the
+    counter here: build that only if it shows the gap is more than a
+    long-tail handful of shows.
 
     Args:
         imdb_id: IMDB show identifier (e.g. "tt0903747").
@@ -271,15 +313,18 @@ async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
     # Stage 2: TVMaze fallback for shows the index hasn't seen yet
     tvmaze = await epguides.lookup_tvmaze_by_imdb(imdb_id)
     if not tvmaze:
+        _record_by_imdb_miss(imdb_id, "tvmaze_lookup_miss")
         return None
 
     title = tvmaze.get("name") or ""
     if not title:
+        _record_by_imdb_miss(imdb_id, "tvmaze_missing_name")
         return None
 
     # Bridge TVMaze title → local epguides catalog
     by_title = await _find_show_by_title(title)
     if not by_title:
+        _record_by_imdb_miss(imdb_id, "title_bridge_miss")
         return None
 
     # Populate the reverse index opportunistically so future lookups for

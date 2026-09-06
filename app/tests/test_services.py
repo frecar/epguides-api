@@ -2916,12 +2916,17 @@ def test_parse_date_invalid_format():
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.record_by_imdb_bridge_miss")
 @patch("app.services.show_service.cache_set")
 @patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.services.epguides.get_all_shows_metadata")
 @patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
-async def test_get_show_by_imdb_id_happy_path(mock_lookup, mock_metadata, _mock_get, _mock_set):
-    """TVMaze returns a hit, title bridges to local catalog → merged ShowSchema."""
+async def test_get_show_by_imdb_id_happy_path(mock_lookup, mock_metadata, _mock_get, _mock_set, mock_record_miss):
+    """TVMaze returns a hit, title bridges to local catalog → merged ShowSchema.
+
+    Also asserts the by-imdb miss counter is NOT recorded on a successful
+    bridge — it's a metric for the failure path only (#474).
+    """
     mock_lookup.return_value = {"name": "Breaking Bad"}
     mock_metadata.return_value = [
         {"directory": "breakingbad", "title": "Breaking Bad", "network": "AMC", "run time": "60 min"},
@@ -2934,22 +2939,29 @@ async def test_get_show_by_imdb_id_happy_path(mock_lookup, mock_metadata, _mock_
     assert result.imdb_id == "tt0903747"
     assert result.title == "Breaking Bad"
     assert result.network == "AMC"
+    mock_record_miss.assert_not_called()
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.record_by_imdb_bridge_miss")
 @patch("app.services.show_service.cache_get", return_value=None)  # Stage 1 (reverse index) miss
 @patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
-async def test_get_show_by_imdb_id_tvmaze_404(mock_lookup, _mock_cache_get):
-    """TVMaze has no record for this IMDB ID → None."""
+async def test_get_show_by_imdb_id_tvmaze_404(mock_lookup, _mock_cache_get, mock_record_miss):
+    """TVMaze has no record for this IMDB ID → None, and the bridge-miss
+    counter fires (#474) — this is the volume signal for whether a bulk
+    reverse-index build is worth its cost; see get_show_by_imdb_id's
+    docstring for why a cheap Stage 1.5 isn't available instead."""
     mock_lookup.return_value = None
     assert await show_service.get_show_by_imdb_id("tt9999999") is None
+    mock_record_miss.assert_called_once()
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.record_by_imdb_bridge_miss")
 @patch("app.services.show_service.cache_get", return_value=None)  # Stage 1 (reverse index) miss
 @patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
-async def test_get_show_by_imdb_id_tvmaze_missing_name(mock_lookup, _mock_cache_get):
-    """TVMaze hit but no `name` field → cannot bridge → None.
+async def test_get_show_by_imdb_id_tvmaze_missing_name(mock_lookup, _mock_cache_get, mock_record_miss):
+    """TVMaze hit but no `name` field → cannot bridge → None, miss counter fires.
 
     Explicitly patches cache_get so Stage 1 (reverse index) misses and
     we fall through to TVMaze. CI has a real Redis that other tests
@@ -2957,21 +2969,49 @@ async def test_get_show_by_imdb_id_tvmaze_missing_name(mock_lookup, _mock_cache_
     on test ordering."""
     mock_lookup.return_value = {"id": 1}
     assert await show_service.get_show_by_imdb_id("tt0903747") is None
+    mock_record_miss.assert_called_once()
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.record_by_imdb_bridge_miss")
 @patch("app.services.show_service.cache_set")
 @patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.services.epguides.get_all_shows_metadata")
 @patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
-async def test_get_show_by_imdb_id_not_in_local_catalog(mock_lookup, mock_metadata, _mock_get, _mock_set):
-    """TVMaze knows the show but the local epguides catalog doesn't → None."""
+async def test_get_show_by_imdb_id_not_in_local_catalog(
+    mock_lookup, mock_metadata, _mock_get, _mock_set, mock_record_miss
+):
+    """TVMaze knows the show but the local epguides catalog doesn't → None,
+    miss counter fires."""
     mock_lookup.return_value = {"name": "An Obscure Show That epguides Lacks"}
     mock_metadata.return_value = [
         {"directory": "got", "title": "Game of Thrones", "network": "HBO", "run time": "60 min"},
     ]
 
     assert await show_service.get_show_by_imdb_id("tt7777777") is None
+    mock_record_miss.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_all_shows_never_carries_imdb_id():
+    """`get_all_shows()` / `_get_all_shows_raw()` never populate `imdb_id`
+    from the master-list CSV (it has no imdb column) — regression guard for
+    #474, where a proposed fix assumed the opposite and would have been
+    dead code. `imdb_id` is only ever populated per-show via `get_show()`.
+    """
+    with (
+        patch("app.services.show_service.cache_get", return_value=None),
+        patch("app.services.show_service.cache_set"),
+        patch(
+            "app.services.epguides.get_all_shows_metadata",
+            new_callable=AsyncMock,
+            return_value=[{"directory": "breakingbad", "title": "Breaking Bad", "network": "AMC"}],
+        ),
+    ):
+        shows = await show_service.get_all_shows()
+
+    assert len(shows) == 1
+    assert shows[0].imdb_id is None
 
 
 @pytest.mark.asyncio
