@@ -53,7 +53,7 @@ def parse_date_string(date_string: str) -> datetime | None:
         date_string: Date string to parse.
 
     Returns:
-        Parsed datetime or None if unparseable.
+        Parsed datetime or None if unparsable.
     """
     if not date_string:
         return None
@@ -243,6 +243,7 @@ _TVMAZE_COLUMNS = {"season": 1, "number": 2, "release_date": 3, "title": 4}
 
 # TVMaze API base URL
 _TVMAZE_API_URL = "https://api.tvmaze.com"
+_TVMAZE_API_HOST = httpx.URL(_TVMAZE_API_URL).host
 
 
 # =============================================================================
@@ -250,16 +251,27 @@ _TVMAZE_API_URL = "https://api.tvmaze.com"
 # =============================================================================
 
 
-async def _tvmaze_get(url: str, **kwargs: Any) -> httpx.Response | None:
+async def _tvmaze_get(url: str, *, follow_redirects: bool = False, **kwargs: Any) -> httpx.Response | None:
     """GET a TVMaze API endpoint with metric recording.
 
     Returns the response on HTTP 200, None on any error or non-200 status.
     Records tvmaze upstream request and latency metrics.
+
+    ``follow_redirects`` is opt-in for endpoints TVMaze documents as
+    redirecting (``/lookup/shows`` answers a hit with a 301 to
+    ``/shows/<id>``). A redirect that leaves the TVMaze API host is treated
+    as an error rather than trusted.
     """
+    if follow_redirects:
+        kwargs["follow_redirects"] = True
     start = time.monotonic()
     try:
         async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
             response = await client.get(url, **kwargs)
+            if follow_redirects and (response.url.scheme != "https" or response.url.host != _TVMAZE_API_HOST):
+                record_upstream_request("tvmaze", "http_error")
+                logger.warning("TVMaze %s redirected off the API origin to %s", url, response.url)
+                return None
             if response.status_code != 200:
                 record_upstream_request("tvmaze", "http_error")
                 logger.debug("TVMaze %s returned HTTP %d", url, response.status_code)
@@ -318,6 +330,10 @@ async def lookup_tvmaze_by_imdb(imdb_id: str) -> dict[str, Any] | None:
     Closes the user-reported gap (#229): title search can hit the remake
     instead of the original; IMDB ID is unambiguous.
 
+    TVMaze answers a hit with ``301 Location: /shows/<tvmaze_id>`` rather
+    than a 200 body, so the redirect must be followed. Before #474 it was
+    not, and every hit was misread as a miss.
+
     Args:
         imdb_id: IMDB show identifier, e.g. "tt0903747" (Breaking Bad).
             Format is validated upstream of this helper.
@@ -329,7 +345,7 @@ async def lookup_tvmaze_by_imdb(imdb_id: str) -> dict[str, Any] | None:
     if not imdb_id:
         return None
 
-    response = await _tvmaze_get(f"{_TVMAZE_API_URL}/lookup/shows", params={"imdb": imdb_id})
+    response = await _tvmaze_get(f"{_TVMAZE_API_URL}/lookup/shows", params={"imdb": imdb_id}, follow_redirects=True)
     if not response:
         return None
     try:

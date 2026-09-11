@@ -218,7 +218,7 @@ def _record_by_imdb_miss(imdb_id: str, reason: str) -> None:
     `reason` distinguishes where Stage 2 gave up (log-only — the counter
     itself carries no labels, see `record_by_imdb_bridge_miss`) so a log
     search can tell "TVMaze doesn't have this ID" apart from "TVMaze had
-    it but we couldn't bridge the title to our catalog" without needing a
+    it but no catalogue show matches (or several do)" without needing a
     new metric label per case.
     """
     logger.info("by-imdb bridge miss for %s (%s)", imdb_id, reason)
@@ -237,51 +237,35 @@ async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
     Two-stage lookup:
 
     1. **Local reverse index first** — `imdb_to_key:{imdb_id}` cache lookup,
-       populated lazily by `get_show` every time a show is enriched with
-       its imdb_id. Covers any show that's been visited at least once via
-       `/shows/{key}`. Fast: single Redis GET + cached `get_show` call.
+       populated by `get_show` whenever a show is enriched with its imdb_id
+       and by Stage 2 on every successful bridge. Fast: single Redis GET +
+       cached `get_show` call.
 
-    2. **TVMaze fallback** — `/lookup/shows?imdb=<id>` returns the matching
-       show by IMDB ID directly, then bridges via title to the local
-       catalog. Covers shows the reverse index hasn't seen yet, IF
-       TVMaze has them indexed by IMDB.
+    2. **TVMaze bridge** — `/lookup/shows?imdb=<id>` resolves the IMDB ID to
+       a TVMaze show, which is then matched to the local catalogue by the
+       master list's own `TVmaze` id column (see
+       `_bridge_tvmaze_to_catalogue`). Covers first requests for any show
+       TVMaze knows, with no dependency on a prior `/shows/{key}` visit.
 
-    Why two stages: TVMaze doesn't index every IMDB ID. #229 follow-up
-    (Chicago Fire, tt2261391) exposed this — the show is in our local
-    catalog WITH the correct imdb_id, but TVMaze returns null on the
-    /lookup/shows?imdb= query. The reverse index closes this gap for
-    any show that's been visited via the standard /shows/{key} endpoint.
+    Stage 2 matches by TVMaze id rather than title because titles are not
+    unique: TVMaze calls tt13111078 "Lioness", and a title match picks the
+    catalogue's "Lioness (2021)" instead of "Lioness (2023)". A wrong bridge
+    is worse than a miss — the reverse index keeps it for a year.
 
-    Returns None only when both stages fail. The endpoint maps None to
-    a 404, and this records `epguides_by_imdb_bridge_miss_total` so the
-    gap's real volume is measurable (#474).
+    Returns None when neither stage yields a safe match. The endpoint maps
+    None to a 404, and this records `epguides_by_imdb_bridge_miss_total`
+    (#474), with the reason in the log line.
 
-    ## No cheap "Stage 1.5" exists (#474)
+    ## History (#474)
 
-    #474 proposed a Stage 1.5 that scans `get_all_shows()` for a matching
-    `imdb_id` before falling back to TVMaze, on the premise that "the full
-    catalogue already carries each show's own imdb_id field." That premise
-    does not hold: `_get_all_shows_raw()` builds the catalogue from the
-    epguides master-list CSV via `_map_csv_row_to_dict`, which hardcodes
-    `imdb_id=None` (the master CSV has no imdb column). `imdb_id` is only
-    ever populated per-show, lazily, by `_enrich_show_metadata` scraping
-    that show's own epguides page inside `get_show()` — and that value
-    lives solely in the per-show `show:{id}` cache, never written back to
-    `shows:all:raw` or `show_index`. So `get_all_shows()` never carries a
-    populated `imdb_id`, for any show, and a scan over it can never match.
-
-    Separately confirmed (live, against the real TVMaze API): TVMaze's own
-    dedicated `/lookup/shows?imdb=` index (Stage 2) is measurably less
-    complete than TVMaze's *general* show search — `/singlesearch/shows`
-    returns the correct `externals.imdb` for shows the dedicated lookup
-    endpoint returns null for (reproduced for tt13443470, tt2699128,
-    tt0434665). A bulk index built from TVMaze's full show database (or
-    an equivalent external dataset) would close more of the gap, but is a
-    materially bigger feature — new external bulk ingestion, rate
-    limiting, and a resumable background build — than a per-request
-    lookup stage, and isn't justified without volume data. Hence the
-    counter here: build that only if it shows the gap is more than a
-    long-tail handful of shows.
+    Until #474, Stage 2 missed for every ID: TVMaze answers a lookup hit
+    with a 301 redirect, which the client did not follow. That was misread
+    as TVMaze's lookup index being incomplete (including the #229 Chicago
+    Fire case). It is not — the lookup resolves those IDs once the redirect
+    is followed. The catalogue itself (`get_all_shows()`) still never
+    carries `imdb_id`: the master CSV has no imdb column, so a scan for
+    `imdb_id` there cannot match (see
+    `test_get_all_shows_never_carries_imdb_id`).
 
     Args:
         imdb_id: IMDB show identifier (e.g. "tt0903747").
@@ -310,68 +294,99 @@ async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
             )
         return local
 
-    # Stage 2: TVMaze fallback for shows the index hasn't seen yet
+    # Stage 2: TVMaze bridge for shows the index hasn't seen yet
     tvmaze = await epguides.lookup_tvmaze_by_imdb(imdb_id)
     if not tvmaze:
         _record_by_imdb_miss(imdb_id, "tvmaze_lookup_miss")
         return None
 
-    title = tvmaze.get("name") or ""
-    if not title:
-        _record_by_imdb_miss(imdb_id, "tvmaze_missing_name")
+    # Raw master-list rows (not `get_all_shows()`): only the raw CSV dicts
+    # carry the `TVmaze` id column.
+    rows = await epguides.get_all_shows_metadata()
+    if not rows:
+        _record_by_imdb_miss(imdb_id, "catalogue_unavailable")
         return None
 
-    # Bridge TVMaze title → local epguides catalog
-    by_title = await _find_show_by_title(title)
-    if not by_title:
-        _record_by_imdb_miss(imdb_id, "title_bridge_miss")
+    row, reason = _bridge_tvmaze_to_catalogue(rows, tvmaze)
+    if row is None:
+        _record_by_imdb_miss(imdb_id, reason)
         return None
 
-    # Populate the reverse index opportunistically so future lookups for
-    # this imdb_id hit Stage 1 directly.
-    await _index_show_by_imdb(by_title.epguides_key, imdb_id)
+    show = ShowSchema(**{**_map_csv_row_to_dict(row), "imdb_id": imdb_id})
 
-    return create_show_schema(
-        epguides_key=by_title.epguides_key,
-        title=by_title.title,
-        imdb_id=imdb_id,
-        network=by_title.network,
-        run_time_min=by_title.run_time_min,
-        start_date=by_title.start_date,
-        end_date=by_title.end_date,
-        country=by_title.country,
-        total_episodes=by_title.total_episodes,
-        poster_url=by_title.poster_url,
-    )
+    # Populate the reverse index so future lookups for this imdb_id hit
+    # Stage 1 directly.
+    await _index_show_by_imdb(show.epguides_key, imdb_id)
+    return show
 
 
-async def _find_show_by_title(title: str) -> ShowSchema | None:
-    """Best-effort title match against the local epguides catalog.
+def _row_tvmaze_id(row: dict[str, str]) -> str:
+    return (row.get("TVmaze") or "").strip()
 
-    Prefers an exact case-insensitive match. Falls back to a substring
-    match (matching show whose title contains the input or vice versa).
-    Used by `get_show_by_imdb_id` to bridge TVMaze→local; not exported.
+
+def _row_title(row: dict[str, str]) -> str:
+    return _clean_title(row.get("title") or "").lower().strip()
+
+
+def _year_in(value: str | None) -> str | None:
+    match = re.search(r"\b(\d{4})\b", value or "")
+    return match.group(1) if match else None
+
+
+def _distinct_directories(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Collapse master-list rows that repeat the same directory (it happens)."""
+    by_directory: dict[str, dict[str, str]] = {}
+    for row in rows:
+        directory = (row.get("directory") or "").strip()
+        if directory:
+            by_directory.setdefault(directory, row)
+    return list(by_directory.values())
+
+
+def _bridge_tvmaze_to_catalogue(
+    rows: list[dict[str, str]], tvmaze: dict[str, Any]
+) -> tuple[dict[str, str] | None, str]:
+    """Pick the master-list row for a TVMaze show, or say why none is safe.
+
+    Returns `(row, "")` on a match, `(None, miss_reason)` otherwise.
+
+    1. **By TVMaze id** — the master list's `TVmaze` column. A handful of
+       ids are shared by related shows (a revival, a remake), so more than
+       one candidate is narrowed by exact title, then by premiere year; if
+       that still isn't unique it is a miss, never a guess.
+    2. **By exact title**, only when no row carries this TVMaze id, and
+       only among rows with no TVMaze id at all (a row with a different id
+       is provably another show). It must match exactly one show. There is
+       deliberately no substring pass: on the real master list it bridges
+       "Tomorrow's World" to "Tom".
+
+    Rows without a title are never candidates (they cannot form a show).
     """
-    shows = await get_all_shows()
-    title_lower = title.lower().strip()
-    if not title_lower:
-        return None
+    maze_id = str(tvmaze.get("id") or "").strip()
+    name = (tvmaze.get("name") or "").lower().strip()
+    titled = [r for r in rows if _row_title(r)]
 
-    # Pass 1: exact case-insensitive match — the strong signal
-    for show in shows:
-        if show.title.lower().strip() == title_lower:
-            return show
+    if maze_id:
+        by_id = _distinct_directories([r for r in titled if _row_tvmaze_id(r) == maze_id])
+        if len(by_id) == 1:
+            return by_id[0], ""
+        if by_id:
+            by_title = [r for r in by_id if name and _row_title(r) == name]
+            if len(by_title) == 1:
+                return by_title[0], ""
+            premiered = _year_in(tvmaze.get("premiered"))
+            by_year = [r for r in (by_title or by_id) if premiered and _year_in(r.get("start date")) == premiered]
+            if len(by_year) == 1:
+                return by_year[0], ""
+            return None, "tvmaze_id_ambiguous"
 
-    # Pass 2: title contains query OR query contains title. Handles cases
-    # like "The Office (US)" vs "The Office" where TVMaze and epguides
-    # disambiguate differently. Substring match is safe here because
-    # we've already narrowed to one TVMaze hit by IMDB ID.
-    for show in shows:
-        local_title = show.title.lower().strip()
-        if title_lower in local_title or local_title in title_lower:
-            return show
+    if not name:
+        return None, "tvmaze_missing_name"
 
-    return None
+    exact = _distinct_directories([r for r in titled if not _row_tvmaze_id(r) and _row_title(r) == name])
+    if len(exact) == 1:
+        return exact[0], ""
+    return None, "title_bridge_ambiguous" if exact else "title_bridge_miss"
 
 
 def _show_ttl(show: ShowSchema | None) -> int | None:

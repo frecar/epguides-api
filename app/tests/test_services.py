@@ -2959,15 +2959,18 @@ async def test_get_show_by_imdb_id_tvmaze_404(mock_lookup, _mock_cache_get, mock
 @pytest.mark.asyncio
 @patch("app.services.show_service.record_by_imdb_bridge_miss")
 @patch("app.services.show_service.cache_get", return_value=None)  # Stage 1 (reverse index) miss
+@patch("app.services.epguides.get_all_shows_metadata")
 @patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
-async def test_get_show_by_imdb_id_tvmaze_missing_name(mock_lookup, _mock_cache_get, mock_record_miss):
-    """TVMaze hit but no `name` field → cannot bridge → None, miss counter fires.
+async def test_get_show_by_imdb_id_tvmaze_missing_name(mock_lookup, mock_metadata, _mock_cache_get, mock_record_miss):
+    """TVMaze hit whose id no catalogue row carries and with no `name` →
+    cannot bridge → None, miss counter fires.
 
     Explicitly patches cache_get so Stage 1 (reverse index) misses and
     we fall through to TVMaze. CI has a real Redis that other tests
     populate during their runs; without this patch the test depended
     on test ordering."""
     mock_lookup.return_value = {"id": 1}
+    mock_metadata.return_value = [{"directory": "got", "title": "Game of Thrones", "TVmaze": "82"}]
     assert await show_service.get_show_by_imdb_id("tt0903747") is None
     mock_record_miss.assert_called_once()
 
@@ -3139,39 +3142,168 @@ async def test_get_show_by_imdb_id_tvmaze_path_populates_reverse_index(
     assert write_calls[0].args[1] == "breakingbad"
 
 
-@pytest.mark.asyncio
-@patch("app.services.show_service.cache_set")
-@patch("app.services.epguides.get_all_shows_metadata")
-@patch("app.services.show_service.cache_get", return_value=None)
-async def test_find_show_by_title_substring_fallback(mock_get, mock_metadata, _mock_set):
-    """The local catalog title may be 'The Office (US)' while TVMaze returns
-    'The Office'. Substring fallback should still bridge — that's the
-    disambiguation TVMaze already did for us by indexing on IMDB ID."""
-    mock_metadata.return_value = [
-        {"directory": "theofficeus", "title": "The Office (US)", "network": "NBC", "run time": "30 min"},
-    ]
+# Master-list rows shaped like the real CSV, with the real TVMaze ids of the
+# shows #474 reproduced. "Lioness" is the trap: TVMaze names tt13111078
+# "Lioness", and a title bridge picks "Lioness (2021)" — a different show.
+_MASTER_ROWS_474 = [
+    {"title": "Wednesday", "directory": "Wednesday", "TVmaze": "53647", "start date": "Nov 2022"},
+    {"title": "Wednesday 9:30 (8:30 Central)", "directory": "Wednesday930830Central", "TVmaze": ""},
+    {"title": "Bleach", "directory": "Bleach", "TVmaze": "1905", "start date": "Oct 2004"},
+    {"title": "The Leftovers", "directory": "Leftovers", "TVmaze": "138", "start date": "Jun  2014"},
+    {"title": "Lioness (2021)", "directory": "Lioness", "TVmaze": "70321", "start date": "Jan 2021"},
+    {"title": "Lioness (2023)", "directory": "SpecialOpsLioness", "TVmaze": "50415", "start date": "Jul 2023"},
+    # The master list repeats some rows verbatim; that is not ambiguity.
+    {"title": "Lioness (2023)", "directory": "SpecialOpsLioness", "TVmaze": "50415", "start date": "Jul 2023"},
+]
 
-    result = await show_service._find_show_by_title("The Office")
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("imdb_id", "tvmaze", "expected_key"),
+    [
+        ("tt13443470", {"id": 53647, "name": "Wednesday"}, "Wednesday"),
+        ("tt0434665", {"id": 1905, "name": "Bleach"}, "Bleach"),
+        ("tt13111078", {"id": 50415, "name": "Lioness"}, "SpecialOpsLioness"),
+        ("tt2699128", {"id": 138, "name": "The Leftovers"}, "Leftovers"),
+    ],
+)
+@patch("app.services.show_service.record_by_imdb_bridge_miss")
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)  # cold reverse index
+@patch("app.services.epguides.get_all_shows_metadata")
+@patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
+async def test_get_show_by_imdb_id_cold_index_bridges_by_tvmaze_id(
+    mock_lookup, mock_metadata, _mock_get, mock_set, mock_record_miss, imdb_id, tvmaze, expected_key
+):
+    """#474: first request for a catalogued show resolves with no prior
+    /shows/{key} visit, bridges by TVMaze id (not title), and warms Stage 1."""
+    mock_lookup.return_value = tvmaze
+    mock_metadata.return_value = _MASTER_ROWS_474
+
+    result = await show_service.get_show_by_imdb_id(imdb_id)
+
     assert result is not None
-    assert result.epguides_key == "theofficeus"
+    assert result.epguides_key == expected_key
+    assert result.imdb_id == imdb_id
+    mock_set.assert_called_once()
+    assert mock_set.call_args.args[:2] == (f"imdb_to_key:{imdb_id}", expected_key)
+    mock_record_miss.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_find_show_by_title_empty_input_returns_none():
-    """Empty / whitespace title → None without scanning the catalog."""
-    assert await show_service._find_show_by_title("") is None
-    assert await show_service._find_show_by_title("   ") is None
+@patch("app.services.show_service.record_by_imdb_bridge_miss")
+@patch("app.services.show_service.cache_set")
+@patch("app.services.show_service.cache_get", return_value=None)
+@patch("app.services.epguides.get_all_shows_metadata", return_value=[])
+@patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
+async def test_get_show_by_imdb_id_catalogue_unavailable(mock_lookup, _mock_metadata, _mock_get, mock_set, mock_miss):
+    """Master list unavailable → miss (not a guess), nothing indexed."""
+    mock_lookup.return_value = {"id": 53647, "name": "Wednesday"}
+    assert await show_service.get_show_by_imdb_id("tt13443470") is None
+    mock_miss.assert_called_once()
+    mock_set.assert_not_called()
 
 
 @pytest.mark.asyncio
+@patch("app.services.show_service.record_by_imdb_bridge_miss")
 @patch("app.services.show_service.cache_set")
 @patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.services.epguides.get_all_shows_metadata")
-async def test_find_show_by_title_no_match(mock_metadata, _mock_get, _mock_set):
+@patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
+async def test_get_show_by_imdb_id_ambiguous_bridge_is_not_indexed(
+    mock_lookup, mock_metadata, _mock_get, mock_set, mock_miss
+):
+    """An ambiguous bridge is a 404, never a year-long reverse-index entry."""
+    mock_lookup.return_value = {"id": 6446, "name": "Crime Scene", "premiered": "1999-01-01"}
     mock_metadata.return_value = [
-        {"directory": "got", "title": "Game of Thrones", "network": "HBO", "run time": "60 min"},
+        {"title": "Tatort", "directory": "Tatort", "TVmaze": "6446", "start date": "Nov 1970"},
+        {"title": "Tatort (Austria)", "directory": "Tatort_AT", "TVmaze": "6446", "start date": "Jan 1971"},
     ]
-    assert await show_service._find_show_by_title("Completely Unrelated Title") is None
+    assert await show_service.get_show_by_imdb_id("tt0806910") is None
+    mock_miss.assert_called_once()
+    mock_set.assert_not_called()
+
+
+def test_bridge_shared_tvmaze_id_prefers_exact_title():
+    """A revival listed under the original's TVMaze id (real shape: 19499)."""
+    rows = [
+        {"title": "Mystery Science Theater 3000", "directory": "MysteryScienceTheater3000", "TVmaze": "19499"},
+        {"title": "Mystery Science Theater 3000: The Return", "directory": "MST3KTheReturn", "TVmaze": "19499"},
+    ]
+    row, reason = show_service._bridge_tvmaze_to_catalogue(rows, {"id": 19499, "name": "Mystery Science Theater 3000"})
+    assert row is not None and row["directory"] == "MysteryScienceTheater3000"
+    assert reason == ""
+
+
+def test_bridge_shared_tvmaze_id_ignores_blank_name():
+    """No TVMaze name must not select a blank-titled row as the "exact" match."""
+    rows = [
+        {"title": "", "directory": "Blank", "TVmaze": "19499"},
+        {"title": "Mystery Science Theater 3000", "directory": "MysteryScienceTheater3000", "TVmaze": "19499"},
+    ]
+    row, _ = show_service._bridge_tvmaze_to_catalogue(rows, {"id": 19499})
+    assert row is not None and row["directory"] == "MysteryScienceTheater3000"
+
+
+def test_bridge_shared_tvmaze_id_falls_back_to_premiere_year():
+    rows = [
+        {"title": "Tatort", "directory": "Tatort", "TVmaze": "6446", "start date": "Nov 1970"},
+        {"title": "Tatort", "directory": "Tatort_AT", "TVmaze": "6446", "start date": "Jan 1971"},
+    ]
+    row, _ = show_service._bridge_tvmaze_to_catalogue(rows, {"id": 6446, "name": "Tatort", "premiered": "1971-01-10"})
+    assert row is not None and row["directory"] == "Tatort_AT"
+
+
+def test_bridge_shared_tvmaze_id_without_tiebreak_is_ambiguous():
+    rows = [
+        {"title": "Tatort", "directory": "Tatort", "TVmaze": "6446", "start date": "Nov 1970"},
+        {"title": "Tatort", "directory": "Tatort_AT", "TVmaze": "6446", "start date": "Nov 1970"},
+    ]
+    assert show_service._bridge_tvmaze_to_catalogue(
+        rows, {"id": 6446, "name": "Tatort", "premiered": "1970-11-29"}
+    ) == (
+        None,
+        "tvmaze_id_ambiguous",
+    )
+
+
+def test_bridge_title_fallback_never_matches_a_row_keyed_to_another_show():
+    """The pre-#474 title bridge would have returned "Lioness (2021)" here."""
+    rows = [{"title": "Lioness (2021)", "directory": "Lioness", "TVmaze": "70321"}]
+    assert show_service._bridge_tvmaze_to_catalogue(rows, {"id": 50415, "name": "Lioness"}) == (
+        None,
+        "title_bridge_miss",
+    )
+
+
+@pytest.mark.parametrize("name", ["Tomorrow's World", "Anatomy of a Scandal", "Ryan's World"])
+def test_bridge_title_fallback_never_substring_matches(name):
+    """Real master-list rows titled "Tom" and "Ryan" have no TVMaze id; a
+    substring pass bridged all of these names to them."""
+    rows = [
+        {"title": "Tom", "directory": "Tom", "TVmaze": ""},
+        {"title": "Ryan", "directory": "Ryan", "TVmaze": ""},
+    ]
+    assert show_service._bridge_tvmaze_to_catalogue(rows, {"id": 999999, "name": name}) == (None, "title_bridge_miss")
+
+
+def test_bridge_title_fallback_exact_match_must_be_unique():
+    show = {"title": "The Office", "directory": "Office", "TVmaze": ""}
+    duplicate_title = {"title": "The Office", "directory": "Office_2001", "TVmaze": ""}
+    tvmaze = {"id": 526, "name": "The Office"}
+
+    row, _ = show_service._bridge_tvmaze_to_catalogue([show], tvmaze)
+    assert row is show
+    assert show_service._bridge_tvmaze_to_catalogue([show, duplicate_title], tvmaze) == (
+        None,
+        "title_bridge_ambiguous",
+    )
+
+
+def test_bridge_title_fallback_ignores_blank_titles():
+    """A blank catalogue title must not substring-match every name."""
+    rows = [{"title": "", "directory": "blank", "TVmaze": ""}]
+    assert show_service._bridge_tvmaze_to_catalogue(rows, {"id": 9, "name": "Anything"}) == (None, "title_bridge_miss")
 
 
 # =============================================================================

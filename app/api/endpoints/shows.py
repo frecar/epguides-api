@@ -140,8 +140,9 @@ async def get_show_by_imdb_id(
     ### Errors
 
     - **400** if `imdb_id` is malformed (must match `^tt\\d+$`)
-    - **404** if no show found — either TVMaze has no record or the
-      matched show isn't in the epguides catalog
+    - **404** if no show found — TVMaze has no record for the ID, the show
+      isn't in the epguides catalog, or several catalog shows match and
+      none can be chosen safely
     """
     # Format gate: TVMaze rejects garbage anyway, but a 400 here is a
     # better operator/UI signal than letting the 404 fall through.
