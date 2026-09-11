@@ -1,0 +1,6 @@
+# Allowlist for the typos pre-commit hook (see .pre-commit-config.yaml).
+# Add a word here ONLY for a real domain term, never to paper over a misspelling.
+
+[default.extend-words]
+# Ordinal suffix ("2nd") matched as a literal token when parsing show titles.
+nd = "nd"

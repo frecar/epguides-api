@@ -790,28 +790,80 @@ async def test_lookup_tvmaze_by_imdb_empty_input_short_circuits():
     assert await epguides.lookup_tvmaze_by_imdb("") is None
 
 
+def _tvmaze_transport(handler):
+    """Route `_tvmaze_get` through real httpx (request building, redirect
+    handling) against a MockTransport. The caller's kwargs pass through
+    untouched, so whether redirects are followed is the code's own choice —
+    mocking AsyncClient wholesale is how #474's 301 went unnoticed."""
+    real_client = httpx.AsyncClient
+
+    def factory(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+        return real_client(*args, transport=httpx.MockTransport(handler), **kwargs)
+
+    return patch("app.services.epguides.httpx.AsyncClient", side_effect=factory)
+
+
+_WEDNESDAY = {"id": 53647, "name": "Wednesday", "externals": {"imdb": "tt13443470"}}
+
+
+def _lookup_redirects_to(location: str):
+    """TVMaze's real lookup shape: 301 to the show resource on a hit."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/lookup/shows":
+            assert request.url.params["imdb"] == "tt13443470"
+            return httpx.Response(301, headers={"Location": location})
+        if request.url.host == "api.tvmaze.com" and request.url.path == "/shows/53647":
+            return httpx.Response(200, json=_WEDNESDAY)
+        return httpx.Response(200, json={"id": 1, "name": "Not TVMaze"})
+
+    return handler
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.mark_upstream_success", new_callable=AsyncMock)
+async def test_lookup_tvmaze_by_imdb_follows_the_lookup_redirect(_mock_mark):
+    """A lookup hit is a 301 to /shows/<id>; following it yields the show (#474)."""
+    with _tvmaze_transport(_lookup_redirects_to("https://api.tvmaze.com/shows/53647")):
+        assert await epguides.lookup_tvmaze_by_imdb("tt13443470") == _WEDNESDAY
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.mark_upstream_success", new_callable=AsyncMock)
+async def test_lookup_tvmaze_by_imdb_rejects_off_host_redirect(_mock_mark):
+    """A redirect off the TVMaze API host is an error, not a show."""
+    with _tvmaze_transport(_lookup_redirects_to("https://example.com/shows/53647")):
+        assert await epguides.lookup_tvmaze_by_imdb("tt13443470") is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.mark_upstream_success", new_callable=AsyncMock)
+async def test_lookup_tvmaze_by_imdb_rejects_scheme_downgrade_redirect(_mock_mark):
+    """Same host over plain http is not the API origin either."""
+    with _tvmaze_transport(_lookup_redirects_to("http://api.tvmaze.com/shows/53647")):
+        assert await epguides.lookup_tvmaze_by_imdb("tt13443470") is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.mark_upstream_success", new_callable=AsyncMock)
+async def test_lookup_tvmaze_by_imdb_returns_none_on_404(_mock_mark):
+    """TVMaze answers an unknown IMDB ID with a 404 → None."""
+    with _tvmaze_transport(lambda request: httpx.Response(404)):
+        assert await epguides.lookup_tvmaze_by_imdb("tt9999999") is None
+
+
+@pytest.mark.asyncio
+@patch("app.services.epguides.mark_upstream_success", new_callable=AsyncMock)
+async def test_lookup_tvmaze_by_imdb_returns_none_on_parse_error(_mock_mark):
+    """A non-JSON 200 body is caught — defensive against weird upstream payloads."""
+    with _tvmaze_transport(lambda request: httpx.Response(200, content=b"not json")):
+        assert await epguides.lookup_tvmaze_by_imdb("tt0903747") is None
+
+
 @pytest.mark.asyncio
 @patch("httpx.AsyncClient")
-async def test_lookup_tvmaze_by_imdb_happy_path(mock_client_class):
-    """TVMaze lookup returns the parsed JSON on 200."""
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {"name": "Breaking Bad", "externals": {"imdb": "tt0903747"}}
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client_class.return_value = mock_client
-
-    result = await epguides.lookup_tvmaze_by_imdb("tt0903747")
-    assert result == {"name": "Breaking Bad", "externals": {"imdb": "tt0903747"}}
-
-
-@pytest.mark.asyncio
-@patch("httpx.AsyncClient")
-async def test_lookup_tvmaze_by_imdb_returns_none_on_non_200(mock_client_class):
-    """404 / 500 / etc → None. The wrapper _tvmaze_get already returns None
-    on non-200; this checks the helper composes correctly."""
+async def test_tvmaze_get_does_not_follow_redirects_unless_asked(mock_client_class):
+    """Only the lookup opts in; other TVMaze calls keep their exact request."""
     mock_response = MagicMock()
     mock_response.status_code = 404
     mock_client = AsyncMock()
@@ -820,24 +872,8 @@ async def test_lookup_tvmaze_by_imdb_returns_none_on_non_200(mock_client_class):
     mock_client.get = AsyncMock(return_value=mock_response)
     mock_client_class.return_value = mock_client
 
-    assert await epguides.lookup_tvmaze_by_imdb("tt9999999") is None
-
-
-@pytest.mark.asyncio
-@patch("httpx.AsyncClient")
-async def test_lookup_tvmaze_by_imdb_returns_none_on_parse_error(mock_client_class):
-    """response.json() raising should be caught — defensive against weird
-    upstream payloads."""
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.side_effect = ValueError("not json")
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client_class.return_value = mock_client
-
-    assert await epguides.lookup_tvmaze_by_imdb("tt0903747") is None
+    assert await epguides._search_tvmaze_by_title("Wednesday") is None
+    assert "follow_redirects" not in mock_client.get.call_args.kwargs
 
 
 # =============================================================================
