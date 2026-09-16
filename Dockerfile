@@ -67,6 +67,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     APP_VERSION=${APP_VERSION} \
     PATH="/build/.venv/bin:$PATH"
 
+# Pull Debian security patches the pinned base image has not been rebuilt
+# against yet. The digest pin keeps the base reproducible, but it also freezes
+# the OS packages at whatever was current when upstream last rebuilt the tag —
+# so fixed CVEs can sit unpatched in the image until the next upstream rebuild.
+# The CI image scan exists to catch exactly that lag; this closes it at build
+# time rather than waiting on upstream.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # Non-root user
 RUN groupadd -r -g 1000 appgroup && \
     useradd -r -u 1000 -g appgroup -s /sbin/nologin appuser
