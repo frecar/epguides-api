@@ -5,6 +5,17 @@ updates:
   # to scan).
   - package-ecosystem: "uv"
     directory: "/"
+    # Hold a new release for 3 days before opening a version-update PR. For a
+    # freshly malicious release — an upstream account takeover or a typosquat —
+    # advisory feeds are lagged by construction and cannot break the chain, and
+    # a green CI run is not evidence either: CI installs and executes the new
+    # package before any merge. A release-age cooldown buys the window in which
+    # an advisory, a yank, or the maintainer's own retraction appears.
+    #
+    # This does NOT delay security fixes: `cooldown` is a version-update option
+    # only, and Dependabot security updates are created regardless of it.
+    cooldown:
+      default-days: 3
     schedule:
       interval: "weekly"
       day: "monday"
@@ -26,6 +37,17 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    # Hold a new release for 3 days before opening a version-update PR. For a
+    # freshly malicious release — an upstream account takeover or a typosquat —
+    # advisory feeds are lagged by construction and cannot break the chain, and
+    # a green CI run is not evidence either: CI installs and executes the new
+    # package before any merge. A release-age cooldown buys the window in which
+    # an advisory, a yank, or the maintainer's own retraction appears.
+    #
+    # This does NOT delay security fixes: `cooldown` is a version-update option
+    # only, and Dependabot security updates are created regardless of it.
+    cooldown:
+      default-days: 3
     schedule:
       interval: "weekly"
     labels:
@@ -61,6 +83,17 @@ updates:
   # review before merge.
   - package-ecosystem: "docker"
     directory: "/"
+    # Hold a new release for 3 days before opening a version-update PR. For a
+    # freshly malicious release — an upstream account takeover or a typosquat —
+    # advisory feeds are lagged by construction and cannot break the chain, and
+    # a green CI run is not evidence either: CI installs and executes the new
+    # package before any merge. A release-age cooldown buys the window in which
+    # an advisory, a yank, or the maintainer's own retraction appears.
+    #
+    # This does NOT delay security fixes: `cooldown` is a version-update option
+    # only, and Dependabot security updates are created regardless of it.
+    cooldown:
+      default-days: 3
     schedule:
       interval: "weekly"
       day: "monday"
