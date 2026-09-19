@@ -35,6 +35,23 @@ updates:
           - "minor"
           - "patch"
 
+  # pip ecosystem, docs/ scope — docs/requirements.txt exists and is what the
+  # pip advisories flag (e.g. setuptools, mkdocs-material), but the uv entry
+  # above only covers the project root, so nothing ever opens PRs for it
+  # (frecar/epguides-api#489). Same weekly cadence + 3-day cooldown as uv.
+  - package-ecosystem: "pip"
+    directory: "/docs"
+    cooldown:
+      default-days: 3
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps-docs"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     # Hold a new release for 3 days before opening a version-update PR. For a
