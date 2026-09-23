@@ -17,25 +17,29 @@ parsing, ``response_model`` serialization, the OpenAPI schema generation) with
 zero reliance on a warmed cache or the public internet — a clean, fast, repeatable
 contract check rather than a flaky live smoke.
 
-The engine itself (``app.contract``) is a thin in-process peer of the deployed
-scheduled probe: same anonymous-GET eligibility filter, same ``MUST_COVER``
-floor, same declared-200-schema validation — so the two surfaces share one
-notion of "the contract" and cannot silently diverge.
+The engine itself (``app.contract_engine``, a deliberate vendored copy of the
+shared OpenAPI contract engine — this public repo cannot take a private
+dependency) is a thin in-process peer of the deployed scheduled probe: same
+anonymous-GET eligibility filter, same ``MUST_COVER`` floor (owned by
+``app.contract``), same declared-200-schema validation — so the two surfaces
+share one notion of "the contract" and cannot silently diverge.
 """
 
 import time
 from collections.abc import Iterator
 from contextlib import ExitStack
+from copy import deepcopy
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.contract import (
-    MUST_COVER,
+from app.contract import MUST_COVER
+from app.contract_engine import (
     ContractResult,
     RouteProbeResult,
+    assert_no_document_level_security,
     build_validator,
     eligible_get_routes,
     run_contract,
@@ -110,7 +114,9 @@ def test_api_contract_holds_for_all_anonymous_get_routes(hermetic_app: TestClien
     MUST_COVER route vanishing from the schema all fail here (and so fail the PR).
     """
     schema = app.openapi()
-    result = run_contract(schema, _make_fetch(hermetic_app))
+    # The vendored engine has no app-specific default: the floor is passed
+    # explicitly so it can never silently inherit another app's.
+    result = run_contract(schema, _make_fetch(hermetic_app), must_cover=MUST_COVER)
     assert result.ok, "API contract regression:\n" + "\n".join(result.failures())
 
 
@@ -383,3 +389,77 @@ def test_probe_skips_schema_validation_when_no_declared_schema() -> None:
     result = run_contract(schema, lambda _p: (200, {"anything": True}), must_cover=("/x",))
     assert result.ok
     assert result.probes[0].schema_skipped is True
+
+
+# ---------------------------------------------------------------------------
+# Seeded violations against the LIVE schema (the cutover acceptance bar: the
+# vendored engine must still FAIL the gate the way the pre-cutover engine did,
+# not merely pass a healthy app).
+# ---------------------------------------------------------------------------
+
+
+def test_seeded_must_cover_deletion_fails_the_vendored_gate(hermetic_app: TestClient) -> None:
+    """A MUST_COVER route silently vanishing from the live schema fails."""
+    schema = deepcopy(app.openapi())
+    del schema["paths"]["/shows/"]
+    result = run_contract(schema, _make_fetch(hermetic_app), must_cover=MUST_COVER)
+    assert not result.ok
+    assert any("MUST_COVER" in line and "/shows/" in line for line in result.failures())
+
+
+def test_seeded_schema_violation_body_fails_the_vendored_gate(hermetic_app: TestClient) -> None:
+    """A live route serving a schema-violating body fails the vendored gate."""
+    live_fetch = _make_fetch(hermetic_app)
+
+    def fetch(path: str) -> tuple[int, Any]:
+        status, body = live_fetch(path)
+        if path == "/health":
+            # /health declares an object schema — a top-level array cannot validate.
+            return status, ["not", "an", "object"]
+        return status, body
+
+    result = run_contract(app.openapi(), fetch, must_cover=MUST_COVER)
+    assert not result.ok
+    assert any("/health" in line and "schema" in line for line in result.failures())
+
+
+# ---------------------------------------------------------------------------
+# Inherited engine behaviours (pins for the three deliberate supersets the
+# vendored engine carries over the pre-cutover local one).
+# ---------------------------------------------------------------------------
+
+
+def test_eligible_routes_exclude_operation_level_authed_routes() -> None:
+    """A GET operation carrying ``security`` is NOT anonymous, NOT probed."""
+    schema: dict[str, Any] = {
+        "openapi": "3.1.0",
+        "paths": {
+            "/free": {"get": {"responses": {"200": {}}}},
+            "/authed": {"get": {"security": [{"bearerAuth": []}], "responses": {"200": {}}}},
+            "/explicitly-open": {"get": {"security": [], "responses": {"200": {}}}},
+        },
+    }
+    assert eligible_get_routes(schema) == {"/free", "/explicitly-open"}
+
+
+def test_document_level_security_fails_loud() -> None:
+    """A top-level ``security`` requirement raises instead of inverting."""
+    schema: dict[str, Any] = {
+        "openapi": "3.1.0",
+        "security": [{"bearerAuth": []}],
+        "paths": {"/x": {"get": {"responses": {"200": {}}}}},
+    }
+    with pytest.raises(AssertionError, match="top-level `security`"):
+        assert_no_document_level_security(schema)
+    with pytest.raises(AssertionError, match="top-level `security`"):
+        run_contract(schema, lambda _p: (200, {}), must_cover=("/x",))
+
+
+def test_build_validator_accepts_integer_200_key() -> None:
+    """Some generators key responses under integer ``200`` — still validated."""
+    schema: dict[str, Any] = {
+        "paths": {
+            "/x": {"get": {"responses": {200: {"content": {"application/json": {"schema": {"type": "object"}}}}}}}
+        },
+    }
+    assert build_validator(schema, "/x") is not None
