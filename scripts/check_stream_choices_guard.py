@@ -222,6 +222,14 @@ def check_file(path: Path) -> list[tuple[int, str]]:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
+    # every violation shape above requires an `ast.Attribute`
+    # node with `attr == "choices"`, which requires the literal text
+    # "choices" to appear in the source — cheap to rule out before paying
+    # for `ast.parse` (this guard's dominant cost on the no-argv full-repo
+    # pass `make ci-parity` runs, since the vast majority of tracked .py
+    # files never mention `choices` at all).
+    if "choices" not in text:
+        return []
     try:
         tree = ast.parse(text, filename=str(path))
     except SyntaxError:
@@ -243,8 +251,21 @@ def check_file(path: Path) -> list[tuple[int, str]]:
     return out
 
 
+def _discover_repo_python_files(root: Path) -> list[Path]:
+    # prune `ALLOWED_PATH_COMPONENTS` dirs DURING the walk rather
+    # than relying solely on the per-file `is_allowed_path` check below —
+    # `rglob("*.py")` has no pruning hook, so it used to stat every file
+    # under `.venv`/site-packages too (measured: 3973 of 6002 discovered
+    # files were vendored .venv code) before that filter discarded them.
+    out: list[Path] = []
+    for dirpath, dirnames, filenames in root.walk():
+        dirnames[:] = [d for d in dirnames if d not in ALLOWED_PATH_COMPONENTS]
+        out.extend(dirpath / name for name in filenames if name.endswith(".py"))
+    return out
+
+
 def main(argv: list[str]) -> int:
-    files = [Path(a) for a in argv] if argv else [p for p in Path.cwd().rglob("*.py") if p.is_file()]
+    files = [Path(a) for a in argv] if argv else _discover_repo_python_files(Path.cwd())
 
     violation_count = 0
     for f in files:
