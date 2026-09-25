@@ -133,20 +133,17 @@ def _external_ref_problem(ref: str) -> str | None:
 
 def find_dockerfiles(repo_root: Path) -> list[Path]:
     """Return every tracked ``Dockerfile`` / ``Dockerfile.*`` under ``repo_root``."""
+    # prune `_SKIP_DIR_PARTS` DURING the walk, not after — a
+    # name-patterned `rglob("Dockerfile*")` still has to descend into every
+    # directory (glob has no pruning hook), including `.git` and any stray
+    # venv, before the old post-hoc `rel.parts` filter discarded them.
     out: list[Path] = []
-    for path in sorted(repo_root.rglob("Dockerfile*")):
-        if not path.is_file():
-            continue
-        try:
-            rel = path.relative_to(repo_root)
-        except ValueError:  # pragma: no cover - rglob stays under repo_root
-            continue
-        if any(part in _SKIP_DIR_PARTS for part in rel.parts):
-            continue
-        name = path.name
-        if name == "Dockerfile" or name.startswith("Dockerfile."):
-            out.append(path)
-    return out
+    for dirpath, dirnames, filenames in repo_root.walk():
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIR_PARTS]
+        for name in filenames:
+            if name == "Dockerfile" or name.startswith("Dockerfile."):
+                out.append(dirpath / name)
+    return sorted(out)
 
 
 def _parse_from(line: str) -> tuple[str, str | None] | None:
