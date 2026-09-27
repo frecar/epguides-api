@@ -392,5 +392,3 @@ not restate them here. What is specific to this repo:
 - **This repository is public.** Never reference private repositories, internal
   hostnames, IP addresses, or infrastructure details in code, comments, issues,
   PRs, or commit messages.
-- **Deployment is automatic** — see `Deployment Workflow` above. Do not deploy
-  by hand except for an active incident needing immediate rollout.
