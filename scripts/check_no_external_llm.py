@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 import sys
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 # Pattern split + reassembled at runtime so this file itself doesn't
@@ -32,6 +33,19 @@ PATTERN = re.compile(r"api\." + r"(?:" + "|".join(_FORBIDDEN_HOSTS) + r")" + r"\
 # Per-line opt-out — for docs/runbooks/issue bodies that need to name the
 # forbidden patterns when explaining the policy.
 IGNORE_MARKER = "llm-policy: ignore"
+
+# REVIEW DATE for the three hand-maintained sets below (allowed path
+# components, allowed filenames, checked extensions). These sets are a
+# reviewed judgment, not derived state: a new language added to a repo
+# without a matching extension entry would be silently unscanned, and a new
+# tooling/cache directory without an allowlist entry would either
+# false-positive or, if exempted thoughtlessly, punch a hole. Re-examine all
+# three sets on or before this date and move it forward deliberately; the
+# check at the top of main() fails the run once it lapses so the review
+# cannot go silent. NOTE: this file is synced byte-for-byte into consumer
+# repos and must stay stdlib-only, so the review marker lives here rather
+# than in the shared reviewed-literal helper.
+LITERAL_REVIEW_BY = date(2026, 11, 25)
 
 # Path components / filenames that are always allowed (tests, benchmarks,
 # this script itself, virtualenvs, build artifacts). Component matching handles
@@ -107,6 +121,13 @@ def check_file(path: Path) -> list[tuple[int, str]]:
 
 
 def main(argv: list[str]) -> int:
+    if datetime.now(UTC).date() > LITERAL_REVIEW_BY:
+        print(
+            f"FAIL: the allowlist/extension review date ({LITERAL_REVIEW_BY.isoformat()}) "
+            "has lapsed — re-examine ALLOWED_PATH_COMPONENTS, ALLOWED_FILENAMES, and "
+            "CHECKED_EXTENSIONS, then move LITERAL_REVIEW_BY forward deliberately."
+        )
+        return 1
     if argv:
         # Pre-commit pass: argv is the list of changed files.
         files = [Path(a) for a in argv]
