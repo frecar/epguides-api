@@ -54,11 +54,23 @@ from __future__ import annotations
 
 import ast
 import sys
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 # Per-line opt-out for the rare legitimate unguarded index (kept identical in
 # spirit to check_no_external_llm.py's `# llm-policy: ignore`).
 IGNORE_MARKER = "stream-choices-guard: ignore"
+
+# REVIEW DATE for the two hand-maintained sets below (allowed path components,
+# allowed filenames). These sets are a reviewed judgment, not derived state: a
+# new tooling/cache directory without an allowlist entry would false-positive
+# on vendored code, and a thoughtless exemption would punch a hole in the
+# guard's coverage. Re-examine both sets on or before this date and move it
+# forward deliberately; the check at the top of main() fails the run once it
+# lapses so the review cannot go silent. NOTE: this file is vendored
+# byte-for-byte into consumer repos and must stay stdlib-only, so the review
+# marker lives here rather than in the shared reviewed-literal helper.
+LITERAL_REVIEW_BY = date(2026, 11, 25)
 
 # Path components / filenames that are skipped. Tests are allowlisted: they
 # legitimately build unguarded-stream fixtures to prove the guard works, and
@@ -265,6 +277,13 @@ def _discover_repo_python_files(root: Path) -> list[Path]:
 
 
 def main(argv: list[str]) -> int:
+    if datetime.now(UTC).date() > LITERAL_REVIEW_BY:
+        print(
+            f"FAIL: the allowlist review date ({LITERAL_REVIEW_BY.isoformat()}) "
+            "has lapsed — re-examine ALLOWED_PATH_COMPONENTS and "
+            "ALLOWED_FILENAMES, then move LITERAL_REVIEW_BY forward deliberately."
+        )
+        return 1
     files = [Path(a) for a in argv] if argv else _discover_repo_python_files(Path.cwd())
 
     violation_count = 0
