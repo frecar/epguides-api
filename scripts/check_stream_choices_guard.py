@@ -42,7 +42,7 @@ are allowlisted).
 
 Used by:
   - `.pre-commit-config.yaml` (runs on changed files at commit time)
-  - `.github/workflows/ci.yml` lint job (runs over the whole tree)
+  - `.github/workflows/ci.yml` registry-gate job (`pm scan --gate`, runs over the whole tree)
   - `make ci-parity` (pre-push parity with CI)
 
 Sibling to `check_no_external_llm.py` — same wiring, same allowlist
