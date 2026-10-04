@@ -14,11 +14,26 @@ def init_observability(release: str) -> None:
         return
 
     import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.httpx import HttpxIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+    from sentry_sdk.scrubber import EventScrubber
 
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
         profiles_sample_rate=settings.SENTRY_PROFILES_SAMPLE_RATE,
+        # Request transactions (FastAPI/Starlette) and spans for the
+        # upstream HTTP calls this API makes (epguides.com, TVMaze) only
+        # exist when these integrations are active. The SDK auto-enables
+        # them for installed frameworks, but passing them explicitly pins
+        # that behavior so an SDK default change can't silently drop
+        # tracing here.
+        integrations=[
+            FastApiIntegration(),
+            StarletteIntegration(),
+            HttpxIntegration(),
+        ],
         # Propagate Sentry traces to the upstream HTTP services this API
         # talks to so distributed traces span the API -> upstream boundary
         # cleanly. Sentry itself receives traces via the DSN HTTP endpoint;
@@ -38,6 +53,14 @@ def init_observability(release: str) -> None:
         # cookies/PII attached). Pinning it explicitly means a future
         # sentry-sdk default change can't silently start attaching PII here.
         send_default_pii=False,
+        # The SDK builds EventScrubber(recursive=False) when this is unset,
+        # which redacts denylisted keys (token, password, secret, ...)
+        # ONLY AT THE TOP LEVEL of a structure. The common shape a secret
+        # actually sits in is nested one level down -- a context dict in
+        # `extra`, a JSON request body, breadcrumb/span data -- so the
+        # denylist is largely inert exactly where it matters. Recursive
+        # scrubbing widens redaction depth (not the denylist itself).
+        event_scrubber=EventScrubber(recursive=True),
         # The sentry-sdk default is "medium", which attaches up to ~10KB of
         # the raw request body to captured events. That capture happens
         # independently of send_default_pii (only cookies are gated by that
