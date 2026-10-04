@@ -22,29 +22,55 @@ def test_observability_is_noop_without_sentry_dsn(monkeypatch):
 
 def test_observability_initialises_sentry_when_configured(monkeypatch):
     sentry_sdk_mock = Mock()
+    # init_observability() lazily imports these sentry_sdk submodules; the
+    # fakes must be seeded alongside the top-level mock or the from-imports
+    # blow up resolving submodules off a Mock parent.
+    scrubber_mod = Mock()
+    fastapi_mod = Mock()
+    starlette_mod = Mock()
+    httpx_mod = Mock()
     monkeypatch.setattr(observability.settings, "SENTRY_DSN", "https://example.invalid/1")
     monkeypatch.setattr(observability.settings, "SENTRY_TRACES_SAMPLE_RATE", 0.25)
     monkeypatch.setattr(observability.settings, "SENTRY_PROFILES_SAMPLE_RATE", 0.05)
     monkeypatch.setattr(observability.settings, "SENTRY_ENVIRONMENT", "test")
 
-    with patch.dict("sys.modules", {"sentry_sdk": sentry_sdk_mock}):
+    with patch.dict(
+        "sys.modules",
+        {
+            "sentry_sdk": sentry_sdk_mock,
+            "sentry_sdk.scrubber": scrubber_mod,
+            "sentry_sdk.integrations.fastapi": fastapi_mod,
+            "sentry_sdk.integrations.starlette": starlette_mod,
+            "sentry_sdk.integrations.httpx": httpx_mod,
+        },
+    ):
         observability.init_observability(release="test-release")
 
     # Assert against the exact kwargs the app really passes to
     # sentry_sdk.init, not a constant defined elsewhere in this file --
-    # this is what actually proves include_local_variables and
-    # max_request_body_size can't be silently dropped or re-inherited from
-    # the SDK default.
+    # this is what actually proves include_local_variables,
+    # max_request_body_size, and the propagation targets can't be silently
+    # dropped or re-inherited from the SDK default.
+    scrubber_mod.EventScrubber.assert_called_once_with(recursive=True)
+    fastapi_mod.FastApiIntegration.assert_called_once_with()
+    starlette_mod.StarletteIntegration.assert_called_once_with()
+    httpx_mod.HttpxIntegration.assert_called_once_with()
     sentry_sdk_mock.init.assert_called_once_with(
         dsn="https://example.invalid/1",
         traces_sample_rate=0.25,
         profiles_sample_rate=0.05,
+        integrations=[
+            fastapi_mod.FastApiIntegration.return_value,
+            starlette_mod.StarletteIntegration.return_value,
+            httpx_mod.HttpxIntegration.return_value,
+        ],
         trace_propagation_targets=["epguides.com", "api.tvmaze.com", "localhost"],
         release="test-release",
         environment="test",
         include_local_variables=False,
         send_default_pii=False,
         max_request_body_size="never",
+        event_scrubber=scrubber_mod.EventScrubber.return_value,
     )
 
 
@@ -107,6 +133,67 @@ def test_real_captured_event_has_no_frame_locals(monkeypatch):
     assert transport.envelopes, "expected at least one captured envelope"
     leaked = _frames_with_vars(transport.envelopes)
     assert not leaked, f"frame locals leaked into the Sentry event: {leaked}"
+
+
+def _extra_dicts(envelopes):
+    """Return the `extra` sub-object of every captured exception event.
+
+    Scoped to `extra` (not the whole payload) because unrelated fields --
+    e.g. in-app stack frame source context -- legitimately echo nearby test
+    source lines and would otherwise produce false positives when the
+    secret marker also appears as a literal in this file.
+    """
+    found = []
+    for envelope in envelopes:
+        for item in envelope.items:
+            payload = item.payload.json
+            if not payload or "exception" not in payload:
+                continue
+            found.append(payload.get("extra", {}))
+    return found
+
+
+def test_real_captured_event_scrubs_nested_secrets(monkeypatch):
+    """End-to-end check using the real sentry_sdk (not mocked): run the
+    actual init_observability() call, capture a real exception with a
+    denylisted key (`token`) nested one level down inside scope `extra`,
+    and inspect the literal event payload the SDK builds. The SDK default
+    scrubber (`recursive=False`) redacts denylisted keys only at the top
+    level, so this nested shape ships in cleartext unless init passes a
+    recursive scrubber. This proves the *behavior* -- the nested token is
+    redacted -- rather than just asserting the init() option value, which
+    a downstream override could silently defeat.
+    """
+    monkeypatch.setattr(transport_mod, "HttpTransport", _CapturingTransport)
+    monkeypatch.setattr(observability.settings, "SENTRY_DSN", "https://public@sentry.example.invalid/1")
+    monkeypatch.setattr(observability.settings, "SENTRY_TRACES_SAMPLE_RATE", 0.0)
+    monkeypatch.setattr(observability.settings, "SENTRY_PROFILES_SAMPLE_RATE", 0.0)
+    monkeypatch.setattr(observability.settings, "SENTRY_ENVIRONMENT", "test")
+
+    observability.init_observability(release="test-release")
+    client = sentry_sdk.get_client()
+    transport = client.transport
+    assert isinstance(transport, _CapturingTransport)
+
+    secret_marker = "nested-token-should-be-scrubbed"
+    with sentry_sdk.new_scope() as scope:
+        scope.set_extra("payload", {"token": secret_marker})
+        try:
+            raise ValueError("boom")
+        except ValueError:
+            sentry_sdk.capture_exception()
+    sentry_sdk.flush()
+
+    assert transport.envelopes, "expected at least one captured envelope"
+    extras = _extra_dicts(transport.envelopes)
+    assert extras, "expected at least one captured event with an extra context"
+    for extra in extras:
+        assert secret_marker not in json.dumps(extra), (
+            f"nested secret leaked into the Sentry event's extra context: {extra}"
+        )
+    assert any(e.get("payload", {}).get("token") == "[Filtered]" for e in extras), (
+        f"expected the nested token to be scrubbed to '[Filtered]': {extras}"
+    )
 
 
 def _request_dicts(envelopes):
