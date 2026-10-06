@@ -202,8 +202,7 @@ uv run pytest app/tests/test_endpoints.py::test_function -v  # one specific test
 **Deploy:** the public instance auto-rebuilds daily. Contributors don't deploy manually — merge a PR and the change goes live within a day.
 
 Architecture, caching patterns, and gotchas live in [AGENTS.md](./AGENTS.md) — read that
-before deeper changes. (`CLAUDE.md` is only a one-line shim that imports it, and tools
-reading files directly treat that import as literal text, so it is not the doc to follow.)
+before deeper changes.
 
 ## Data Sources
 
