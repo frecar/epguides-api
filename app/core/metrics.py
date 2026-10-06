@@ -3,7 +3,7 @@
 Exposes cache hit/miss counters that tools (Grafana, Prometheus, etc.)
 can scrape from the `/metrics` endpoint to monitor cache efficiency.
 
-Documented in CLAUDE.md "Observability gaps" section.
+Documented in AGENTS.md "Observability gaps" section.
 
 ## Ingest freshness heartbeat
 
