@@ -83,6 +83,7 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 
 ### GitHub issues
 - Any non-trivial plan or task becomes a GH issue, before or as you start — the issue is the durable record. Apply **exactly one each** of `type:` (bug/feature/chore/docs/infra), `severity:` (critical/high/medium/low), `status:` (triage/ready/in-progress/blocked/burn-in), `priority:` (p0..p3) and `effort:` (s/m/l/xl) at file time — **five axes, all of them**.
+- **File through the operator tooling** (raw `gh issue create` bypasses label/board/body enforcement). Body structure is required — stamp, `## Problem`, `## Acceptance criteria`, artifact, length: `agent-harness/docs/github-issue-filing.md`, template in the `issue-filing` skill.
 - Self-filed issue → `Closes #N` in the PR. **External-reporter** issue → `Refs #N` (never auto-close on merge; the reporter verifies first).
 - **GitHub does not parse negation.** `Closes #N` / `Fixes #N` / `Resolves #N` anywhere in a commit or PR body closes #N on merge — even inside "this does **not** close #N". Never put a closing keyword next to an issue number you are not closing; write `Refs #N` or spell the number out ("issue N") instead.
 - This is a public repo — never reference internal hostnames, IPs, private repos, or private deployment details in issues/PRs/comments.
