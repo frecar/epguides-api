@@ -258,12 +258,12 @@ repos:
   - repo: local
     hooks:
       - id: agents-md-size-cap
-        name: "AGENTS.md Muse 60 KiB cap"
-        # dotfiles#465: Muse truncates each rules file past 64 KiB (measured,
-        # dotfiles#422). The 60 KiB blocking threshold keeps headroom; extract
+        name: "AGENTS.md Muse 48 KiB cap"
+        # dotfiles#465: Muse truncates each rules file past ~52.5 KiB (re-measured 2026-10-07;
+        # dotfiles#422's 64 KiB is stale on 1.4.3). The 48 KiB blocking threshold keeps headroom; extract
         # bulky reference material into docs/agents/*.md instead of growing
         # this file. Authority: sync-agents-core.sh --check (Muse gate).
-        entry: bash -c 'test $(wc -c < AGENTS.md) -le 61440 || { echo "AGENTS.md exceeds the 61440-byte Muse cap ($(wc -c < AGENTS.md) bytes) \u2014 extract into docs/agents/*.md (dotfiles#465)" >&2; exit 1; }' --
+        entry: bash -c 'test $(wc -c < AGENTS.md) -le 49152 || { echo "AGENTS.md exceeds the 49152-byte Muse cap ($(wc -c < AGENTS.md) bytes) \u2014 extract into docs/agents/*.md (dotfiles#465)" >&2; exit 1; }' --
         language: system
         pass_filenames: false
         files: ^AGENTS\.md$
