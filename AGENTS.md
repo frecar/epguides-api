@@ -111,7 +111,7 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 <!-- AGENTS-CORE:END -->
 
 
-Canonical agent instructions for this repository. Compatibility files (`CLAUDE.md`, `.github/copilot-instructions.md`) point here.
+Canonical agent instructions for this repository. The `.github/copilot-instructions.md` compatibility file points here.
 
 REST API for TV show metadata, episodes, air dates, and summaries. Also provides an MCP server for AI assistants.
 
@@ -120,8 +120,8 @@ REST API for TV show metadata, episodes, air dates, and summaries. Also provides
 REST API for TV show metadata, episodes, air dates, and summaries. Also
 provides an MCP server for AI assistants.
 
-Canonical agent instructions for this repository. Compatibility files
-(`CLAUDE.md`, `.github/copilot-instructions.md`) point here.
+Canonical agent instructions for this repository. The `.github/copilot-instructions.md`
+compatibility file points here.
 
 ## LLM Policy
 - Natural-language queries are routed through whatever OpenAI-compatible gateway is set in `LLM_API_URL` (local Ollama, vLLM, llama.cpp server, hosted endpoint, ...).
