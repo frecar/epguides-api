@@ -124,3 +124,17 @@ updates:
       docker-images:
         patterns:
           - "*"
+    # Pin the prod Python base image to the stable 3.14.x line. Dependabot
+    # otherwise proposes python:3.15.0rc* pre-releases for the production
+    # Dockerfile. Two complementary rules: semver-major blocks the 3.14 ->
+    # 3.15 category, and the Bundler-syntax versions bound also catches
+    # the pre-release tags (3.15.0a*/b*/rc*) that sort below 3.15.0 GA.
+    # 3.14.x patch bumps still flow. Remove both rules (or raise the
+    # bound) when 3.15 reaches GA and we deliberately move to it.
+    ignore:
+      - dependency-name: "python"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "python"
+        versions:
+          - ">= 3.15.0.a"
