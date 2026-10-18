@@ -215,24 +215,23 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
-  # Per-repo override (lives OUTSIDE the managed block by design): AGENTS.md
-  # Muse size cap. Moved here from inside the managed block (#527 resolution)
-  # so baseline re-syncs stay idempotent without dropping the 48 KiB enforcement.
+  # >>> shared baseline additions (managed; do not hand-edit) >>>
+  # Cap AGENTS.md at 48 KiB (49152 bytes). The Muse agent harness truncates
+  # each rules file past ~52.5 KiB, so the tail of an oversized AGENTS.md (its
+  # Operational Rules) silently stops loading; 48 KiB keeps headroom. Extract
+  # bulky reference material into docs/agents/*.md instead of growing this
+  # file. The limit is owned by the AGENTS.md sync gate
+  # (sync-agents-core.sh --check); keep this value in step with it.
   - repo: local
     hooks:
       - id: agents-md-size-cap
         name: "AGENTS.md Muse 48 KiB cap"
-        # dotfiles#465: Muse truncates each rules file past ~52.5 KiB (re-measured 2026-10-07;
-        # dotfiles#422's 64 KiB is stale on 1.4.3). The 48 KiB blocking threshold keeps headroom; extract
-        # bulky reference material into docs/agents/*.md instead of growing
-        # this file. Authority: sync-agents-core.sh --check (Muse gate).
-        entry: bash -c 'test $(wc -c < AGENTS.md) -le 49152 || { echo "AGENTS.md exceeds the 49152-byte Muse cap ($(wc -c < AGENTS.md) bytes) \u2014 extract into docs/agents/*.md (dotfiles#465)" >&2; exit 1; }' --
+        entry: bash -c 'test $(wc -c < AGENTS.md) -le 49152 || { echo "AGENTS.md exceeds the 49152-byte Muse cap ($(wc -c < AGENTS.md) bytes) — extract into docs/agents/*.md" >&2; exit 1; }' --
         language: system
         pass_filenames: false
         files: ^AGENTS\.md$
         stages: [pre-commit]
 
-  # >>> shared baseline additions (managed; do not hand-edit) >>>
   # Lint GitHub Actions workflow YAML locally. `language: golang` auto-bootstraps
   # Go, so no host toolchain is needed. Keep this `rev` and the CI `actionlint`
   # job's pinned version in lockstep.
