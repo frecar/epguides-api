@@ -149,6 +149,10 @@ make up
 
 ### Production
 
+The image installs locked dependencies with uv in its builder stage. The final
+runtime has no pip; change dependencies in the project and rebuild the image
+instead of installing packages into a running container.
+
 ```bash
 make up-prod
 

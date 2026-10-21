@@ -77,6 +77,10 @@ RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
+# Dependencies are installed by uv in the builder. Remove the base image's
+# unused installer and its independently vendored certificate/dependency set.
+RUN python -m pip uninstall --yes pip
+
 # Non-root user
 RUN groupadd -r -g 1000 appgroup && \
     useradd -r -u 1000 -g appgroup -s /sbin/nologin appuser
