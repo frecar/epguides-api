@@ -17,6 +17,7 @@ Guards epguides-api#324. Two layers:
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -37,9 +38,9 @@ CI_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "ci.yml"
 OSV_CONFIG = _REPO_ROOT / ".osv-scanner.toml"
 AUDIT_SCRIPT = _REPO_ROOT / "scripts" / "audit_osv.sh"
 
-# The pinned OSV-Scanner action ref that CI uses as the authoritative
-# online dependency-CVE backstop.
-_OSV_ACTION = "google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc"
+# The workflow owns the version; the contract requires the correct action
+# and an immutable commit rather than duplicating its changing SHA.
+_OSV_ACTION = "google/osv-scanner-action/osv-scanner-action@"
 
 
 def _local_hooks() -> dict[str, dict]:
@@ -120,11 +121,27 @@ def test_ci_has_authoritative_online_osv_job() -> None:
         None,
     )
     assert osv_step is not None, "CI audit job must run the pinned OSV-Scanner action"
+    assert re.fullmatch(re.escape(_OSV_ACTION) + r"[0-9a-f]{40}", osv_step["uses"]), (
+        "OSV-Scanner action must be pinned to an immutable commit"
+    )
     scan_args = osv_step["with"]["scan-args"]
     assert "--lockfile=uv.lock" in scan_args
     assert "--config=.osv-scanner.toml" in scan_args
     # The audit job is one of ci-gate's required `needs`, so the OSV step gates.
     assert "audit" in config["jobs"]["ci-gate"]["needs"]
+
+
+@pytest.mark.parametrize("action", ["", _OSV_ACTION + "v2.7.0", _OSV_ACTION + "a" * 39])
+def test_ci_osv_contract_rejects_missing_or_mutable_ref(tmp_path: Path, monkeypatch, action: str) -> None:
+    config = yaml.safe_load(CI_WORKFLOW.read_text(encoding="utf-8"))
+    for step in config["jobs"]["audit"]["steps"]:
+        if str(step.get("uses", "")).startswith(_OSV_ACTION):
+            step["uses"] = action
+    workflow = tmp_path / "ci.yml"
+    workflow.write_text(yaml.safe_dump(config), encoding="utf-8")
+    monkeypatch.setitem(globals(), "CI_WORKFLOW", workflow)
+    with pytest.raises(AssertionError, match="OSV-Scanner action"):
+        test_ci_has_authoritative_online_osv_job()
 
 
 # --------------------------------------------------------------------------
