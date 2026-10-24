@@ -8,7 +8,7 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 ### Worktrees
 - Create worktrees **only** under `/tmp/wt-<branch-slug>-<instance>/<repo>` (branch with `/`→`-`; `<instance>` = `$$`+epoch or a harness dispatch id — never omit it). **Never** derive it from the issue number, agent name, or branch alone: concurrent dispatches on one issue would share a directory and interleave edits. **Never** nest a worktree inside the main clone directory — that pollutes the workspace.
 - Base off fresh `origin/main`: `git fetch origin` immediately before `git worktree add "/tmp/wt-<slug>-<instance>/<repo>" origin/main -b <branch>`.
-- Name the worktree by the branch, not the issue. **Tear it down** on completion or hand-off: `git worktree remove <path>` + `rm -rf` the parent.
+- Name the worktree by the branch, not the issue. **Tear it down** on completion or hand-off: `git worktree remove <path>` + `rmdir` the parent.
 - **Leave every worktree RECOVERABLE-FROM-REMOTE before you stop — for ANY reason** (task done, context exhausted, timeout, error, hand-off). Before your last turn, your work must be in one of these states, and you must say which:
   - **pushed + PR open** → the normal done state; remove the worktree after the PR merges.
   - **pushed, no PR yet** → say so and name the branch: no `gh pr list` or backlog query will find it.
