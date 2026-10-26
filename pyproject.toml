@@ -11,18 +11,18 @@ keywords = ["tv", "shows", "api", "epguides", "fastapi"]
 # Pinned exact versions matching the previous requirements.txt floor.
 # uv.lock pins transitives. Bump deliberately, not via floating ranges.
 dependencies = [
-    "fastapi==0.143.2",
+    "fastapi==0.161.1",
     "uvicorn[standard]==0.54.0",
     "redis==8.1.0",
     "pydantic==2.14.1",
-    "pydantic-settings==2.16.0",
+    "pydantic-settings==2.16.1",
     "python-multipart==0.0.32",
     "httpx==0.28.1",
     "python-dateutil==2.9.0.post0",
     "prometheus-client==0.26.0",
-    "sentry-sdk==2.72.0",  # optional — only active when SENTRY_DSN is set
+    "sentry-sdk==2.73.0",  # optional — only active when SENTRY_DSN is set
     "orjson==3.13.0",
-    "setuptools==84.1.0",  # keep setuptools current — security floor for transitives
+    "setuptools==84.2.1",  # keep setuptools current — security floor for transitives
     "msgpack>=1.2.3",
 ]
 
@@ -33,7 +33,7 @@ dev = [
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
-    "ruff==0.17.1",
+    "ruff==0.17.2",
     "pre-commit==4.7.0",
     "mypy==2.4.0",
     "pip-audit==2.10.1",
