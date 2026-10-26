@@ -18,7 +18,7 @@ dependencies = [
     "pydantic-settings==2.16.1",
     "python-multipart==0.0.32",
     "httpx==0.28.1",
-    "python-dateutil==2.9.0.post0",
+    "python-dateutil==3.0.0",
     "prometheus-client==0.26.0",
     "sentry-sdk==2.73.0",  # optional — only active when SENTRY_DSN is set
     "orjson==3.13.0",
