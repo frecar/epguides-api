@@ -67,6 +67,7 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 - **One merge owner when a session coordinates several agents' PRs:** owners hand PRs over explicitly and stop merging (under strict up-to-date protection each outside merge re-runs CI for every queued PR); the owner merges whichever is green first.
 - A dependabot PR you cannot push to (protected `dependabot/*` ref) or merge: supersede it from your own branch carrying its commit verbatim, and close it with a pointer.
 - **Verify the merge actually happened.** A gate run from the wrong cwd/repo is a silent no-merge — it can exit 0 while nothing merges. After the wrapper returns, confirm the PR reached `state == MERGED`: `gh pr view <n> --json state -q .state` (expect `MERGED`) or `gh api repos/<owner>/<repo>/pulls/<n> -q .merged` (expect `true`). Do not treat gate exit 0 alone as proof.
+- **Verify queue admission after release.** On a merge-queue repo, a released PR is not done until the queue shows it admitted at its authored head (or `state == "MERGED"`); a dequeued entry needs a fresh exact-head READY heartbeat before retrying.
 
 ### Commits & conventions
 - **Never** add `Co-Authored-By` or any AI-attribution line — commits are the operator's own work.
