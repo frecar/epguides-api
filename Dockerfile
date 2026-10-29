@@ -25,7 +25,7 @@ FROM python:3.14.8-slim@sha256:fbecd461fc72d21b2143c6eaba25143738079154a6d0ea3da
 # this line. The astral-sh/uv image only contains the static uv binary; we COPY
 # it into our python base image rather than using it as the base (which lacks
 # python).
-COPY --from=ghcr.io/astral-sh/uv:0.12.22 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /usr/local/bin/uv
 
 WORKDIR /build
 
