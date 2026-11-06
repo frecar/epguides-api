@@ -4,3 +4,5 @@ mkdocs-material==9.8.0
 pymdown-extensions>=12.3
 # Security floor for MkDocs' transitive dependency (GHSA-65pc-fj4g-8rjx).
 idna>=3.20
+# Security floor for requests/mkdocs transitive dependency (PYSEC-2026-4320 / GHSA-6q48-6c7w-9gw2).
+certifi>=2026.10.18
