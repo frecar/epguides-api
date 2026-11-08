@@ -38,6 +38,14 @@ make up
 !!! success "Automatic Quality Checks"
     Pre-commit hooks ensure code quality on every commit.
 
+The CI secret scanner downloads a version- and SHA256-pinned gitleaks binary.
+If its release URL fails, it tries the exact uploaded asset through GitHub's
+REST API once. Both transports must match the same checksum before extraction
+or installation; failed or ambiguous metadata and wrong bytes keep the check
+red. The ephemeral job token stays in `GH_TOKEN`, and temporary partials are
+removed on exit. Installer failure contracts live in
+`app/tests/test_gitleaks_download.py`.
+
 ### What They Do
 
 1. 🔢 **Update version** - Increments build number
