@@ -60,6 +60,7 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 - **Tooling conventions:** `gh` for every GitHub operation rather than the web UI; `make` targets are uniform across repos (`dev`, `test`, `lint`, `build`). Consultation protocols are harness-specific — do not claim you consulted one your harness does not have.
 
 ### Merge discipline
+- **Look for stacked PR opportunities.** During planning and implementation, split genuinely dependent work into small reviewable layers and open PRs early so checks and review can overlap; keep independent work independent. GitHub native stacks are distinct from branch-based PR chains: use them only when the configured gated merger supports every stack member. Preserve per-head CI and review and the native queue; otherwise use the normal gated path for each PR in dependency order.
 - `main` is protected on every repo: **never** `git push` to it, **never** raw `gh pr merge` or web-merge.
 - Merge **only** via the project's gated merge wrapper, which refuses unless every required check has concluded `success`.
 - **The gated merge wrapper lives in its own home repo, not necessarily this one** — if this checkout has no such wrapper, `cd` into the repo that owns it before invoking it, and always pass an explicit repo target rather than relying on cwd auto-detection (an implicit target can silently resolve to the wrong repo's identically-numbered PR).
