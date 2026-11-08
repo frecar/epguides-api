@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   strip-status-label:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["untrusted-linux"]') || '["ubuntu-latest"]') }}
     timeout-minutes: 5
     steps:
       - name: Remove active status:* labels from the closed issue

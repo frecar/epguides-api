@@ -230,14 +230,13 @@ mypy, ruff and gitleaks:
   no browser smoke — the single biggest cost class in the heavier repos.
 - **Small app surface**, so the test suite is genuinely short rather than
   trimmed.
-- **GitHub-hosted runners.** As a public repo it cannot depend on private
-  reusable workflows or a privately-hosted registry mirror, which turns out to
-  cost less than it saves: no self-hosted queueing, and the tool cache is warm.
-
-That last one is a **constraint, not a choice**, and it cuts both ways. Do not
-"fix" this repo by importing a private-repo CI pattern: private reusable
-workflows and internal mirrors are unavailable here by construction, and a
-change that assumes them will fail for outside contributors, not just for us.
+- **Hosted default with an isolated public route.** Portable jobs may use an
+  isolated public worker only when `CI_FLEET_UNTRUSTED_ENABLED` is enabled;
+  otherwise they remain on GitHub-hosted runners. Jobs requiring Docker stay
+  hosted until a compatible public-safe Docker capability is separately
+  qualified and enabled. Source flags do not prove rollout. Never route public
+  contributions to a trusted-only runner, and keep workflows independent of
+  non-public actions, dependencies and image mirrors.
 
 ### Adding a gate here has a budget
 
