@@ -100,7 +100,7 @@ jobs:
   lint:
     name: Lint
     # Portable job: only use the isolated public route after its rollout flag is enabled.
-    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
     # Bounded ceiling so a wedged runner fails fast instead of holding a
     # shared self-hosted runner for the GitHub default 6h.
     timeout-minutes: 15
@@ -168,7 +168,7 @@ jobs:
   typecheck:
     name: Type Check
     # Portable job: only use the isolated public route after its rollout flag is enabled.
-    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
     # Bounded ceiling so a wedged runner fails fast instead of holding a
     # shared self-hosted runner for the GitHub default 6h.
     timeout-minutes: 15
@@ -555,7 +555,7 @@ jobs:
     # itself is a local git op — no network once the binary is in place.
     #
     # Portable job: only use the isolated public route after its rollout flag is enabled.
-    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -640,7 +640,7 @@ jobs:
     if: always()
     needs: [audit, lint, typecheck, test, trivy-fs, docker-build, trivy-image, gitleaks]
     # Keep aggregation on the isolated public route only after its rollout flag is enabled.
-    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-direct-untrusted-linux"]') || '["ubuntu-latest"]') }}
     # Bounded ceiling — this gate only checks `needs.*.result` and exits,
     # so it should finish in seconds.
     timeout-minutes: 10

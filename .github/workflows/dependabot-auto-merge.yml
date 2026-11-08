@@ -22,7 +22,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
     # GitHub-hosted: public-repo, pull_request-reachable. Pure GitHub API
     # calls (approve + enable auto-merge) — no self-hosted runner needed.
-    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-direct-untrusted-linux"]') || '["ubuntu-latest"]') }}
     # Bounded ceiling so a wedged runner (hung gh API / metadata fetch /
     # auto-merge wait) fails fast.
     timeout-minutes: 15
@@ -67,7 +67,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     # GitHub-hosted: scheduled/dispatch GitHub API sweep — no self-hosted
     # runner needed.
-    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-direct-untrusted-linux"]') || '["ubuntu-latest"]') }}
     steps:
       - name: Rebase behind-main dependabot PRs
         env:
