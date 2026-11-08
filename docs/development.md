@@ -58,11 +58,7 @@ removed on exit. Installer failure contracts live in
 pre-commit install
 ```
 
-### Skip (Not Recommended)
-
-```bash
-git commit --no-verify
-```
+Keep the configured hooks enabled; fix a failing check before publishing.
 
 ---
 
@@ -88,6 +84,52 @@ curl http://localhost:3000/health
 ---
 
 ## 🧪 Testing
+
+### Strict CI execution evidence
+
+The default `Test` job stays one GitHub-hosted job, with the existing Redis
+service and capacity-aware `pytest -n auto` worker selector. Fork pull requests
+also stay hosted. No promotion variable or default shard count is changed by
+this integration.
+
+`.github/pytest-suite.json` owns the complete pytest invocation, configuration
+files and relevant environment inputs. CI performs native collection, creates
+an identity-bound format-2 manifest, runs exactly its assigned cases and seals
+the receipt together with the coverage bytes. The complete aggregate verifies
+every case/receipt/artifact before enforcing the unchanged 95% application
+coverage floor. Per-shard coverage is partial evidence; it cannot substitute
+for that final full-suite check. Missing or changed source, invocation, case
+completion or coverage bytes fails the `Test` job and the existing `ci-gate`.
+
+`ci_shard_helper/` is a complete generated public-safe payload, not an
+application code fork. Update it through the canonical export as a whole,
+including `MANIFEST.sha256`; do not patch individual generated files or reformat
+them locally. The bundle verifier checks exact membership and every byte, and
+the consumer contract pins its manifest fingerprint. This public CI needs no
+non-public action, dependency, access token or image mirror.
+
+```bash
+uv run python scripts/ci_pytest_shards.py verify-bundle
+```
+
+A future parallel route requires explicit `CI_FLEET_UNTRUSTED_ENABLED` and
+positively qualified isolated Docker x64 capacity published in
+`CI_FLEET_UNTRUSTED_LINUX_DOCKER_X64_COMPATIBLE_CAPACITY`. Generic Linux capacity
+does not qualify the Redis service requirement. Before promotion, measure the
+actual runner/tool/service path and CI latency. Missing, zero or malformed
+capacity refuses planning before expensive collection. This count represents raw
+compatible positions. For N>1, planning uses at most N−1 positions, leaving one
+for other work; N=1 retains one shard. The collected file count and existing
+maximum still bound the plan. Runtime contention policy remains independent.
+The planner and final aggregation remain hosted; only successful non-fork plans can route matrix jobs
+to `fleet-pooled-untrusted-linux-docker-x64`. Artifacts are scoped to the current
+run attempt, and shard failures/cancellations never become successful skips.
+
+The strict checks extend the existing required test lane for every PR/push,
+without adding a separate required context. Compare their measured overhead
+with the existing test and image-scan paths before promotion; revert the CI
+integration if it regresses the required lane rather than removing coverage or
+receipt checks. Failure contracts live in `app/tests/test_ci_pytest_shards.py`.
 
 ### Run Tests
 

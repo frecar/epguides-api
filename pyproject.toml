@@ -54,6 +54,10 @@ packages = ["app"]
 [tool.ruff]
 line-length = 120
 target-version = "py314"
+# Generated helper bytes are verified by their complete checksum manifest.
+# Format changes belong in the export, never a consumer-local rewrite.
+extend-exclude = ["ci_shard_helper"]
+force-exclude = true
 
 # Host-interpreter carve-back. Everything under scripts/ is invoked by the
 # system `python3` (a developer's machine / CI runner, which may be older than
@@ -114,6 +118,7 @@ tmp_path_retention_count = 1
 
 [tool.coverage.run]
 source = ["app"]
+relative_files = true
 omit = ["app/tests/*", "app/__init__.py", "app/*/__init__.py"]
 
 [tool.coverage.report]
