@@ -99,8 +99,8 @@ jobs:
 
   lint:
     name: Lint
-    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
-    runs-on: ubuntu-latest
+    # Portable job: only use the isolated public route after its rollout flag is enabled.
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
     # Bounded ceiling so a wedged runner fails fast instead of holding a
     # shared self-hosted runner for the GitHub default 6h.
     timeout-minutes: 15
@@ -167,8 +167,8 @@ jobs:
 
   typecheck:
     name: Type Check
-    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
-    runs-on: ubuntu-latest
+    # Portable job: only use the isolated public route after its rollout flag is enabled.
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
     # Bounded ceiling so a wedged runner fails fast instead of holding a
     # shared self-hosted runner for the GitHub default 6h.
     timeout-minutes: 15
@@ -195,7 +195,8 @@ jobs:
 
   test:
     name: Test
-    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    # Redis service containers require Docker; retain hosted execution until a
+    # public-safe isolated Docker route is qualified.
     runs-on: ubuntu-latest
     # Bounded ceiling so a wedged runner (or a hung redis service /
     # stuck pytest) fails fast instead of holding a shared self-hosted
@@ -236,16 +237,9 @@ jobs:
         # guard" step above, which fails the build on a literal worker/CPU/
         # memory ceiling such as `-n 16` or `--maxprocesses=16`):
         #
-        #  - Runner: always GitHub-hosted `ubuntu-latest`, every job, no
-        #    exception — this is a public repository, so untrusted fork-PR
-        #    code must never reach a shared/self-hosted runner or its
-        #    secrets and network (see `audit` above). A trusted-only
-        #    self-hosted path was considered and intentionally NOT adopted:
-        #    it would need its own event/permission/isolation-tested split
-        #    between untrusted PR jobs and trusted branch/dependabot jobs,
-        #    which is a materially bigger trust-boundary surface than this
-        #    workflow currently carries. GitHub-hosted is the documented
-        #    exception for this repo, not a gap.
+        #  - GitHub-hosted remains the production path until a compatible
+        #    isolated public Docker runner has been qualified. Do not route
+        #    this service-backed job through a portable runner without Docker.
         #  - Parallelism: `-n auto` is overridden by the tested hook in
         #    app/tests/conftest.py. It takes the lower of 80% of affinity /
         #    cgroup-quota-visible CPU, 80% of finite available memory at the
@@ -283,7 +277,8 @@ jobs:
   # single-step form.
   trivy-fs:
     name: Trivy fs scan
-    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    # Trivy's scan action requires Docker; retain hosted execution until a
+    # public-safe isolated Docker route is qualified.
     runs-on: ubuntu-latest
     # Bounded ceiling so a wedged runner (hung Trivy DB pull or stuck
     # scan) fails fast instead of holding a shared self-hosted runner
@@ -358,7 +353,8 @@ jobs:
   # loads it for scanning off the same shared cache.
   docker-build:
     name: Docker build
-    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    # Docker build requires a Docker-capable runner; keep hosted until its
+    # isolated public capability is qualified.
     runs-on: ubuntu-latest
     # Bounded ceiling — primary wedge-stopper. The buildx bootstrap
     # pull (moby/buildkit) and in-build FROM-base pulls can hang on a
@@ -434,7 +430,8 @@ jobs:
   # would weaken HIGH visibility.
   trivy-image:
     name: Trivy image scan
-    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
+    # Image build and scan require Docker; keep hosted until the isolated
+    # public Docker capability is qualified.
     runs-on: ubuntu-latest
     # Bounded ceiling — this job both builds the image (same buildx
     # bootstrap / FROM-base pull hang risk as docker-build) and loads +
@@ -557,8 +554,8 @@ jobs:
     # (Docker-Hub pull-rate-limit pain) and trips org-license checks. The scan
     # itself is a local git op — no network once the binary is in place.
     #
-    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
-    runs-on: ubuntu-latest
+    # Portable job: only use the isolated public route after its rollout flag is enabled.
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -642,8 +639,8 @@ jobs:
   ci-gate:
     if: always()
     needs: [audit, lint, typecheck, test, trivy-fs, docker-build, trivy-image, gitleaks]
-    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
-    runs-on: ubuntu-latest
+    # Keep aggregation on the isolated public route only after its rollout flag is enabled.
+    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-direct-untrusted-linux"]') || '["ubuntu-latest"]') }}
     # Bounded ceiling — this gate only checks `needs.*.result` and exits,
     # so it should finish in seconds.
     timeout-minutes: 10
