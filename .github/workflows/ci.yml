@@ -569,6 +569,7 @@ jobs:
         # When bumping the hook, bump GITLEAKS_VERSION + GITLEAKS_SHA256 here in
         # the same PR (SHA256 = linux_x64 tarball digest from checksums.txt).
         env:
+          GH_TOKEN: ${{ github.token }}
           GITLEAKS_VERSION: 8.30.1
           GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
         run: |
@@ -576,7 +577,19 @@ jobs:
           tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${tarball}"
           tmp="$(mktemp -d)"
-          curl -fsSL --retry 3 -o "${tmp}/${tarball}" "${url}"
+          trap 'rm -rf "${tmp}"' EXIT
+          # One alternate transport after a failed release URL (epguides-api#578).
+          # The immutable platform checksum below covers either response.
+          if ! curl -fsSL --connect-timeout 10 --max-time 60 -o "${tmp}/${tarball}" "${url}"; then
+            echo "::warning::Release download failed; trying the pinned release REST asset"
+            asset_id="$(gh api "repos/gitleaks/gitleaks/releases/tags/v${GITLEAKS_VERSION}" \
+              --jq "[select(.tag_name == \"v${GITLEAKS_VERSION}\") | .assets[] | select(.name == \"${tarball}\" and .state == \"uploaded\")] | if length == 1 then .[0].id else error(\"expected one uploaded pinned asset\") end")"
+            case "${asset_id}" in
+              ''|0|*[!0-9]*) echo "::error::Invalid pinned release asset identity" >&2; exit 1 ;;
+            esac
+            gh api "repos/gitleaks/gitleaks/releases/assets/${asset_id}" \
+              -H "Accept: application/octet-stream" > "${tmp}/${tarball}"
+          fi
           echo "${GITLEAKS_SHA256}  ${tmp}/${tarball}" | sha256sum -c -
           tar -xzf "${tmp}/${tarball}" -C "${tmp}" gitleaks
           install -m 0755 "${tmp}/gitleaks" "${RUNNER_TEMP}/gitleaks"
