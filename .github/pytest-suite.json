@@ -1,0 +1,5 @@
+{
+  "argv": ["pytest", "app/tests", "-n", "auto", "--dist=worksteal", "--cov=app", "--cov-fail-under=95", "--cov-report=term-missing", "-q"],
+  "config_files": [".github/pytest-suite.json", "pyproject.toml", "uv.lock", "app/tests/conftest.py", "scripts/compute_xdist_workers.py"],
+  "environment": ["REDIS_HOST", "REDIS_PORT"]
+}

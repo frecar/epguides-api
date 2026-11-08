@@ -26,6 +26,8 @@ env/
 local.cfg
 
 # Testing & Coverage
+.ci-pytest/
+.reaper-heartbeat
 .coverage
 coverage.xml
 htmlcov/
