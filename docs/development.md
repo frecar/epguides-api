@@ -117,8 +117,11 @@ positively qualified isolated Docker x64 capacity published in
 `CI_FLEET_UNTRUSTED_LINUX_DOCKER_X64_COMPATIBLE_CAPACITY`. Generic Linux capacity
 does not qualify the Redis service requirement. Before promotion, measure the
 actual runner/tool/service path and CI latency. Missing, zero or malformed
-capacity refuses planning before expensive collection. The planner and final
-aggregation remain hosted; only successful non-fork plans can route matrix jobs
+capacity refuses planning before expensive collection. This count represents raw
+compatible positions. For N>1, planning uses at most N−1 positions, leaving one
+for other work; N=1 retains one shard. The collected file count and existing
+maximum still bound the plan. Runtime contention policy remains independent.
+The planner and final aggregation remain hosted; only successful non-fork plans can route matrix jobs
 to `fleet-pooled-untrusted-linux-docker-x64`. Artifacts are scoped to the current
 run attempt, and shard failures/cancellations never become successful skips.
 

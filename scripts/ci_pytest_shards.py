@@ -65,7 +65,7 @@ def plan(directory: Path, *, capacity: int) -> list[int]:
     descriptor_path, manifest_path = directory / "suite.json", directory / "manifest.json"
     helper("collect-pytest", "--spec", SPEC, "--output", str(descriptor_path))
     descriptor = read_descriptor(descriptor_path)
-    total = min(capacity, len(descriptor["collection"]), MAX_SHARDS)
+    total = min(max(1, capacity - 1), len(descriptor["collection"]), MAX_SHARDS)
     if total < 1:
         raise ValueError("complete pytest collection is empty")
     helper(

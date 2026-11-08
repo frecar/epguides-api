@@ -24,7 +24,7 @@ def metadata(monkeypatch):
     monkeypatch.setenv("GITHUB_RUN_ID", "12345")
     monkeypatch.setenv("CI_FORK_PR", "false")
     monkeypatch.setenv("CI_FLEET_UNTRUSTED_ENABLED", "true")
-    monkeypatch.setenv("CI_QUALIFIED_DOCKER_CAPACITY", "2")
+    monkeypatch.setenv("CI_QUALIFIED_DOCKER_CAPACITY", "3")
 
 
 @pytest.mark.parametrize("value", ["", "0", "-1", "01", "1.0", "true", "١", "1025"])
@@ -142,6 +142,25 @@ def native_checkout(tmp_path, metadata):
         return result
 
     return root, run, environment
+
+
+@pytest.mark.parametrize("capacity,expected", [(1, 1), (2, 1), (3, 2), (4, 3), (1024, 5)])
+def test_native_plan_reserves_one_compatible_position_with_single_position_exception(
+    native_checkout, capacity, expected
+):
+    root, run, environment = native_checkout
+    for number in range(3, 6):
+        (root / f"tests/test_extra_{number}.py").write_text(f"def test_extra_{number}():\n    assert True\n")
+    for arguments in (
+        ["add", "tests"],
+        ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "fixture"],
+    ):
+        subprocess.run(["git", *arguments], cwd=root, env=environment, check=True, capture_output=True)
+    run("plan", "--directory", "plan", extra_env={"CI_QUALIFIED_DOCKER_CAPACITY": str(capacity)})
+    manifest = json.loads((root / "plan/manifest.json").read_text())
+    descriptor = json.loads((root / "plan/suite.json").read_text())
+    assert len(descriptor["collection"]) == 5
+    assert manifest["shard_total"] == expected
 
 
 def test_real_complete_native_shards_seal_combine_and_refuse_tampered_coverage(native_checkout):
