@@ -373,8 +373,7 @@ jobs:
   # single-step form.
   trivy-fs:
     name: Trivy fs scan
-    # Trivy's scan action requires Docker; retain hosted execution until a
-    # public-safe isolated Docker route is qualified.
+    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
     runs-on: ubuntu-latest
     # Bounded ceiling so a wedged runner (hung Trivy DB pull or stuck
     # scan) fails fast instead of holding a shared self-hosted runner
@@ -434,52 +433,19 @@ jobs:
         env:
           TRIVY_DISABLE_VEX_NOTICE: "true"
 
-  # Build the production image in CI. Without this, the multi-stage
-  # Dockerfile is only syntax-linted by hadolint — an actual build
-  # regression (a base-image tag that no longer resolves, a broken
-  # `uv sync`, a COPY path that drifts after a refactor) would merge
-  # silently and only surface on the next deploy rebuild. This job
-  # gates every PR on a real `docker build` of the runtime target.
-  #
-  # The build is BuildKit-cached via GitHub Actions cache so the cost
-  # stays bounded: a Dockerfile/lockfile-stable PR is a near-instant
-  # cache hit; only dependency or base-image changes pay the cold-build
-  # cost. `load: true` is omitted here (this job only needs to prove the
-  # build succeeds, not export the image) — the trivy-image job below
-  # loads it for scanning off the same shared cache.
-  docker-build:
-    name: Docker build
-    # Docker build requires a Docker-capable runner; keep hosted until its
-    # isolated public capability is qualified.
+  # Build the declared production recipes once and scan their immutable IDs.
+  trivy-image:
+    name: Trivy image scan
     runs-on: ubuntu-latest
-    # Bounded ceiling — primary wedge-stopper. The buildx bootstrap
-    # pull (moby/buildkit) and in-build FROM-base pulls can hang on a
-    # registry rate-limit / network stall. 25m sits well above a normal
-    # cached build (sub-3min) so it only trips on a real hang.
     timeout-minutes: 25
     permissions:
       contents: read
-    # Lift the Docker Hub token into a job-level env var so the login step
-    # can gate on its presence. The `secrets` context is NOT permitted in
-    # an `if:` expression, but `env` is — and on fork PRs (no secrets) the
-    # var resolves to an empty string, so the guard skips login cleanly.
+    outputs:
+      image_ids: ${{ steps.production.outputs.image-ids }}
     env:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Authenticate to Docker Hub BEFORE buildx is created. The buildx
-      # docker-container driver does NOT inherit the host daemon's registry
-      # config, so base-image resolution (`FROM python:3.14-slim`) otherwise
-      # hits Docker Hub anonymously and is rate-limited (HTTP 429) once the
-      # BuildKit cache misses. An authenticated pull raises the rate limit
-      # well above the anonymous ceiling. setup-buildx-action reads the
-      # credentials login writes to the runner's docker config at
-      # builder-create time and propagates them into the container builder,
-      # so login MUST precede the buildx step.
-      #
-      # Guarded on a non-empty token so fork PRs — which GitHub never grants
-      # secrets — degrade cleanly to an anonymous pull instead of erroring
-      # on an empty credential.
       - name: Log in to Docker Hub
         if: env.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
@@ -487,141 +453,79 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set up Docker Buildx
+        id: buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
-      - name: Build runtime image (cached)
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
-          context: .
-          target: runtime
-          push: false
-          load: false
-          tags: epguides-api:ci
-          cache-from: type=gha,scope=docker-image
-          # ignore-error=true: the GitHub Actions Cache API is rate-limited,
-          # so under concurrent CI load the mode=max cache *export* RPC can
-          # stall and the buildkit builder is torn down mid-export (goaway
-          # NO_ERROR / "graceful_stop"), failing the job even though the image
-          # built fine. The cache write-back is a non-load-bearing build-time
-          # optimisation, so a failed export must not fail the build.
-          # ignore-error is a documented type=gha cache-to boolean.
-          cache-to: type=gha,mode=max,scope=docker-image,ignore-error=true
-
-  # Trivy image scan. Orthogonal to trivy-fs above: `fs` scans the repo's
-  # manifests and lockfiles; `image` scans the BUILT image — the
-  # base-image OS package layer (python:3.14-slim) plus the installed
-  # virtualenv. Without this, base-image CVEs are invisible to CI.
-  #
-  # This job rebuilds the runtime image, but off the SAME GitHub Actions
-  # BuildKit cache the docker-build job populated, so the second build is
-  # a cache hit and the extra cost is the image load + scan, not a full
-  # rebuild. `load: true` puts the image in the local Docker daemon so
-  # `trivy image` can read it.
-  #
-  # Two-step gating mirrors the trivy-fs job exactly:
-  #   step 1: severity=CRITICAL, exit-code=1                  → blocks merge
-  #   step 2: severity=HIGH, exit-code=0, if: always()        → surfaces findings only
-  #
-  # `if: always()` on the HIGH step is load-bearing: without it, a
-  # CRITICAL failure skips the HIGH-annotation step entirely, which
-  # would weaken HIGH visibility.
-  trivy-image:
-    name: Trivy image scan
-    # Image build and scan require Docker; keep hosted until the isolated
-    # public Docker capability is qualified.
-    runs-on: ubuntu-latest
-    # Bounded ceiling — this job both builds the image (same buildx
-    # bootstrap / FROM-base pull hang risk as docker-build) and loads +
-    # scans it. 25m sits above a normal cached build + scan.
-    timeout-minutes: 25
-    permissions:
-      contents: read
-    # See docker-build: `secrets` is not allowed in `if:`, so the token is
-    # lifted to job-level env for the login guard. Empty on fork PRs →
-    # login skipped, anonymous pull.
-    env:
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Install Trivy into a per-job directory on the runner's local temp
-      # space. setup-trivy's default install path ($HOME/.local/bin/trivy-bin)
-      # is shared across concurrent jobs on a self-hosted runner host, so one
-      # job writing the binary while another execs it raises ETXTBSY ("Text
-      # file busy", exit 126). ${{ runner.temp }} is unique per job and on
-      # local disk, so there is no shared write/exec target to race on.
+          use: false
+          cleanup: true
+      - name: Build production Compose images once
+        id: production
+        env:
+          COMPOSE_FILES: docker-compose.prod.yml
+          BUILDX_BUILDER: ${{ steps.buildx.outputs.name }}
+        run: bash scripts/compose_build.sh build
       - name: Install Trivy (per-job, isolated binary)
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
-          version: v0.70.0 # keep in sync with aquasecurity/trivy-action@v0.36.0
+          version: v0.70.0
           cache: true
           path: ${{ runner.temp }}
       - name: Put the per-job Trivy on PATH
         run: echo "${{ runner.temp }}/trivy-bin" >> "$GITHUB_PATH"
-      # Authenticate to Docker Hub before buildx is created — same reason
-      # as the docker-build job: the docker-container driver pulls base
-      # images anonymously and is 429-rate-limited on a cache miss without
-      # this. Login MUST precede setup-buildx-action so the credentials
-      # propagate into the container builder. Fork-PR-safe via the token
-      # guard (empty token → anonymous pull).
-      - name: Log in to Docker Hub
-        if: env.DOCKERHUB_TOKEN != ''
-        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
-      - name: Build runtime image (cached, loaded for scan)
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: .
-          target: runtime
-          push: false
-          load: true
-          tags: epguides-api:scan
-          cache-from: type=gha,scope=docker-image
-          # ignore-error=true: the GitHub Actions Cache API is rate-limited,
-          # so under concurrent CI load the mode=max cache *export* RPC can
-          # stall and the buildkit builder is torn down mid-export (goaway
-          # NO_ERROR / "graceful_stop"), failing the job even though the image
-          # built fine. The cache write-back is a non-load-bearing build-time
-          # optimisation, so a failed export must not fail the build.
-          # ignore-error is a documented type=gha cache-to boolean.
-          cache-to: type=gha,mode=max,scope=docker-image,ignore-error=true
+      - name: Prepare the job-local vulnerability database
+        id: database
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: trivy image --download-db-only --cache-dir "$TRIVY_CACHE_DIR" --timeout 10m
       - name: Trivy image scan — CRITICAL (gates merge)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          skip-setup-trivy: true # use the per-job Trivy installed above
-          scan-type: "image"
-          image-ref: "epguides-api:scan"
-          severity: "CRITICAL"
-          exit-code: "1"
-          # Suppress findings with no upstream fix available — those
-          # are noise we cannot act on (`bump the base image` does not
-          # always have a target). Mirrors the trivy-fs policy.
-          ignore-unfixed: true
-          format: "table"
-          trivyignores: ".trivyignore.image"
+        id: scan_critical
         env:
+          IMAGE_IDS: ${{ steps.production.outputs.image-ids }}
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+          TRIVY_SKIP_DB_UPDATE: "true"
           TRIVY_DISABLE_VEX_NOTICE: "true"
+        run: bash scripts/compose_build.sh scan CRITICAL
       - name: Trivy image scan — HIGH (annotation only)
-        # `if: always()` so a CRITICAL failure above does not suppress
-        # HIGH visibility — policy is "CRITICAL gates, HIGH informs",
-        # not "CRITICAL gates, HIGH only-shown-when-clean".
-        if: always()
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          skip-setup-trivy: true # use the per-job Trivy installed above
-          scan-type: "image"
-          image-ref: "epguides-api:scan"
-          # exit-code=0 — HIGH surfaces in the run log but does NOT
-          # gate. Avoids base-image noise creating bypass culture.
-          severity: "HIGH"
-          exit-code: "0"
-          ignore-unfixed: true
-          format: "table"
-          trivyignores: ".trivyignore.image"
+        id: scan_high
+        if: ${{ always() && steps.production.outcome == 'success' && steps.database.outcome == 'success' }}
         env:
+          IMAGE_IDS: ${{ steps.production.outputs.image-ids }}
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+          TRIVY_SKIP_DB_UPDATE: "true"
           TRIVY_DISABLE_VEX_NOTICE: "true"
+        run: bash scripts/compose_build.sh scan HIGH
+      - name: Remove job-owned image tags
+        if: always()
+        env:
+          IMAGE_TAGS: ${{ steps.production.outputs.image-tags || '[]' }}
+        run: bash scripts/compose_build.sh cleanup
+
+  # Preserve the existing required build context with a receipt from the same
+  # successful build-and-scan job, without building the image a second time.
+  docker-build:
+    name: Docker build
+    needs: [trivy-image]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Verify production build and scan receipt
+        env:
+          IMAGE_JOB_RESULT: ${{ needs.trivy-image.result }}
+          IMAGE_IDS: ${{ needs.trivy-image.outputs.image_ids }}
+        run: |
+          set -euo pipefail
+          test "$IMAGE_JOB_RESULT" = success
+          python3 - <<'PYTHON'
+          import json
+          import os
+          import re
+          ids = json.loads(os.environ["IMAGE_IDS"])
+          if not isinstance(ids, list) or not ids or any(not isinstance(value, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", value) for value in ids):
+              raise SystemExit("missing or invalid production image receipt")
+          PYTHON
   # ===== END managed-public-ci-template: ci-trivy-buildx =====
 
   gitleaks:
