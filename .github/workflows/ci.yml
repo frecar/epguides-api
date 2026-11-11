@@ -236,7 +236,7 @@ jobs:
       - name: Collect complete native cases and bind the shard plan
         id: plan
         run: uv run python scripts/ci_pytest_shards.py plan --directory "${RUNNER_TEMP}/pytest-plan"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pytest-plan-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pytest-plan/
@@ -285,7 +285,7 @@ jobs:
         env:
           CI_SHARD: ${{ matrix.shard }}
         run: uv run python scripts/ci_pytest_shards.py run --directory "${RUNNER_TEMP}/pytest-plan" --shard "${CI_SHARD}"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pytest-shard-${{ github.run_attempt }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/pytest-plan/artifacts/shard-${{ matrix.shard }}/
