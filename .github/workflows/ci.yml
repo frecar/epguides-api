@@ -277,7 +277,7 @@ jobs:
           enable-cache: true
           prune-cache: true
       - run: uv sync --frozen
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: pytest-plan-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pytest-plan
@@ -334,12 +334,12 @@ jobs:
         # The tracked invocation retains -n auto and the existing CPU/RAM
         # selector/Redis DB isolation. The final complete report enforces 95%.
         run: uv run python scripts/ci_pytest_shards.py single --directory "${RUNNER_TEMP}/pytest-evidence"
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: env.CI_FLEET_UNTRUSTED_ENABLED == 'true' && env.CI_FORK_PR == 'false'
         with:
           name: pytest-plan-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pytest-plan
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: env.CI_FLEET_UNTRUSTED_ENABLED == 'true' && env.CI_FORK_PR == 'false'
         with:
           pattern: pytest-shard-${{ github.run_attempt }}-*
