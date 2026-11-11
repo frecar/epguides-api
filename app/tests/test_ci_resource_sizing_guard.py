@@ -17,7 +17,6 @@ The guard is a standalone stdlib script, so it is exercised as a subprocess
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -59,11 +58,9 @@ def test_ci_test_job_uses_capacity_relative_xdist() -> None:
     test_commands = [step["run"] for step in test_job["steps"] if "run" in step]
 
     assert test_job["runs-on"] == "ubuntu-latest"
-    spec = json.loads((_REPO_ROOT / ".github" / "pytest-suite.json").read_text(encoding="utf-8"))
-    assert spec["argv"][spec["argv"].index("-n") + 1] == "auto"
-    assert "--dist=worksteal" in spec["argv"]
-    assert "scripts/compute_xdist_workers.py" in spec["config_files"]
-    assert any("scripts/ci_pytest_shards.py single" in command for command in test_commands)
+    pytest_command = next(command for command in test_commands if "pytest" in command)
+    assert "-n auto" in pytest_command
+    assert "--dist=worksteal" in pytest_command
 
 
 def test_guard_self_test_passes() -> None:
