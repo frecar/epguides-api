@@ -56,7 +56,6 @@ line-length = 120
 target-version = "py314"
 # Generated helper bytes are verified by their complete checksum manifest.
 # Format changes belong in the export, never a consumer-local rewrite.
-extend-exclude = ["ci_shard_helper"]
 force-exclude = true
 
 # Host-interpreter carve-back. Everything under scripts/ is invoked by the

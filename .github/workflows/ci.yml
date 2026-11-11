@@ -29,7 +29,6 @@ permissions:
 env:
   CI_FLEET_UNTRUSTED_ENABLED: ${{ vars.CI_FLEET_UNTRUSTED_ENABLED }}
   CI_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-  CI_QUALIFIED_DOCKER_CAPACITY: ${{ vars.CI_FLEET_UNTRUSTED_LINUX_DOCKER_X64_COMPATIBLE_CAPACITY }}
   PYTHONHASHSEED: "0"
 
 jobs:
@@ -169,7 +168,7 @@ jobs:
         # ruff `per-file-target-version` py312 override in pyproject.toml is
         # the fast lint+format layer; this is the authoritative compile
         # backstop.
-        run: uv run --python 3.12 --no-project python -m py_compile scripts/*.py ci_shard_helper/*.py
+        run: uv run --python 3.12 --no-project python -m py_compile scripts/*.py
 
   typecheck:
     name: Type Check
@@ -199,105 +198,8 @@ jobs:
       - name: Run mypy
         run: uv run mypy app/ --config-file pyproject.toml --exclude 'app/tests/'
 
-  # The default stays one hosted job. Parallel collection only starts after
-  # explicit isolated-Docker qualification; fork contributions stay hosted.
-  test-plan:
-    if: vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    outputs:
-      shards: ${{ steps.plan.outputs.shards }}
-    services:
-      redis:
-        image: redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
-        ports: [6379:6379]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      REDIS_HOST: localhost
-      REDIS_PORT: 6379
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Require qualified isolated Docker x64 capacity
-        run: python3 scripts/ci_pytest_shards.py capacity
-      - name: Isolate uv cache
-        run: |
-          echo "UV_CACHE_DIR=${RUNNER_TEMP}/uv-cache" >> "$GITHUB_ENV"
-          echo "UV_PYTHON_INSTALL_DIR=${RUNNER_TEMP}/uv-python" >> "$GITHUB_ENV"
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          version: "0.13.6"
-          enable-cache: true
-          prune-cache: true
-      - run: uv sync --frozen
-      - name: Collect complete native cases and bind the shard plan
-        id: plan
-        run: uv run python scripts/ci_pytest_shards.py plan --directory "${RUNNER_TEMP}/pytest-plan"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: pytest-plan-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/pytest-plan/
-          if-no-files-found: error
-          retention-days: 1
-
-  test-shard:
-    needs: test-plan
-    if: needs.test-plan.result == 'success'
-    # The literal capability is independently qualified before promotion.
-    runs-on: ${{ fromJSON(vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux-docker-x64"]' || '["ubuntu-latest"]') }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ${{ fromJSON(needs.test-plan.outputs.shards) }}
-    services:
-      redis:
-        image: redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
-        ports: [6379:6379]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      REDIS_HOST: localhost
-      REDIS_PORT: 6379
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Isolate uv cache
-        run: |
-          echo "UV_CACHE_DIR=${RUNNER_TEMP}/uv-cache" >> "$GITHUB_ENV"
-          echo "UV_PYTHON_INSTALL_DIR=${RUNNER_TEMP}/uv-python" >> "$GITHUB_ENV"
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          version: "0.13.6"
-          enable-cache: true
-          prune-cache: true
-      - run: uv sync --frozen
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: pytest-plan-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/pytest-plan
-      - name: Run exactly the assigned cases and seal coverage bytes
-        env:
-          CI_SHARD: ${{ matrix.shard }}
-        run: uv run python scripts/ci_pytest_shards.py run --directory "${RUNNER_TEMP}/pytest-plan" --shard "${CI_SHARD}"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: pytest-shard-${{ github.run_attempt }}-${{ matrix.shard }}
-          path: ${{ runner.temp }}/pytest-plan/artifacts/shard-${{ matrix.shard }}/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 1
-
   test:
     name: Test
-    # Always arbitrate expected/skipped paths; missing/cancelled shards fail.
-    needs: [test-plan, test-shard]
-    if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -314,11 +216,6 @@ jobs:
       REDIS_PORT: 6379
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Require every expected execution job
-        env:
-          CI_PLAN_RESULT: ${{ needs.test-plan.result }}
-          CI_SHARDS_RESULT: ${{ needs.test-shard.result }}
-        run: python3 scripts/ci_pytest_shards.py gate
       - name: Isolate uv cache
         run: |
           echo "UV_CACHE_DIR=${RUNNER_TEMP}/uv-cache" >> "$GITHUB_ENV"
@@ -329,24 +226,11 @@ jobs:
           enable-cache: true
           prune-cache: true
       - run: uv sync --frozen
-      - name: Run hosted default/fork suite with complete sealed evidence
-        if: env.CI_FLEET_UNTRUSTED_ENABLED != 'true' || env.CI_FORK_PR != 'false'
-        # The tracked invocation retains -n auto and the existing CPU/RAM
-        # selector/Redis DB isolation. The final complete report enforces 95%.
-        run: uv run python scripts/ci_pytest_shards.py single --directory "${RUNNER_TEMP}/pytest-evidence"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: env.CI_FLEET_UNTRUSTED_ENABLED == 'true' && env.CI_FORK_PR == 'false'
-        with:
-          name: pytest-plan-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/pytest-plan
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: env.CI_FLEET_UNTRUSTED_ENABLED == 'true' && env.CI_FORK_PR == 'false'
-        with:
-          pattern: pytest-shard-${{ github.run_attempt }}-*
-          path: ${{ runner.temp }}/pytest-artifacts
-      - name: Verify every native receipt and sealed artifact at the 95% floor
-        if: env.CI_FLEET_UNTRUSTED_ENABLED == 'true' && env.CI_FORK_PR == 'false'
-        run: uv run python scripts/ci_pytest_shards.py combine --directory "${RUNNER_TEMP}/pytest-plan" --artifacts "${RUNNER_TEMP}/pytest-artifacts"
+      - name: Run the suite
+        # -n auto with the existing CPU/RAM selector and Redis DB isolation
+        # (scripts/compute_xdist_workers.py via app/tests/conftest.py). The
+        # fixed 95% application coverage floor is enforced here.
+        run: uv run pytest app/tests -n auto --dist=worksteal --cov=app --cov-fail-under=95 --cov-report=term-missing -q
 
   # The three jobs below (trivy-fs, docker-build, trivy-image) are a managed
   # copy kept byte-identical to the canonical CI template. Hand-edits between
