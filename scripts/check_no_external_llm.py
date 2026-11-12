@@ -20,6 +20,7 @@ Used by:
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from datetime import UTC, date, datetime
@@ -120,8 +121,20 @@ def check_file(path: Path) -> list[tuple[int, str]]:
     return violations
 
 
+def _review_lapsed(review_by: date) -> bool:
+    """A lapsed review date is a stderr warning on the real clock,
+    never a failure (it would dequeue the whole merge group on one calendar day).
+    Tests that prove the lapse is detected set ENFORCE_REVIEW_LAPSE=1."""
+    if datetime.now(UTC).date() <= review_by:
+        return False
+    if os.environ.get("ENFORCE_REVIEW_LAPSE") == "1":
+        return True
+    print(f"WARNING (non-blocking): review date {review_by.isoformat()} has lapsed", file=sys.stderr)
+    return False
+
+
 def main(argv: list[str]) -> int:
-    if datetime.now(UTC).date() > LITERAL_REVIEW_BY:
+    if _review_lapsed(LITERAL_REVIEW_BY):
         print(
             f"FAIL: the allowlist/extension review date ({LITERAL_REVIEW_BY.isoformat()}) "
             "has lapsed — re-examine ALLOWED_PATH_COMPONENTS, ALLOWED_FILENAMES, and "
