@@ -200,8 +200,15 @@ make up
 
 ```bash
 make up-prod
-# or: docker compose -f docker-compose.prod.yml up -d
+# or: docker compose -f docker-compose.prod.yml -f docker-compose.build.yml build
+#     docker compose -f docker-compose.prod.yml up -d
 ```
+
+`docker-compose.prod.yml` names a prebuilt image,
+`${IMAGE_REGISTRY}/apps/epguides/api:${IMAGE_TAG}` (defaults `localhost` and
+`ci`, which is what `make up-prod` builds). A deployment sets both variables
+and pulls the image built from that git SHA; it never builds on the host.
+`docker-compose.build.yml` is the build recipe used by CI and `make build`.
 
 **Features:**
 
