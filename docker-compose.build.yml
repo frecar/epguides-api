@@ -1,0 +1,8 @@
+# Build recipe for the production image. Used by CI and `make build`; the
+# deployed stack pulls the prebuilt image named in docker-compose.prod.yml.
+services:
+  epguides-api:
+    build:
+      context: .
+      args:
+        OS_SECURITY_EPOCH: "${OS_SECURITY_EPOCH:-dev}"

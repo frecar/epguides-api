@@ -254,7 +254,7 @@ docker compose -f docker-compose.prod.yml logs -f
 ### Build Image
 
 ```bash
-docker build -t epguides-api .
+docker build --build-arg OS_SECURITY_EPOCH=dev -t epguides-api .
 ```
 
 ### Run with Custom Redis
