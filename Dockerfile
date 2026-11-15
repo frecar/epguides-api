@@ -13,7 +13,7 @@
 # (resolved with `docker buildx imagetools inspect python:3.14.6-slim`), so each
 # build host still resolves its own platform. Enforced by
 # scripts/check_base_image_digest_pin_drift.py.
-FROM python:3.14.10-slim@sha256:930e1abba7c4e8f96ed93e8012c35d174d7732752731bbd5e8e757d7ec6f3966 AS builder
+FROM python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS builder
 
 # uv is pinned to an exact version (not `latest`). It is deliberately NOT
 # digest-pinned: the uv version is the single source of record, kept in lockstep
@@ -52,7 +52,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime — minimal production image
 # ---------------------------------------------------------------------------
-FROM python:3.14.10-slim@sha256:930e1abba7c4e8f96ed93e8012c35d174d7732752731bbd5e8e757d7ec6f3966 AS runtime
+FROM python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS runtime
 
 LABEL org.opencontainers.image.title="Epguides API" \
       org.opencontainers.image.description="REST API for TV show metadata, episodes, and air dates" \
