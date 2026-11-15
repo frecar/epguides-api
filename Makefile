@@ -121,7 +121,7 @@ stop: down
 
 # `build` produces the production image without starting containers.
 build:
-	docker compose -f docker-compose.prod.yml build
+	docker compose -f docker-compose.prod.yml -f docker-compose.build.yml build
 
 logs:
 	docker compose logs -f
@@ -131,11 +131,12 @@ logs:
 # =============================================================================
 
 up-prod:
+	docker compose -f docker-compose.prod.yml -f docker-compose.build.yml build
 	docker compose -f docker-compose.prod.yml up -d
 	@make urls
 
 deploy-prod:
-	docker compose -f docker-compose.prod.yml build --no-cache
+	docker compose -f docker-compose.prod.yml -f docker-compose.build.yml build --no-cache
 	docker compose -f docker-compose.prod.yml up -d
 	@sleep 3
 	@make cache-clear

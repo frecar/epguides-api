@@ -33,7 +33,9 @@ WORKDIR /build
 # wheels for cpython-3.14 on Linux x86_64, so the build toolchain isn't
 # strictly required. Keep gcc + libc-dev around in case a future
 # transitive needs to compile from source on this base image.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+ARG OS_SECURITY_EPOCH
+RUN : "${OS_SECURITY_EPOCH:?OS_SECURITY_EPOCH build-arg is required}" \
+    && apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libc-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -73,7 +75,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # so fixed CVEs can sit unpatched in the image until the next upstream rebuild.
 # The CI image scan exists to catch exactly that lag; this closes it at build
 # time rather than waiting on upstream.
-RUN apt-get update \
+ARG OS_SECURITY_EPOCH
+RUN : "${OS_SECURITY_EPOCH:?OS_SECURITY_EPOCH build-arg is required}" \
+    && apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 

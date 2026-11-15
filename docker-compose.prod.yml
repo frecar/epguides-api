@@ -7,8 +7,9 @@
 
 services:
   epguides-api:
-    build:
-      context: .
+    # The production image is built and scanned once in CI and pulled by git SHA;
+    # docker-compose.build.yml adds the build recipe for CI and local builds.
+    image: "${IMAGE_REGISTRY:-localhost}/apps/epguides/api:${IMAGE_TAG:-ci}"
     # 5 workers = 6 cores - 1 (reserved for Redis + OS)
     # uvloop + httptools: ~2x faster than default asyncio
     command: >

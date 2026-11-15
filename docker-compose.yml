@@ -9,6 +9,8 @@ services:
   epguides-api:
     build:
       context: .
+      args:
+        OS_SECURITY_EPOCH: "${OS_SECURITY_EPOCH:-dev}"
     command: >
       uvicorn app.main:app
       --host 0.0.0.0
