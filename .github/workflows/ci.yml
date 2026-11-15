@@ -345,7 +345,7 @@ jobs:
       - name: Build production Compose images once
         id: production
         env:
-          COMPOSE_FILES: docker-compose.prod.yml
+          COMPOSE_FILES: docker-compose.prod.yml docker-compose.build.yml
           BUILDX_BUILDER: ${{ steps.buildx.outputs.name }}
         run: bash scripts/compose_build.sh build
       - name: Install Trivy (per-job, isolated binary)
