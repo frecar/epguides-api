@@ -1,3 +1,4 @@
+# Throwaway review-workflow check; this PR will be closed unmerged.
 """Docker health check script.
 
 Verifies the API is responding correctly by checking:
