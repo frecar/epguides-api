@@ -6,23 +6,10 @@ on:
   pull_request:
     branches: [main]
 
-# Keyed on the PR number when present (always distinct from any
-# push-to-main group) instead of github.ref alone, so a delayed
-# pull_request run can never collide with, and cancel, a push run on
-# main. push events fall through to github.ref unchanged.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# Least-privilege default for the whole workflow. Every
-# job here is read-only — checkout, lint, type-check, test, dependency
-# audit, Docker build (push: false), and Trivy fs/image scans. None
-# post PR comments, push pages, push an image, or cut a release, so no
-# job needs a write escalation. The trivy-fs / docker-build /
-# trivy-image jobs keep their own explicit `permissions: { contents:
-# read }` as documentation; this top-level block makes the read-only
-# floor the default for jobs that don't restate it, rather than relying
-# on the broad ambient `GITHUB_TOKEN` permissions.
 permissions:
   contents: read
 
@@ -34,17 +21,7 @@ env:
 jobs:
   audit:
     name: Security Audit
-    # GitHub-hosted runner. This is a public repo: a fork PR can run
-    # arbitrary code in CI, so every pull_request-reachable job runs on an
-    # ephemeral, network-isolated GitHub-hosted runner rather than a
-    # self-hosted one. The image-build jobs below authenticate their
-    # Docker Hub base-image pulls with a read-only token (when available)
-    # to avoid the anonymous pull-rate limit on a hosted runner.
     runs-on: ubuntu-latest
-    # Bounded ceiling so a wedged self-hosted runner (hung network pull
-    # in pip-audit / uv export, or any stuck step) fails the job instead
-    # of holding a shared runner for the GitHub default 6h. Sized above
-    # normal duration so it only trips on a real hang.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,32 +47,12 @@ jobs:
           prune-cache: true
 
       - name: Export deps to requirements.txt (third-party only)
-        # epguides-api is not published to PyPI, so we can't audit the
-        # venv directly (pip-audit errors on the unpublished first-party
-        # entry). Export ALL transitive deps to a hashed requirements.txt
-        # and audit that file instead — gives us the same third-party
-        # CVE coverage without confusing pip-audit.
         run: uv export --frozen --no-dev --no-emit-project --output-file=/tmp/requirements-audit.txt
 
       - name: Audit
-        # No --ignore-vuln entries. All previously-ignored CVEs now have
-        # upstream fixes that ship in the lockfile. Anything surfacing
-        # here is an actual vuln that needs an upgrade, not a silenced
-        # workaround.
         run: uvx pip-audit --strict --desc --require-hashes -r /tmp/requirements-audit.txt
 
       - name: Security audit (OSV-Scanner)
-        # Authoritative ONLINE dependency-CVE backstop. The local
-        # `scripts/audit_osv.sh` pre-push hook shifts this same verdict
-        # left (it warn-skips offline); this CI step is the source of
-        # truth that always runs against the live osv.dev advisory DB.
-        # All ignores live in .osv-scanner.toml with a mandatory
-        # ignoreUntil + reason + reviewer comment — NO --ignore-vuln CLI
-        # flags. Orthogonal to pip-audit above: pip-audit scans the
-        # exported hashed requirements.txt, OSV-Scanner reads the uv.lock
-        # resolved graph directly — overlapping osv.dev coverage with
-        # independent parsers, so a miss in one parser is caught by the
-        # other.
         uses: google/osv-scanner-action/osv-scanner-action@32d3cd482bdadfb38b186c0ad1b031902d55d932 # v2.7.1
         with:
           scan-args: |-
@@ -104,10 +61,7 @@ jobs:
 
   lint:
     name: Lint
-    # Portable job: only use the isolated public route after its rollout flag is enabled.
     runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]') || (vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
-    # Bounded ceiling so a wedged runner fails fast instead of holding a
-    # shared self-hosted runner for the GitHub default 6h.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -137,45 +91,17 @@ jobs:
         run: python3 scripts/check_no_external_llm.py
 
       - name: Base image digest-pin check
-        # Fail-closed: every external image a Dockerfile pulls (FROM + COPY
-        # --from) must be pinned by `tag@sha256:` so the build is reproducible
-        # and a mutated upstream tag can't be adopted silently. Stdlib-only +
-        # docker-less, so it also runs in `make ci-parity` / pre-commit.
         run: python3 scripts/check_base_image_digest_pin_drift.py
 
       - name: CI resource-sizing guard
-        # Fail-closed: no workflow step may hardcode a topology-specific
-        # worker/CPU/memory ceiling (`pytest -n 16`, `--maxprocesses=16`,
-        # `--memory=8g`). A literal number only ever matches the runner it
-        # was tuned on; the value must instead be derived from whatever
-        # capacity the assigned runner reports at run time (`auto` /
-        # `logical` / a computed fraction of scheduler-visible CPU or
-        # memory). Stdlib-only, so it also runs in `make ci-parity` /
-        # pre-commit.
         run: python3 scripts/check_ci_resource_sizing.py
 
       - name: Host-interpreter syntax guard (Python 3.12)
-        # Everything under scripts/ is run by the system `python3` (a
-        # developer's machine / CI runner, possibly older than 3.14) via the
-        # `language: system` pre-commit hooks + `make ci-parity`, NOT the 3.14
-        # `uv` venv. The repo's `requires-python >=3.14` + ruff
-        # `target-version=py314` mean the 3.14 toolchain (and `ruff format`)
-        # will happily emit 3.14-only syntax — e.g. rewrite `except (A, B):`
-        # into PEP 758 `except A, B:`, which is a SyntaxError on Python < 3.14.
-        # This step compiles every host-run script under a real CPython 3.12
-        # (`--no-project` sidesteps the `requires-python >=3.14` gate —
-        # py_compile needs only the interpreter grammar, no project deps). The
-        # ruff `per-file-target-version` py312 override in pyproject.toml is
-        # the fast lint+format layer; this is the authoritative compile
-        # backstop.
         run: uv run --python 3.12 --no-project python -m py_compile scripts/*.py
 
   typecheck:
     name: Type Check
-    # Portable job: only use the isolated public route after its rollout flag is enabled.
     runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]') || (vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
-    # Bounded ceiling so a wedged runner fails fast instead of holding a
-    # shared self-hosted runner for the GitHub default 6h.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -227,17 +153,8 @@ jobs:
           prune-cache: true
       - run: uv sync --frozen
       - name: Run the suite
-        # -n auto with the existing CPU/RAM selector and Redis DB isolation
-        # (scripts/compute_xdist_workers.py via app/tests/conftest.py). The
-        # fixed 95% application coverage floor is enforced here.
         run: uv run pytest app/tests -n auto --dist=worksteal --cov=app --cov-fail-under=95 --cov-report=term-missing -q
 
-  # The three jobs below (trivy-fs, docker-build, trivy-image) are a managed
-  # copy kept byte-identical to the canonical CI template. Hand-edits between
-  # the markers are overwritten by the next template sync; change the canonical
-  # template (and re-run the drift check) instead. The drift check compares only
-  # the region between the markers, so the rest of this workflow stays freely
-  # editable.
   # ===== BEGIN managed-public-ci-template: ci-trivy-buildx — DO NOT HAND-EDIT =====
   # Trivy fs scan. Standalone job here so PR/push runs gate on it via
   # ci-gate. The companion .github/workflows/trivy-fs-nightly.yml owns
@@ -413,45 +330,15 @@ jobs:
   # ===== END managed-public-ci-template: ci-trivy-buildx =====
 
   gitleaks:
-    # INTENTIONAL PUBLIC-REPO EXEMPTION: keep this credential-less,
-    # self-contained implementation. Public fork PRs cannot consume private
-    # shared actions, so this job must not be consolidated with the private
-    # consumers' canonical implementation.
-    # Server-side secret-scanning BACKSTOP to the local `gitleaks` pre-commit
-    # hook. The local hook scans the STAGED diff at commit time but is
-    # bypassable (`git commit --no-verify`, `SKIP=gitleaks`, commenting out the
-    # hook); this job re-runs gitleaks on the PR so a bypassed local hook is
-    # still caught before merge. It reuses the SAME vendored `.gitleaks.toml`
-    # (no CI-vs-local divergence) and is wired into `ci-gate` below so a
-    # detected secret blocks the merge.
-    #
-    # NOT path-filtered — it always runs, so it never reports `skipped` and is
-    # safe in ci-gate's `needs` regardless of which files a PR touches.
-    #
-    # SCOPE = PR-diff range, not full-tree: the gate catches a NEWLY-introduced
-    # secret. A pre-existing committed secret must be rotated, not turned into
-    # an unrelated-PR blocker. A periodic full-history sweep is a separate
-    # concern.
-    #
-    # IMPLEMENTATION = pinned CLI binary from GitHub Releases (version +
-    # SHA256), NOT `gitleaks/gitleaks-action`: the Docker action pulls an image
-    # (Docker-Hub pull-rate-limit pain) and trips org-license checks. The scan
-    # itself is a local git op — no network once the binary is in place.
-    #
-    # Portable job: only use the isolated public route after its rollout flag is enabled.
     runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]') || (vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Full history so the PR base commit is present for the range scan.
           fetch-depth: 0
 
       - name: Install pinned gitleaks
         # v8.30.1 matches the `gitleaks/gitleaks` `rev` pinned in
-        # .pre-commit-config.yaml — keep the two in lockstep so CI == local.
-        # When bumping the hook, bump GITLEAKS_VERSION + GITLEAKS_SHA256 here in
-        # the same PR (SHA256 = linux_x64 tarball digest from checksums.txt).
         env:
           GH_TOKEN: ${{ github.token }}
           GITLEAKS_VERSION: 8.30.1
@@ -462,8 +349,6 @@ jobs:
           url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${tarball}"
           tmp="$(mktemp -d)"
           trap 'rm -rf "${tmp}"' EXIT
-          # One alternate transport after a failed release URL (epguides-api#578).
-          # The immutable platform checksum below covers either response.
           if ! curl -fsSL --connect-timeout 10 --max-time 60 -o "${tmp}/${tarball}" "${url}"; then
             echo "::warning::Release download failed; trying the pinned release REST asset"
             asset_id="$(gh api "repos/gitleaks/gitleaks/releases/tags/v${GITLEAKS_VERSION}" \
@@ -481,12 +366,6 @@ jobs:
           rm -rf "${tmp}"
 
       - name: Scan PR diff for secrets
-        # Range = base..head on pull_request, before..after on push to main.
-        # Use head.sha (NOT github.sha, the synthetic merge commit on PR events)
-        # so we scan exactly the contributor's commits. On a push whose `before`
-        # is the zero-SHA (new branch / first push / force-push to an unknown
-        # parent), fall back to scanning HEAD's working tree so the gate never
-        # silently no-ops.
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -508,37 +387,10 @@ jobs:
             gitleaks dir . "${common[@]}"
           fi
 
-  # Aggregate gate. This is the single required check
-  # branch protection keys off, so it must run on EVERY outcome and
-  # treat ANYTHING that is not a clean success across all `needs` jobs
-  # as a hard fail. `if: always()` guarantees the gate itself always
-  # runs and reports a definitive pass/fail status (a job that is
-  # itself skipped reports `skipped`, which some branch-protection
-  # configs misread as success — so the gate must never be allowed to
-  # skip).
-  #
-  # The assertion catches all three non-success `needs.*.result`
-  # values, because `contains(needs.*.result, 'failure')` alone is the
-  # classic GitHub Actions gating foot-gun:
-  #   - `failure`   — a job failed outright.
-  #   - `cancelled` — runner killed mid-run, or a concurrency cancel
-  #     landed. A cancelled job never reports `failure`, so a
-  #     `failure`-only gate would go green while a mandatory check did
-  #     not actually pass.
-  #   - `skipped`   — an upstream `needs` dependency did not run (e.g.
-  #     its own dependency was cancelled, cascading a skip). A skipped
-  #     required job is NOT a passed one, so the gate fails on it too.
-  #
-  # Test always arbitrates the conditional planning/shard paths itself.
-  # Every required result below must still be success; intentional skips
-  # belong only to the internal paths that Test explicitly verifies.
   ci-gate:
     if: always()
     needs: [audit, lint, typecheck, test, trivy-fs, docker-build, trivy-image, gitleaks]
-    # Keep aggregation on the isolated public route only after its rollout flag is enabled.
     runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]') || (vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-direct-untrusted-linux"]') || '["ubuntu-latest"]') }}
-    # Bounded ceiling — this gate only checks `needs.*.result` and exits,
-    # so it should finish in seconds.
     timeout-minutes: 10
     steps:
       - name: Assert all required jobs succeeded

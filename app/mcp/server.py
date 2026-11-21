@@ -233,7 +233,6 @@ class MCPServer:
             return self._error(_ERROR_INVALID_PARAMS, f"Unknown resource: {uri}")
 
         shows = await show_service.get_all_shows()
-        # Limit for performance
         shows_data = [show.model_dump() for show in shows[:100]]
 
         return self._success(
@@ -316,7 +315,6 @@ class MCPServer:
         if not episodes:
             return self._error(_ERROR_INVALID_PARAMS, f"No episodes found for: {epguides_key}")
 
-        # Structured filters (mirror shows.py:311-321).
         season = args.get("season")
         episode = args.get("episode")
         year = args.get("year")
@@ -334,7 +332,6 @@ class MCPServer:
             search_lower = title_search.lower()
             episodes = [ep for ep in episodes if search_lower in ep.title.lower()]
 
-        # Natural-language query — graceful degradation when LLM unavailable.
         nlq = args.get("nlq")
         if nlq and episodes:
             from app.models.schemas import EpisodeSchema

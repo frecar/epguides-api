@@ -12,7 +12,6 @@ from typing import Any
 
 from app.core.config import settings
 
-# Fields to extract from log records for structured output
 _EXTRA_FIELDS = ("method", "path", "status_code", "process_time_seconds", "client")
 
 
@@ -62,7 +61,6 @@ def _use_json_format() -> bool:
         return False
     if log_format == "json":
         return True
-    # Fallback: DEBUG level defaults to text for dev convenience
     return settings.LOG_LEVEL.upper() != "DEBUG"
 
 
@@ -77,7 +75,6 @@ def setup_logging() -> logging.Logger:
     log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
     root_logger.setLevel(log_level)
 
-    # Remove existing handlers to avoid duplicates
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
@@ -92,7 +89,6 @@ def setup_logging() -> logging.Logger:
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
-    # Suppress noisy third-party loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 

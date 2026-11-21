@@ -28,7 +28,6 @@ def get_version() -> str:
     import os
     from pathlib import Path
 
-    # Try VERSION file first (auto-updated by pre-commit hook)
     version_file = Path(__file__).parent.parent.parent / "VERSION"
     if version_file.exists():
         try:
@@ -36,12 +35,10 @@ def get_version() -> str:
         except Exception:
             pass
 
-    # Check environment variable (set by Docker build or CI)
     env_version = os.environ.get("APP_VERSION")
     if env_version and env_version != "dev":
         return env_version
 
-    # Try git commit count for local development
     try:
         import subprocess
 
@@ -72,9 +69,9 @@ Episodes that aired less than this many hours ago are marked as unreleased.
 
 
 DATE_FORMATS = (
-    "%d %b %y",  # e.g., "20 Jan 08"
-    "%d/%b/%y",  # e.g., "20/Jan/08"
-    "%Y-%m-%d",  # ISO format
+    "%d %b %y",
+    "%d/%b/%y",
+    "%Y-%m-%d",
 )
 """
 Supported date format strings for parsing episode release dates.
@@ -83,5 +80,5 @@ Order matters - formats are tried in sequence until one succeeds.
 """
 
 
-CACHE_TTL_SHOWS_METADATA_SECONDS = 2592000  # 30 days
+CACHE_TTL_SHOWS_METADATA_SECONDS = 2592000
 """Cache TTL for the master show list (new shows added infrequently)."""

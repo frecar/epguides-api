@@ -252,7 +252,6 @@ async def test_tool_get_episodes_filters(mock_get_episodes, mcp_server):
     ]
     mock_get_episodes.return_value = mock_episodes
 
-    # season filter
     request = {
         "jsonrpc": "2.0",
         "id": "f1",
@@ -267,7 +266,6 @@ async def test_tool_get_episodes_filters(mock_get_episodes, mcp_server):
     parsed = _json.loads(text)
     assert all(ep["season"] == 1 for ep in parsed)
 
-    # season + episode
     mock_get_episodes.return_value = mock_episodes
     response = await mcp_server.handle_request(
         {
@@ -281,7 +279,6 @@ async def test_tool_get_episodes_filters(mock_get_episodes, mcp_server):
     assert len(parsed) == 1
     assert parsed[0]["title"] == "Aftermath"
 
-    # year filter
     mock_get_episodes.return_value = mock_episodes
     response = await mcp_server.handle_request(
         {
@@ -295,7 +292,6 @@ async def test_tool_get_episodes_filters(mock_get_episodes, mcp_server):
     assert len(parsed) == 1
     assert parsed[0]["season"] == 2
 
-    # title_search filter
     mock_get_episodes.return_value = mock_episodes
     response = await mcp_server.handle_request(
         {
@@ -306,7 +302,7 @@ async def test_tool_get_episodes_filters(mock_get_episodes, mcp_server):
         }
     )
     parsed = _json.loads(response["result"]["content"][0]["text"])
-    assert len(parsed) == 2  # Pilot + Pilot Returns
+    assert len(parsed) == 2
 
 
 @pytest.mark.asyncio
@@ -323,7 +319,6 @@ async def test_tool_get_episodes_nlq(mock_get_episodes, mock_nlq, mcp_server):
         EpisodeSchema(season=1, number=10, title="Finale", release_date=date(2020, 4, 1), is_released=True),
     ]
     mock_get_episodes.return_value = mock_episodes
-    # LLM picks just the finale
     mock_nlq.return_value = [mock_episodes[1].model_dump()]
 
     response = await mcp_server.handle_request(
@@ -355,7 +350,7 @@ async def test_tool_get_episodes_nlq_llm_unavailable(mock_get_episodes, mock_nlq
         EpisodeSchema(season=1, number=1, title="Pilot", release_date=date(2020, 1, 1), is_released=True),
     ]
     mock_get_episodes.return_value = mock_episodes
-    mock_nlq.return_value = None  # LLM unavailable
+    mock_nlq.return_value = None
 
     response = await mcp_server.handle_request(
         {
@@ -602,7 +597,7 @@ async def test_tool_call_execution_error(mock_search, mcp_server):
     }
     response = await mcp_server.handle_request(request)
     assert "error" in response
-    assert response["error"]["code"] == -32603  # Internal error
+    assert response["error"]["code"] == -32603
 
 
 @pytest.mark.asyncio

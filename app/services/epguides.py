@@ -57,7 +57,6 @@ def parse_date_string(date_string: str) -> datetime | None:
     for fmt in DATE_FORMATS:
         try:
             parsed = datetime.strptime(date_string, fmt).replace(tzinfo=UTC)
-            # Fix century for two-digit years that end up in the future
             if parsed.year > datetime.now(UTC).year + 2:
                 parsed = parsed.replace(year=parsed.year - 100)
             return parsed
@@ -76,7 +75,6 @@ def _clean_unicode_text(response: httpx.Response) -> str:
     response.encoding = response.encoding or "utf-8"
     text = response.text
 
-    # Clean up replacement characters (U+FFFD)
     if "\ufffd" in text:
         text = response.content.decode("utf-8", errors="replace")
         text = text.replace("\ufffd", "")
@@ -120,11 +118,6 @@ async def _fetch_url(url: str) -> httpx.Response | None:
         return None
 
 
-# Leading markers that identify an HTML document body returned where CSV was
-# expected. The CSV export endpoint occasionally answers HTTP 200 with the
-# show *page* (or an error page) instead of CSV; csv.reader would otherwise
-# parse that markup line-by-line and feed fragments like the viewport meta
-# tag's ``user-scalable=yes">`` into the episode-number column (see #298).
 _HTML_LEADING_MARKERS = ("<!doctype", "<html", "<head", "<meta", "<?xml", "<!--")
 
 
@@ -214,7 +207,6 @@ async def get_all_shows_metadata() -> list[dict[str, str]]:
     return list(csv.DictReader(io.StringIO(text, newline="")))
 
 
-# Column mappings for different CSV export formats
 _TVRAGE_COLUMNS = {"season": 1, "number": 2, "release_date": 4, "title": 5}
 _TVMAZE_COLUMNS = {"season": 1, "number": 2, "release_date": 3, "title": 4}
 
@@ -349,7 +341,6 @@ async def _fetch_tvmaze_episodes(maze_id: str) -> list[dict[str, Any]]:
             name = ep.get("name")
             airdate = ep.get("airdate")
 
-            # Skip episodes missing required fields
             if not all([season, number, name, airdate]):
                 continue
 
@@ -394,7 +385,6 @@ async def _get_show_title(show_id: str) -> str | None:
     Returns:
         Show title (e.g., "Shark Tank") or converted show_id.
     """
-    # Strategy 1: Look up in cached metadata
     metadata = await get_all_shows_metadata()
     show_id_lower = show_id.lower()
 
@@ -405,8 +395,6 @@ async def _get_show_title(show_id: str) -> str | None:
             if title:
                 return title
 
-    # Strategy 2: Convert show_id to searchable format
-    # This handles cases like "SharkTank" -> "Shark Tank" or "gameofthrones" -> "game of thrones"
     return _convert_show_id_to_title(show_id)
 
 
@@ -426,10 +414,8 @@ def _convert_show_id_to_title(show_id: str) -> str:
     Returns:
         A search-friendly version of the show ID.
     """
-    # Handle CamelCase (e.g., "SharkTank" -> "Shark Tank")
     title = re.sub(r"([a-z])([A-Z])", r"\1 \2", show_id)
 
-    # If no spaces were added and it's all lowercase, try to add word boundaries
     if " " not in title and title.islower():
         title = _add_word_boundaries(title)
 
@@ -449,29 +435,22 @@ def _add_word_boundaries(text: str) -> str:
     Returns:
         String with spaces at detected word boundaries.
     """
-    # Common words in TV show titles, ordered by length (longer first)
-    # to avoid partial matches (e.g., "the" matching inside "thrones")
     common_words = [
-        # 10+ chars
         "recreation",
-        # 8+ chars
         "stranger",
         "breaking",
         "walking",
         "brooklyn",
         "american",
-        # 7 chars
         "thrones",
         "friends",
         "anatomy",
-        # 6 chars
         "queens",
         "things",
         "office",
         "mirror",
         "knight",
         "modern",
-        # 5 chars
         "shark",
         "house",
         "parks",
@@ -482,7 +461,6 @@ def _add_word_boundaries(text: str) -> str:
         "night",
         "greys",
         "white",
-        # 4 chars
         "tank",
         "game",
         "dead",
@@ -494,7 +472,6 @@ def _add_word_boundaries(text: str) -> str:
         "trek",
         "wars",
         "band",
-        # 3 chars (careful with these)
         "bad",
         "big",
         "new",
@@ -505,24 +482,17 @@ def _add_word_boundaries(text: str) -> str:
 
     result = text
 
-    # Try to split on common word boundaries
-    # Process longer words first to avoid partial matches
     for word in common_words:
         if word in result and len(word) >= 3:
-            # Add space before the word (if preceded by letters)
             result = re.sub(rf"([a-z])({word})", r"\1 \2", result)
-            # Add space after the word (if followed by letters)
             result = re.sub(rf"({word})([a-z])", r"\1 \2", result)
 
-    # Handle common prefixes at the start (the, a, an)
     for prefix in ["the", "a", "an"]:
         if result.startswith(prefix + " "):
-            # Already has space, good
             break
         if result.startswith(prefix) and len(result) > len(prefix):
             rest = result[len(prefix) :]
-            # Only split if what follows looks like a separate word
-            if rest[0].isalpha() and rest not in ["re", "nd", "n"]:  # Avoid "there", "and", "an"
+            if rest[0].isalpha() and rest not in ["re", "nd", "n"]:
                 result = prefix + " " + rest
                 break
 
@@ -531,12 +501,6 @@ def _add_word_boundaries(text: str) -> str:
     return result
 
 
-# NOTE: distinct key prefix from the EpisodeSchema cache. This function caches
-# *raw, unvalidated* episode dicts; the model-validated list is cached
-# separately under "episodes:<show>" by show_service.get_episodes
-# (@cached(model=EpisodeSchema)). Sharing one prefix let a raw dict be read
-# back through the schema cache and fail EpisodeSchema validation (#298), so
-# the namespaces are kept separate.
 @cache(ttl_seconds=settings.CACHE_TTL_SECONDS, key_prefix="episodes_raw")
 async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
     """
@@ -559,14 +523,9 @@ async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
         List of episode dictionaries with season, number, title, release_date, summary, poster_url.
         Returns empty list if both sources fail.
     """
-    # Strategy 1: Try epguides.com (primary)
     url = f"{EPGUIDES_BASE_URL}/{show_id}"
     response = await _fetch_url(url)
 
-    # maze_id learned from the show page (if any) — used by the TVMaze fallback
-    # to skip the imperfect title-based search when we already know the
-    # canonical TVMaze ID. This matters when the CSV endpoint is sick (timeout
-    # / 5xx / empty body) but the show-page scrape succeeded.
     show_page_maze_id: str | None = None
 
     if response and response.status_code == 200:
@@ -579,26 +538,17 @@ async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
             episodes = _parse_episode_rows(rows, column_map)
 
             if episodes:
-                # Enrich with TVMaze data (summaries + images)
                 if maze_id:
                     episodes = await _merge_tvmaze_episode_data(episodes, maze_id)
                 logger.debug("Fetched %d episodes from epguides for %s", len(episodes), show_id)
                 return episodes
 
-            # CSV fetch succeeded structurally but produced no episodes
-            # (timeout, empty body, parse error, malformed rows). Surface the
-            # signal — the cache hides repeated upstream sickness otherwise.
             logger.warning(
                 "epguides CSV returned no episodes for %s (csv_url=%s) — falling back to TVMaze",
                 show_id,
                 csv_url,
             )
 
-    # Strategy 2: TVMaze fallback
-    # Prefer the maze_id we already scraped from the show page — it's the
-    # canonical ID, no fuzzy-title-search ambiguity (see #229 for the class
-    # of bugs the title search creates). Fall back to title-search only when
-    # the show page didn't yield a maze_id (e.g. show-page fetch failed too).
     if show_page_maze_id:
         episodes = await _fetch_tvmaze_episodes(show_page_maze_id)
         if episodes:
@@ -634,14 +584,12 @@ def _extract_csv_url_and_maze_id(page_html: str) -> tuple[str | None, dict[str, 
     Returns:
         Tuple of (csv_url, column_map, maze_id) or (None, {}, None) if not found.
     """
-    # Try TVRage format
     if "exportToCSV.asp" in page_html:
         match = re.search(r"exportToCSV\.asp\?rage=([\d+]+)", page_html)
         if match:
             url = f"{EPGUIDES_BASE_URL}/common/exportToCSV.asp?rage={match.group(1)}"
             return url, _TVRAGE_COLUMNS, None
 
-    # Try TVMaze format
     if "exportToCSVmaze" in page_html:
         match = re.search(r"exportToCSVmaze\.asp\?maze=([\d]+)", page_html)
         if match:
@@ -670,8 +618,7 @@ async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: st
     try:
         tvmaze_episodes = response.json()
 
-        # Build lookup by season/episode for summary and image
-        tvmaze_data_map: dict[tuple[int, int], dict[str, str]] = {}
+        enrichment_by_season_and_episode: dict[tuple[int, int], dict[str, str]] = {}
         for ep in tvmaze_episodes:
             season = ep.get("season")
             number = ep.get("number")
@@ -682,13 +629,12 @@ async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: st
             if summary:
                 summary = re.sub(r"<[^>]+>", "", summary).strip()
 
-            # Extract episode image (still from the episode)
             image = ep.get("image")
             poster_url = ""
             if image:
                 poster_url = image.get("original") or image.get("medium") or ""
 
-            tvmaze_data_map[(season, number)] = {
+            enrichment_by_season_and_episode[(season, number)] = {
                 "summary": summary,
                 "poster_url": poster_url,
             }
@@ -696,9 +642,9 @@ async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: st
         for episode in episodes:
             try:
                 key = (int(episode.get("season", 0)), int(episode.get("number", 0)))
-                tvmaze_ep = tvmaze_data_map.get(key, {})
-                episode["summary"] = tvmaze_ep.get("summary", "")
-                episode["poster_url"] = tvmaze_ep.get("poster_url", "")
+                episode_enrichment = enrichment_by_season_and_episode.get(key, {})
+                episode["summary"] = episode_enrichment.get("summary", "")
+                episode["poster_url"] = episode_enrichment.get("poster_url", "")
             except ValueError, TypeError:
                 episode["summary"] = ""
                 episode["poster_url"] = ""
@@ -774,7 +720,6 @@ def extract_poster_url(tvmaze_data: dict[str, Any] | None) -> str:
 
     image = tvmaze_data.get("image")
     if image:
-        # Prefer original, fall back to medium
         return image.get("original") or image.get("medium") or _DEFAULT_POSTER_URL
 
     return _DEFAULT_POSTER_URL
@@ -811,7 +756,6 @@ async def get_maze_id_for_show(show_id: str) -> str | None:
     Returns:
         TVMaze show ID or None if not found.
     """
-    # Strategy 1: Try epguides
     url = f"{EPGUIDES_BASE_URL}/{show_id}"
     response = await _fetch_url(url)
 
@@ -820,7 +764,6 @@ async def get_maze_id_for_show(show_id: str) -> str | None:
         if maze_id:
             return maze_id
 
-    # Strategy 2: Search TVMaze by title
     show_title = await _get_show_title(show_id)
     if show_title:
         tvmaze_show = await _search_tvmaze_by_title(show_title)
@@ -882,8 +825,6 @@ def _parse_episode_rows(rows: list[list[str]], column_map: dict[str, int]) -> li
         if not episode:
             continue
 
-        # Require numeric season + number. Non-numeric rows are the header,
-        # blank rows, or markup that leaked in — never a real episode.
         if not (_is_integer_token(episode.get("season")) and _is_integer_token(episode.get("number"))):
             skipped += 1
             continue
@@ -896,7 +837,6 @@ def _parse_episode_rows(rows: list[list[str]], column_map: dict[str, int]) -> li
     return episodes
 
 
-# Regex patterns for extracting IMDB data from show pages
 _IMDB_URL_PATTERN = re.compile(r"imdb\.com/title/(tt\d+)", re.IGNORECASE)
 _H2_LINK_PATTERN = re.compile(
     r'<h2>.*?<a[^>]*href=["\']?[^"\']*title/([^"\'/]+)[^"\']*["\' ]?[^>]*>([^<]+)</a>',

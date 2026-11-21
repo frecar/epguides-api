@@ -40,7 +40,6 @@ def _initialize_logging() -> None:
 
         setup_logging()
     except Exception:
-        # Fallback to basic config if custom setup fails
         logging.basicConfig(level=logging.INFO)
 
 
@@ -48,20 +47,10 @@ _initialize_logging()
 
 logger = logging.getLogger(__name__)
 
-# Wall-clock time this worker process started. Used by /health/ready to grant a
-# cold-start grace window: right after a deploy no upstream fetch has happened
-# yet, so the freshness marker is absent — without a grace window the readiness
-# probe would 503 immediately and block the rollout.
 _PROCESS_START_TIME = time.time()
 
-# The primary upstream the readiness probe gates on. epguides.com is the
-# authoritative source; TVMaze is only a fallback, so an epguides regression is
-# the signal that matters for "is our data going stale".
 _READINESS_UPSTREAM = "epguides"
 
-# =============================================================================
-# Observability (opt-in via env vars)
-# =============================================================================
 
 init_observability(release=os.environ.get("GIT_SHA", VERSION))
 
@@ -86,9 +75,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     Handles startup and shutdown events.
     """
     logger.info("Application startup")
-    # Seed the per-source ingest-freshness gauges to 0 so the series are
-    # continuously present from boot (avoids an absence-paging false alarm
-    # before the first successful upstream fetch). See app.core.metrics.
     init_ingest_freshness()
     task = asyncio.create_task(_cache_age_refresh_loop())
     yield
@@ -97,15 +83,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await task
     except asyncio.CancelledError:
         pass
-    # Clean up multiprocess prometheus state for this worker so the
-    # next scrape doesn't double-count dead worker's counters. No-op
-    # in single-process mode (env var unset).
     mark_worker_dead(os.getpid())
     await close_redis_pool()
     logger.info("Application shutdown complete")
 
 
-# Tag metadata for Swagger UI grouping
 OPENAPI_TAGS = [
     {
         "name": "Shows",
@@ -179,7 +161,6 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 )
 
 
-# Request ID tracking (outermost - runs first, available to all other middleware)
 app.add_middleware(RequestIDMiddleware)
 
 if settings.LOG_REQUESTS:
@@ -187,7 +168,6 @@ if settings.LOG_REQUESTS:
 
 app.add_middleware(SecurityHeadersMiddleware)
 
-# CORS - public read-only API, allow all origins but no credentials
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -288,7 +268,7 @@ app.include_router(mcp.router, tags=["MCP"])
 
 @app.get("/", include_in_schema=False)
 def root_index() -> dict[str, str]:
-    """Return a terminal API index for browsers and uptime probes."""
+    """Return a terminal API index for browsers and seconds_since_process_start probes."""
     return {
         "status": "ok",
         "service": "epguides-api",
@@ -358,13 +338,11 @@ async def _build_readiness_report() -> tuple[str, int, dict[str, object]]:
     """
     threshold_seconds = settings.UPSTREAM_STALENESS_HOURS * 3600.0
 
-    # --- Redis round-trip (degraded, not fatal) ---------------------------
     redis_ok, round_trip_ms = await probe_redis_round_trip()
     redis_check: dict[str, object] = {"status": "ok" if redis_ok else "unavailable"}
     if redis_ok and round_trip_ms is not None:
         redis_check["round_trip_ms"] = round(round_trip_ms, 2)
 
-    # --- Upstream freshness (fatal when stale) ----------------------------
     last_success = await get_upstream_last_success(_READINESS_UPSTREAM)
     upstream_check: dict[str, object] = {
         "source": _READINESS_UPSTREAM,
@@ -373,11 +351,8 @@ async def _build_readiness_report() -> tuple[str, int, dict[str, object]]:
     upstream_stale = False
 
     if last_success is None:
-        # No successful fetch recorded yet. Within the cold-start grace window
-        # this is expected (the process just booted); past it, it means we have
-        # never reached the upstream — which IS a not-ready condition.
-        uptime = time.time() - _PROCESS_START_TIME
-        if uptime <= settings.UPSTREAM_FRESHNESS_COLD_START_GRACE_SECONDS:
+        seconds_since_process_start = time.time() - _PROCESS_START_TIME
+        if seconds_since_process_start <= settings.UPSTREAM_FRESHNESS_COLD_START_GRACE_SECONDS:
             upstream_check["status"] = "bootstrapping"
             upstream_check["reason"] = "no upstream fetch yet (within cold-start grace window)"
         else:
@@ -406,10 +381,6 @@ async def _build_readiness_report() -> tuple[str, int, dict[str, object]]:
 
     body: dict[str, object] = {
         "status": overall,
-        # Collision-proof machine marker: the key never appears in nested check
-        # objects, so a regex/substring monitor asserting on it cannot
-        # false-pass against a degraded/unready body (unlike "status": "ok",
-        # which healthy sub-checks also emit).
         "overall_ok": overall == "ok",
         "service": "epguides-api",
         "version": VERSION,

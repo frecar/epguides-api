@@ -107,7 +107,7 @@ async def test_llm_no_api_url_returns_none(mock_settings, no_host_enforcement):
 async def test_llm_url_outside_allow_list_is_blocked(mock_settings, mock_query_llm, allow_listed_hosts):
     """When ALLOWED_LLM_HOSTS is set, non-listed hosts are ignored by default."""
     mock_settings.LLM_ENABLED = True
-    mock_settings.LLM_API_URL = _ALT_LLM_URL  # not in allow-list
+    mock_settings.LLM_API_URL = _ALT_LLM_URL
     mock_settings.LLM_ALLOW_EXTERNAL = False
     mock_settings.LLM_MODEL_NAME = "auto"
 
@@ -200,7 +200,7 @@ def test_parse_allowed_hosts_handles_whitespace_and_case():
 @patch("app.services.llm_service.settings")
 async def test_query_llm_returns_none_when_policy_rejects_url(mock_settings, allow_listed_hosts):
     """The lower-level query helper also enforces URL policy."""
-    mock_settings.LLM_API_URL = "llm.example.com/v1"  # missing scheme -> normalizer rejects
+    mock_settings.LLM_API_URL = "llm.example.com/v1"
     mock_settings.LLM_ALLOW_EXTERNAL = False
     mock_settings.LLM_MODEL_NAME = "auto"
 
@@ -213,7 +213,6 @@ async def test_query_llm_returns_none_when_policy_rejects_url(mock_settings, all
 @patch("app.services.llm_service.settings")
 async def test_llm_empty_episodes_returns_empty_list(mock_settings, no_host_enforcement):
     """Test that LLM returns empty list when no episodes provided, even if LLM is disabled."""
-    # Test with LLM disabled (should still return [] for empty episodes)
     mock_settings.LLM_ENABLED = False
     mock_settings.LLM_API_URL = None
     mock_settings.LLM_ALLOW_EXTERNAL = False
@@ -242,7 +241,7 @@ async def test_llm_successful_query(mock_client_class, mock_settings, no_host_en
 
     mock_response = AsyncMock()
     mock_response.status_code = 200
-    mock_response.json = lambda: {"choices": [{"message": {"content": "[0, 2]"}}]}  # Return indices 0 and 2
+    mock_response.json = lambda: {"choices": [{"message": {"content": "[0, 2]"}}]}
 
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -257,7 +256,6 @@ async def test_llm_successful_query(mock_client_class, mock_settings, no_host_en
     assert result[0]["title"] == "Pilot"
     assert result[1]["title"] == "Seven Thirty-Seven"
 
-    # Verify the request was made correctly
     mock_client.post.assert_called_once()
     call_args = mock_client.post.call_args
     expected_url = f"{mock_settings.LLM_API_URL}/chat/completions"
@@ -266,7 +264,6 @@ async def test_llm_successful_query(mock_client_class, mock_settings, no_host_en
     assert call_args[1]["headers"]["Authorization"] == expected_auth
     assert "messages" in call_args[1]["json"]
     assert call_args[1]["json"]["model"] == "auto"
-    # Structured-output mode is requested so the gateway returns a JSON object.
     assert call_args[1]["json"]["response_format"] == {"type": "json_object"}
 
 
@@ -296,7 +293,6 @@ async def test_llm_no_api_key(mock_client_class, mock_settings, no_host_enforcem
     result = await llm_service.parse_natural_language_query("test", episodes)
 
     assert result is not None
-    # Verify Authorization header is NOT included when no API key
     call_args = mock_client.post.call_args
     assert "Authorization" not in call_args[1]["headers"]
 
@@ -316,7 +312,7 @@ async def test_llm_api_error(mock_client_class, mock_settings, mock_sleep, no_ho
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"}]
 
     mock_response = AsyncMock()
-    mock_response.status_code = 500  # Server error
+    mock_response.status_code = 500
     mock_response.headers = {}
 
     mock_client = AsyncMock()
@@ -327,7 +323,7 @@ async def test_llm_api_error(mock_client_class, mock_settings, mock_sleep, no_ho
 
     result = await llm_service.parse_natural_language_query("test", episodes)
     assert result is None
-    assert mock_client.post.call_count == 2  # one retry after the first 500
+    assert mock_client.post.call_count == 2
     mock_sleep.assert_awaited_once_with(0.5)
 
 
@@ -355,7 +351,6 @@ async def test_llm_invalid_json_response(mock_client_class, mock_settings, no_ho
     mock_client_class.return_value = mock_client
 
     result = await llm_service.parse_natural_language_query("test", episodes)
-    # Should return None due to JSON parsing error
     assert result is None
 
 
@@ -384,7 +379,6 @@ async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings, no_h
 
     await llm_service.parse_natural_language_query("test", episodes)
 
-    # Verify only 100 episodes were sent in the prompt
     call_args = mock_client.post.call_args
     prompt = call_args[1]["json"]["messages"][0]["content"]
     episode_data = json.loads(prompt.split("Episodes:\n")[1].split("\n\nReturn")[0])
@@ -413,7 +407,7 @@ async def test_llm_http_exception_handling(mock_client_class, mock_settings, moc
 
     result = await llm_service.parse_natural_language_query("test", episodes)
     assert result is None
-    assert mock_client.post.call_count == 2  # one retry after the first network error
+    assert mock_client.post.call_count == 2
     mock_sleep.assert_awaited_once_with(0.5)
 
 
@@ -506,12 +500,12 @@ async def test_llm_no_retry_on_client_error(mock_client_class, mock_settings, no
 @pytest.mark.parametrize(
     ("content", "expected_titles"),
     [
-        ("[0, 2]", ["Pilot", "Seven"]),  # bare array (back-compat)
-        ('{"idx": [0, 2]}', ["Pilot", "Seven"]),  # json_object mode
-        ('{"indices": [1]}', ["Cat"]),  # alternate key
-        ('<think>reasoning</think>{"idx": [0]}', ["Pilot"]),  # think-tag strip + object
-        ("[]", []),  # empty array
-        ('{"idx": []}', []),  # empty object
+        ("[0, 2]", ["Pilot", "Seven"]),
+        ('{"idx": [0, 2]}', ["Pilot", "Seven"]),
+        ('{"indices": [1]}', ["Cat"]),
+        ('<think>reasoning</think>{"idx": [0]}', ["Pilot"]),
+        ("[]", []),
+        ('{"idx": []}', []),
     ],
 )
 def test_parse_llm_response_accepts_array_and_object_shapes(content, expected_titles):

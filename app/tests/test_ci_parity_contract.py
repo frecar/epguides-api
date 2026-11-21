@@ -25,8 +25,6 @@ PRE_COMMIT = _REPO_ROOT / ".pre-commit-config.yaml"
 CI_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "ci.yml"
 PYPROJECT = _REPO_ROOT / "pyproject.toml"
 
-# The exact host-3.12 compile guard string that must appear, byte-for-byte, in
-# every enforcement surface (CI step, pre-commit hook, make ci-parity).
 _HOST_PY312_COMPILE = "uv run --python 3.12 --no-project python -m py_compile"
 
 
@@ -36,11 +34,6 @@ def _makefile_text() -> str:
 
 def _local_hooks() -> dict[str, dict]:
     config = yaml.safe_load(PRE_COMMIT.read_text(encoding="utf-8"))
-    # Every `repo: local` block, not just the first. This config has carried
-    # more than one for a long time, so a `return` on the first silently hid
-    # the rest — and a new block added above made hooks look DELETED rather
-    # than shadowed. The duplicate check keeps a real id collision loud
-    # instead of last-one-wins.
     hooks: dict[str, dict] = {}
     for repo in config["repos"]:
         if repo.get("repo") != "local":
@@ -59,13 +52,10 @@ def test_makefile_exposes_ci_parity_target() -> None:
     text = _makefile_text()
     assert "\nci-parity:" in text, "missing the `ci-parity` Makefile target"
     parity_line = next(line for line in text.splitlines() if line.startswith("ci-parity:"))
-    # Composes the existing lint targets plus mypy.
     assert "format-check" in parity_line
     assert "lint" in parity_line
     assert "typecheck" in parity_line, "ci-parity must run mypy via typecheck"
-    # And the full-tree configured-LLM-endpoint lint.
     assert "check_no_external_llm.py" in text, "ci-parity must run scripts/check_no_external_llm.py over the full tree"
-    # The typecheck target itself must invoke mypy.
     assert "\ntypecheck:" in text, "missing the `typecheck` Makefile target"
 
 
@@ -94,10 +84,8 @@ def test_host_py312_compile_guard_in_all_surfaces() -> None:
     pre-commit, AND make ci-parity, byte-for-byte identical, so a `ruff format`
     that introduces 3.14-only syntax can't reach the host interpreter
     undetected. These three are the no-drift contract."""
-    # make ci-parity
     assert _HOST_PY312_COMPILE in _makefile_text(), "ci-parity must compile scripts/ under host 3.12"
 
-    # pre-commit hook (changed-file, files-scoped to scripts/)
     hooks = _local_hooks()
     assert "host-python312-syntax" in hooks, "missing the host-python312-syntax pre-commit hook"
     guard = hooks["host-python312-syntax"]
@@ -106,7 +94,6 @@ def test_host_py312_compile_guard_in_all_surfaces() -> None:
     assert guard["files"] == r"^scripts/.*\.py$"
     assert guard["stages"] == ["pre-commit"]
 
-    # CI step
     assert _HOST_PY312_COMPILE in CI_WORKFLOW.read_text(encoding="utf-8"), (
         "the Host-interpreter syntax guard CI step must compile scripts/ under host 3.12"
     )

@@ -86,17 +86,14 @@ def hermetic_app() -> Iterator[TestClient]:
         "cached_items": {"shows": 2, "episodes": 0, "seasons": 0, "searches": 0},
     }
     with ExitStack() as stack:
-        # /shows/ — deterministic show page, no upstream scrape, no Redis.
         stack.enter_context(
             patch(
                 "app.services.show_service.get_shows_page",
                 new=AsyncMock(return_value=(mock_shows, len(mock_shows))),
             )
         )
-        # /health/ready — Redis round-trip healthy + a fresh upstream success.
         stack.enter_context(patch("app.main.probe_redis_round_trip", new=AsyncMock(return_value=(True, 1.0))))
         stack.enter_context(patch("app.main.get_upstream_last_success", new=AsyncMock(return_value=time.time() - 60)))
-        # /health/cache — deterministic stats, no live Redis.
         stack.enter_context(patch("app.main.get_cache_stats", new=AsyncMock(return_value=mock_cache_stats)))
         with TestClient(app) as client:
             yield client
@@ -109,8 +106,6 @@ def test_api_contract_holds_for_all_anonymous_get_routes(hermetic_app: TestClien
     MUST_COVER route vanishing from the schema all fail here (and so fail the PR).
     """
     schema = app.openapi()
-    # The vendored engine has no app-specific default: the floor is passed
-    # explicitly so it can never silently inherit another app's.
     result = run_contract(schema, _make_fetch(hermetic_app), must_cover=MUST_COVER)
     assert result.ok, "API contract regression:\n" + "\n".join(result.failures())
 
@@ -135,14 +130,8 @@ def test_search_route_is_excluded_required_query_param() -> None:
     """
     eligible = eligible_get_routes(app.openapi())
     assert "/shows/search" not in eligible
-    # Path-templated routes are excluded for the same reason.
     assert "/shows/{epguides_key}" not in eligible
 
-
-# ---------------------------------------------------------------------------
-# Engine unit coverage (failure modes the gate above never triggers on a
-# healthy app, but which MUST work when a real regression lands).
-# ---------------------------------------------------------------------------
 
 _MINIMAL_SCHEMA: dict[str, Any] = {
     "openapi": "3.1.0",
@@ -175,7 +164,6 @@ def test_run_contract_flags_a_500() -> None:
 
 
 def test_run_contract_flags_a_schema_drift() -> None:
-    # 200 but the body omits the required field -> schema failure.
     result = run_contract(
         _MINIMAL_SCHEMA,
         lambda _path: (200, {"unexpected": "value"}),
@@ -291,9 +279,7 @@ def test_eligible_routes_ignore_malformed_path_items() -> None:
 
 
 def test_build_validator_returns_none_without_a_json_200_schema() -> None:
-    # No content at all.
     assert build_validator({"paths": {"/x": {"get": {"responses": {"200": {}}}}}, "$defs": {}}, "/x") is None
-    # 200 present but no application/json schema.
     schema: dict[str, Any] = {
         "paths": {"/x": {"get": {"responses": {"200": {"content": {"text/plain": {}}}}}}},
     }
@@ -318,14 +304,13 @@ def test_build_validator_resolves_component_refs() -> None:
     validator = build_validator(schema, "/x")
     assert validator is not None
     assert list(validator.iter_errors({"a": "ok"})) == []
-    assert list(validator.iter_errors({}))  # missing required 'a'
+    assert list(validator.iter_errors({}))
 
 
 def test_build_validator_returns_none_on_invalid_schema() -> None:
     schema: dict[str, Any] = {
         "paths": {"/x": {"get": {"responses": {"200": {"content": {"application/json": {"schema": {"type": 123}}}}}}}},
     }
-    # A type value of 123 is not a valid JSON Schema -> unusable -> skipped.
     assert build_validator(schema, "/x") is None
 
 
@@ -339,7 +324,6 @@ def test_build_validator_accepts_2xx_range_key() -> None:
 
 
 def test_build_validator_returns_none_without_a_200_response() -> None:
-    # Operation declares only a 404 — no 200/2XX response to validate against.
     schema: dict[str, Any] = {
         "paths": {"/x": {"get": {"responses": {"404": {"content": {"application/json": {"schema": {}}}}}}}},
     }
@@ -347,8 +331,6 @@ def test_build_validator_returns_none_without_a_200_response() -> None:
 
 
 def test_build_validator_resolves_top_level_defs_ref() -> None:
-    # OpenAPI 3.1 allows $defs at the document root; the composed validation
-    # schema must carry them so a #/$defs/... $ref resolves.
     schema: dict[str, Any] = {
         "$defs": {"Item": {"type": "object", "required": ["a"], "properties": {"a": {"type": "string"}}}},
         "paths": {
@@ -360,7 +342,7 @@ def test_build_validator_resolves_top_level_defs_ref() -> None:
     validator = build_validator(schema, "/x")
     assert validator is not None
     assert list(validator.iter_errors({"a": "ok"})) == []
-    assert list(validator.iter_errors({}))  # missing required 'a'
+    assert list(validator.iter_errors({}))
 
 
 def test_contract_result_helpers() -> None:
@@ -379,18 +361,10 @@ def test_contract_result_helpers() -> None:
 
 
 def test_probe_skips_schema_validation_when_no_declared_schema() -> None:
-    # A route with no usable 200 JSON schema is probed for 200-ness only.
     schema: dict[str, Any] = {"openapi": "3.1.0", "paths": {"/x": {"get": {"responses": {"200": {}}}}}}
     result = run_contract(schema, lambda _p: (200, {"anything": True}), must_cover=("/x",))
     assert result.ok
     assert result.probes[0].schema_skipped is True
-
-
-# ---------------------------------------------------------------------------
-# Seeded violations against the LIVE schema (the cutover acceptance bar: the
-# vendored engine must still FAIL the gate the way the pre-cutover engine did,
-# not merely pass a healthy app).
-# ---------------------------------------------------------------------------
 
 
 def test_seeded_must_cover_deletion_fails_the_vendored_gate(hermetic_app: TestClient) -> None:
@@ -409,19 +383,12 @@ def test_seeded_schema_violation_body_fails_the_vendored_gate(hermetic_app: Test
     def fetch(path: str) -> tuple[int, Any]:
         status, body = live_fetch(path)
         if path == "/health":
-            # /health declares an object schema — a top-level array cannot validate.
             return status, ["not", "an", "object"]
         return status, body
 
     result = run_contract(app.openapi(), fetch, must_cover=MUST_COVER)
     assert not result.ok
     assert any("/health" in line and "schema" in line for line in result.failures())
-
-
-# ---------------------------------------------------------------------------
-# Inherited engine behaviours (pins for the three deliberate supersets the
-# vendored engine carries over the pre-cutover local one).
-# ---------------------------------------------------------------------------
 
 
 def test_eligible_routes_exclude_operation_level_authed_routes() -> None:

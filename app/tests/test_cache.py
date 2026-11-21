@@ -14,7 +14,6 @@ from app.core import cache
 @pytest.mark.asyncio
 async def test_get_redis_returns_client():
     """Test get_redis returns a Redis client."""
-    # Just verify it returns something (actual connection tested in integration)
     result = await cache.get_redis()
     assert result is not None
 
@@ -72,8 +71,6 @@ async def test_cache_set_stores_value():
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
         await cache.cache_set("test_key", "test_value", 3600)
-        # Pin value (positional) and TTL (ex= keyword) separately so an
-        # arg-order swap between value and ttl would fail this assertion.
         mock_redis.set.assert_called_once_with("test_key", "test_value", ex=3600)
         _, args, kwargs = mock_redis.set.mock_calls[0]
         assert args == ("test_key", "test_value")
@@ -87,7 +84,6 @@ async def test_cache_set_handles_error():
     mock_redis.set.side_effect = Exception("Redis error")
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
-        # Should not raise
         await cache.cache_set("test_key", "test_value", 3600)
 
 
@@ -108,7 +104,6 @@ async def test_cache_delete_handles_error():
     mock_redis.delete.side_effect = Exception("Redis error")
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
-        # Should not raise
         await cache.cache_delete("key1")
 
 
@@ -340,7 +335,6 @@ async def test_cached_decorator_handles_validation_error():
     async def get_show(show_id: str) -> ShowSchema:
         return create_show_schema(epguides_key="fresh", title="Fresh Show")
 
-    # Missing required field
     with patch.object(cache, "cache_get", return_value='{"wrong_field": "value"}'):
         with patch.object(cache, "cache_set"):
             result = await get_show("test")
@@ -356,7 +350,7 @@ async def test_cached_decorator_with_ttl_override():
 
     def ttl_override(show: ShowSchema) -> int | None:
         if show.end_date:
-            return 31536000  # 1 year for finished shows
+            return 31536000
         return None
 
     @cache.cached("show:{show_id}", ttl=3600, model=ShowSchema, ttl_if=ttl_override)
@@ -365,7 +359,6 @@ async def test_cached_decorator_with_ttl_override():
 
     with patch.object(cache, "cache_get", return_value=None), patch.object(cache, "cache_set") as mock_set:
         await get_show("test")
-        # Should use 1 year TTL for finished show
         call_args = mock_set.call_args
         assert call_args[0][2] == 31536000
 
@@ -388,8 +381,6 @@ async def test_cached_decorator_without_model():
 async def test_get_cache_stats_returns_stats():
     """Test get_cache_stats returns cache statistics."""
     mock_redis = AsyncMock()
-    # The client is created with decode_responses=True, so KEYS returns
-    # already-decoded str values at runtime — mirror that here.
     mock_redis.keys.return_value = [
         "show:test1",
         "show:test2",
@@ -430,10 +421,8 @@ async def test_cache_decorator_handles_redis_error():
     async def get_data(key: str) -> dict:
         return {"result": "fresh"}
 
-    # Simulate cache_get raising an exception
     with patch.object(cache, "cache_get", side_effect=Exception("Redis connection error")):
         result = await get_data("mykey")
-        # Should fall back to executing function
         assert result == {"result": "fresh"}
 
 
@@ -471,7 +460,7 @@ class TestClassifyTtl:
 async def test_refresh_cache_age_gauges_lock_not_acquired():
     """When the NX lock is already held, the function returns without scanning."""
     mock_redis = AsyncMock()
-    mock_redis.set.return_value = None  # lock held by another worker
+    mock_redis.set.return_value = None
     with patch.object(cache, "get_redis", return_value=mock_redis):
         await cache.refresh_cache_age_gauges()
     mock_redis.scan_iter.assert_not_called()
@@ -481,18 +470,16 @@ async def test_refresh_cache_age_gauges_lock_not_acquired():
 async def test_refresh_cache_age_gauges_updates_gauge():
     """Lock acquired and one key found → gauge set to correct age."""
     mock_redis = AsyncMock()
-    mock_redis.set.return_value = True  # lock acquired
+    mock_redis.set.return_value = True
 
-    remaining = cache.TTL_7_DAYS - 86400 * 3  # 4 days remaining → 3 days old
-    expected_age = cache.TTL_7_DAYS - remaining  # 3 days in seconds
+    remaining = cache.TTL_7_DAYS - 86400 * 3
+    expected_age = cache.TTL_7_DAYS - remaining
 
     def _scan_iter(pattern):
         if "show:*" == pattern:
             return _agen("show:breaking-bad")
         return _agen()
 
-    # scan_iter and pipeline().ttl() are synchronous in redis-py pipelines;
-    # only pipeline.execute() is async.
     mock_redis.scan_iter = MagicMock(side_effect=_scan_iter)
     mock_pipe = MagicMock()
     mock_pipe.execute = AsyncMock(return_value=[remaining])
@@ -519,7 +506,7 @@ async def test_refresh_cache_age_gauges_skips_expired_keys():
 
     mock_redis.scan_iter = MagicMock(side_effect=_scan_iter)
     mock_pipe = MagicMock()
-    mock_pipe.execute = AsyncMock(return_value=[0, -1])  # both invalid
+    mock_pipe.execute = AsyncMock(return_value=[0, -1])
     mock_redis.pipeline = MagicMock(return_value=mock_pipe)
 
     with (
@@ -527,7 +514,6 @@ async def test_refresh_cache_age_gauges_skips_expired_keys():
         patch.object(cache, "update_cache_age_gauge") as mock_update,
     ):
         await cache.refresh_cache_age_gauges()
-        # No valid entries → gauge called with empty dict
         mock_update.assert_called_once_with({})
 
 
@@ -559,7 +545,6 @@ async def test_refresh_cache_age_gauges_oldest_entry_selected():
 
     mock_redis.scan_iter = MagicMock(side_effect=_scan_iter)
     mock_pipe = MagicMock()
-    # episodes:a has 1 day remaining (older), episodes:b has 5 days remaining
     mock_pipe.execute = AsyncMock(return_value=[86400, 86400 * 5])
     mock_redis.pipeline = MagicMock(return_value=mock_pipe)
 
@@ -568,7 +553,6 @@ async def test_refresh_cache_age_gauges_oldest_entry_selected():
         patch.object(cache, "update_cache_age_gauge") as mock_update,
     ):
         await cache.refresh_cache_age_gauges()
-        # Oldest entry: 86400 remaining → age = TTL_7_DAYS - 86400 = 518400
         expected = float(cache.TTL_7_DAYS - 86400)
         mock_update.assert_called_once_with({"episodes": expected})
 
@@ -595,7 +579,6 @@ async def test_mark_upstream_success_writes_timestamp():
     mock_redis.set.assert_called_once()
     key, value = mock_redis.set.call_args[0]
     assert key == "health:upstream_last_success:epguides"
-    # Value is a stringified float timestamp
     assert float(value) > 0
 
 
@@ -669,7 +652,6 @@ async def test_probe_redis_round_trip_ok():
     """A successful set/get read-back returns (True, latency)."""
     mock_redis = AsyncMock()
 
-    # Echo back whatever was written so the read-back matches.
     written: dict[str, str] = {}
 
     async def _set(key, value, ex=None):

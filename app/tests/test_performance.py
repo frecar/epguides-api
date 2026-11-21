@@ -20,8 +20,8 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.models.schemas import EpisodeSchema, SeasonSchema, create_show_schema
 
-PERF_TARGET_MS = 20  # Target response time (warning if exceeded)
-PERF_LIMIT_MS = 50  # Hard limit (fail if exceeded)
+PERF_TARGET_MS = 20
+PERF_LIMIT_MS = 50
 PERF_SAMPLES = 5
 
 
@@ -117,9 +117,6 @@ async def measure_endpoint(client: AsyncClient, method: str, url: str, **kwargs)
     else:
         raise ValueError(f"unsupported HTTP method: {method}")
 
-    # Exclude one-time framework/schema initialization. A single cold sample
-    # is dominated by shared-runner scheduling and made the 50 ms assertion
-    # flaky; the median still catches sustained endpoint regressions.
     await request(url, **kwargs)
     samples: list[float] = []
     for _ in range(PERF_SAMPLES):
@@ -318,11 +315,6 @@ async def test_perf_mcp_get_episodes(mock_get_eps, mock_episodes, perf_client):
     assert_performance(elapsed, "POST /mcp (get_episodes)")
 
 
-# These tests require Redis to be running (via `make up`).
-# They test real cache performance, not just endpoint overhead.
-# Skipped automatically if Redis is unavailable.
-
-
 async def redis_available() -> bool:
     """Check if Redis is available for integration tests."""
     try:
@@ -343,9 +335,8 @@ async def live_client():
         yield client
 
 
-# Live performance limits are more relaxed (include network + Redis latency)
-LIVE_PERF_TARGET_MS = 50  # Target for cached responses
-LIVE_PERF_LIMIT_MS = 200  # Hard limit (includes cold cache)
+LIVE_PERF_TARGET_MS = 50
+LIVE_PERF_LIMIT_MS = 200
 
 
 def assert_live_performance(elapsed_ms: float, endpoint: str, cached: bool = True) -> None:
@@ -385,17 +376,14 @@ async def test_live_perf_cache_operations():
     test_key = "perf_test:temp"
     test_value = '{"test": "data", "items": [1, 2, 3, 4, 5]}'
 
-    # Measure cache SET
     start = time.perf_counter()
     await cache_set(test_key, test_value, 60)
     set_time = (time.perf_counter() - start) * 1000
 
-    # Measure cache GET (warm)
     start = time.perf_counter()
     await cache_get(test_key)
     get_time = (time.perf_counter() - start) * 1000
 
-    # Cleanup
     await cache_delete(test_key)
 
     assert set_time < 10, f"cache_set exceeded 10ms: {set_time:.1f}ms"
@@ -410,28 +398,23 @@ async def test_live_perf_cached_vs_uncached():
 
     from app.core.cache import cache_delete, cache_get, cache_set
 
-    # Simulate a cached response scenario
     cache_key = "perf_test:show"
     show_json = '{"epguides_key": "test", "title": "Test Show"}'
 
-    # Cold cache (miss)
     await cache_delete(cache_key)
     start = time.perf_counter()
     result = await cache_get(cache_key)
     cold_time = (time.perf_counter() - start) * 1000
     assert result is None
 
-    # Warm cache (hit)
     await cache_set(cache_key, show_json, 60)
     start = time.perf_counter()
     result = await cache_get(cache_key)
     warm_time = (time.perf_counter() - start) * 1000
     assert result == show_json
 
-    # Cleanup
     await cache_delete(cache_key)
 
-    # Both should be fast (Redis is in-memory)
     assert cold_time < 10, f"Cold cache exceeded 10ms: {cold_time:.1f}ms"
     assert warm_time < 5, f"Warm cache exceeded 5ms: {warm_time:.1f}ms"
 
@@ -450,12 +433,10 @@ async def test_live_perf_hash_operations():
     await redis.hset(test_hash, "key1", "value1")
     await redis.hset(test_hash, "key2", "value2")
 
-    # Measure HGET
     start = time.perf_counter()
     result = await cache_hget(test_hash, "key1")
     hget_time = (time.perf_counter() - start) * 1000
 
-    # Cleanup
     await redis.delete(test_hash)
 
     assert result == "value1"

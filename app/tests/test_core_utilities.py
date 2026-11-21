@@ -153,7 +153,6 @@ class TestDevelopmentFormatter:
     def test_format_pattern(self):
         """Test the format string pattern is applied."""
         formatter = DevelopmentFormatter()
-        # Check the internal format string
         assert "%(asctime)s" in formatter._fmt
         assert "%(name)s" in formatter._fmt
         assert "%(levelname)s" in formatter._fmt
@@ -181,7 +180,6 @@ class TestSetupLogging:
 
         setup_logging()
 
-        # The dummy handler should have been removed
         assert dummy_handler not in root.handlers
 
     def test_suppresses_noisy_loggers(self):
@@ -325,7 +323,7 @@ class TestRequestIDMiddlewareUnit:
 
         request_id = result.headers["X-Request-ID"]
         assert len(request_id) == 32
-        int(request_id, 16)  # Validates it's a hex string
+        int(request_id, 16)
 
     @pytest.mark.asyncio
     async def test_sets_request_state(self):
@@ -342,8 +340,7 @@ class TestRequestIDMiddlewareUnit:
 
         await middleware.dispatch(request, call_next)
 
-        # Verify request.state.request_id was set
-        request.state.request_id = request.state.request_id  # access the attribute
+        request.state.request_id = request.state.request_id
         assert hasattr(request.state, "request_id")
 
     @pytest.mark.asyncio

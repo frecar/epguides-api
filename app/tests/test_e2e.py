@@ -64,7 +64,7 @@ async def test_list_shows_end_to_end(mock_get_shows_page, async_client: AsyncCli
             total_episodes=10,
         ),
     ]
-    mock_get_shows_page.return_value = (mock_shows, 2)  # Returns (page_items, total)
+    mock_get_shows_page.return_value = (mock_shows, 2)
 
     response = await async_client.get("/shows/?page=1&limit=1")
     assert response.status_code == 200
@@ -282,7 +282,7 @@ async def test_get_next_episode_end_to_end(mock_get_episodes, mock_get_show, asy
     mock_show = create_show_schema(
         epguides_key="breakingbad",
         title="Breaking Bad",
-        end_date=None,  # Show is not finished
+        end_date=None,
     )
     mock_get_show.return_value = mock_show
 
@@ -360,11 +360,9 @@ async def test_get_latest_episode_end_to_end(mock_get_episodes, async_client: As
 @pytest.mark.asyncio
 async def test_validation_errors(async_client: AsyncClient):
     """Test request validation."""
-    # Invalid pagination
     response = await async_client.get("/shows/?page=0")
     assert response.status_code == 422
 
-    # Search query too short
     response = await async_client.get("/shows/search?query=a")
     assert response.status_code == 422
 
@@ -435,7 +433,6 @@ async def test_nlq_parameter_calls_llm_service(
     ]
     mock_get_episodes.return_value = all_episodes
 
-    # LLM returns only the "Finale" episode
     mock_llm_parse.return_value = [
         {
             "season": 1,
@@ -451,13 +448,11 @@ async def test_nlq_parameter_calls_llm_service(
     response = await async_client.get("/shows/test/episodes?nlq=finale+episode")
     assert response.status_code == 200
 
-    # Verify LLM service was called
     mock_llm_parse.assert_called_once()
     call_args = mock_llm_parse.call_args
-    assert call_args[0][0] == "finale episode"  # Query
-    assert len(call_args[0][1]) == 3  # All episodes passed to LLM
+    assert call_args[0][0] == "finale episode"
+    assert len(call_args[0][1]) == 3
 
-    # Verify filtered result
     data = response.json()
     assert len(data) == 1
     assert data[0]["title"] == "Finale"
@@ -496,13 +491,11 @@ async def test_nlq_graceful_fallback_when_llm_fails(
     ]
     mock_get_episodes.return_value = all_episodes
 
-    # LLM returns None (failure)
     mock_llm_parse.return_value = None
 
     response = await async_client.get("/shows/test/episodes?nlq=some+query")
     assert response.status_code == 200
 
-    # Should return all episodes as fallback
     data = response.json()
     assert len(data) == 2
 
@@ -549,7 +542,6 @@ async def test_nlq_combined_with_structured_filters(
     ]
     mock_get_episodes.return_value = all_episodes
 
-    # LLM only gets season 2 episodes (after structured filter)
     mock_llm_parse.return_value = [
         {
             "season": 2,
@@ -565,21 +557,14 @@ async def test_nlq_combined_with_structured_filters(
     response = await async_client.get("/shows/test/episodes?season=2&nlq=finale")
     assert response.status_code == 200
 
-    # LLM should only receive season 2 episodes
     call_args = mock_llm_parse.call_args
     episodes_passed_to_llm = call_args[0][1]
-    assert len(episodes_passed_to_llm) == 2  # Only S2 episodes
+    assert len(episodes_passed_to_llm) == 2
     assert all(ep["season"] == 2 for ep in episodes_passed_to_llm)
 
-    # Result should be the filtered finale
     data = response.json()
     assert len(data) == 1
     assert data[0]["title"] == "S2 Finale"
-
-
-# =============================================================================
-# Live LLM Integration Test (only runs if LLM is configured)
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -597,7 +582,6 @@ async def test_llm_live_integration():
 
     from app.services import llm_service
 
-    # Test data - simple episodes
     test_episodes = [
         {"season": 1, "number": 1, "title": "Pilot", "release_date": "2020-01-01"},
         {"season": 1, "number": 2, "title": "The Beginning", "release_date": "2020-01-08"},
@@ -606,19 +590,14 @@ async def test_llm_live_integration():
         {"season": 2, "number": 10, "title": "Series Finale", "release_date": "2021-03-15"},
     ]
 
-    # Make a real LLM call
     result = await llm_service.parse_natural_language_query("finale episodes", test_episodes)
 
-    # Verify LLM responded (not None = success)
     assert result is not None, "LLM should return a result when properly configured"
 
-    # Verify result is a list
     assert isinstance(result, list), "LLM should return a list of episodes"
 
-    # Verify result is a subset of input (LLM filtered something)
     assert len(result) <= len(test_episodes), "LLM should return same or fewer episodes"
 
-    # Log for visibility
     print(f"\n  LLM filtered {len(test_episodes)} episodes to {len(result)}")
     if result:
         print(f"  Returned: {[ep.get('title') for ep in result]}")
@@ -637,15 +616,12 @@ async def test_llm_live_api_health():
     """
     import httpx
 
-    # Try to reach the LLM API
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
-            # The configured gateway exposes a /models endpoint.
             response = await client.get(
                 f"{settings.LLM_API_URL}/models",
                 headers={"Authorization": f"Bearer {settings.LLM_API_KEY}"} if settings.LLM_API_KEY else {},
             )
-            # Accept 200 (success) or 401/403 (auth issue but endpoint exists)
             assert response.status_code in [
                 200,
                 401,

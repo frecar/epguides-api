@@ -108,22 +108,9 @@ UPSTREAM_RESPONSE_AGE = Histogram(
     "epguides_upstream_response_age_seconds",
     "Round-trip time for successful upstream HTTP requests (fetch start → response received)",
     labelnames=["source"],
-    # 7.5 added between 5.0 and 10.0 because observed epguides.com p95 sits
-    # in that range — without an intermediate bucket, histogram_quantile()
-    # linearly interpolates across a 5-second-wide gap and reports a p95
-    # with ~50% relative error in exactly the range we care most about.
-    # See issue #211 for the dashboard interpolation analysis.
     buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 7.5, 10.0, 30.0),
 )
 
-# Age of the oldest live cache entry per resource type. Updated every 5 minutes
-# by a background task that scans Redis TTLs. In multiprocess mode (5 uvicorn
-# workers), each worker independently computes the same value from the same
-# Redis — max collapses all workers to a single representative value.
-# Known limitation: finished-show entries whose remaining TTL has burned below
-# the 30-day threshold are classified as the 30-day class, underreporting age
-# for very old (>11 months) finished shows. Acceptable — these are the
-# lowest-concern population (finished shows don't change).
 CACHE_OLDEST_ENTRY_AGE = Gauge(
     "epguides_cache_oldest_entry_age_seconds",
     "Age in seconds of the oldest live cache entry, per resource type (TTL-math derived)",
@@ -131,12 +118,6 @@ CACHE_OLDEST_ENTRY_AGE = Gauge(
     multiprocess_mode="max",
 )
 
-# Per-source ingest freshness heartbeat — unix epoch of the most recent
-# *successful* upstream fetch per source. See module docstring for the
-# pre-init / demand-aware-alerting rationale. `multiprocess_mode="max"` is the
-# correct collapse for a timestamp gauge across uvicorn workers: the freshest
-# success across all workers is the true last-success time (a worker that
-# served an older success must not drag the aggregate backwards).
 INGEST_LAST_SUCCESS = Gauge(
     "epguides_ingest_last_success_timestamp",
     "Unix epoch of the most recent successful upstream fetch per source "
@@ -146,8 +127,6 @@ INGEST_LAST_SUCCESS = Gauge(
     multiprocess_mode="max",
 )
 
-# Sources whose ingest freshness we track. Pre-initialised at startup so the
-# gauge series exist from boot (see init_ingest_freshness).
 INGEST_SOURCES = ("epguides", "tvmaze")
 
 

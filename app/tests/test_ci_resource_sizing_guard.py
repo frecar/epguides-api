@@ -42,9 +42,6 @@ def _write_workflow(tmp_path: Path, name: str, content: str) -> None:
     (workflows / name).write_text(content)
 
 
-# --- the repo invariant -----------------------------------------------------
-
-
 def test_repo_workflows_pass_the_guard() -> None:
     result = _run(_REPO_ROOT)
     assert result.returncode == 0, (
@@ -72,9 +69,6 @@ def test_guard_self_test_passes() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "self-test passed" in result.stdout
-
-
-# --- the guard has teeth ----------------------------------------------------
 
 
 def test_guard_flags_hardcoded_xdist_worker_count(tmp_path: Path) -> None:
@@ -155,9 +149,6 @@ def test_guard_fails_closed_on_no_workflows(tmp_path: Path) -> None:
     assert "no .github/workflows" in result.stderr
 
 
-# --- three-surface wiring parity (no-drift, mirrors the ci-parity contract) --
-
-
 def test_guard_wired_into_all_enforcement_surfaces() -> None:
     script = "scripts/check_ci_resource_sizing.py"
 
@@ -168,8 +159,6 @@ def test_guard_wired_into_all_enforcement_surfaces() -> None:
     assert script in ci, "the lint job must run the CI resource-sizing guard so it gates"
 
     config = yaml.safe_load((_REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
-    # Every `repo: local` block, not just the first — this config carries
-    # several, so `next(...)` inspected only the earliest.
     local = {"hooks": [h for r in config["repos"] if r.get("repo") == "local" for h in r["hooks"]]}
     entries = [h["entry"] for h in local["hooks"]]
     assert any(script in e for e in entries), "a pre-commit hook must run the CI resource-sizing guard"

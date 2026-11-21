@@ -21,36 +21,18 @@ from app.core.metrics import record_cache_hit, record_cache_miss, update_cache_a
 
 logger = logging.getLogger(__name__)
 
-# =============================================================================
-# Cache TTL Constants (Single Source of Truth)
-# =============================================================================
 
-TTL_7_DAYS = 86400 * 7  # Ongoing shows, seasons, episodes
-TTL_30_DAYS = 86400 * 30  # Show list, indexes
-TTL_1_YEAR = 86400 * 365  # Finished shows (data won't change)
+TTL_7_DAYS = 86400 * 7
+TTL_30_DAYS = 86400 * 30
+TTL_1_YEAR = 86400 * 365
 
-# Redis NX lock key / TTL for the cache-age background scanner.
-# One worker holds the lock per scan interval; all others skip that interval.
-# TTL is shorter than the 300s task interval so the next worker can pick up
-# promptly after 260s even if the lock holder crashed mid-scan.
 _CACHE_AGE_LOCK_KEY = "epguides:cache_age_scan:lock"
 _CACHE_AGE_LOCK_TTL = 260
 
-# Prefixes that map directly to resource types in the cache key `<type>:<id>`.
 _SCAN_PREFIXES = ("show", "episodes", "seasons", "search", "shows")
 
-# Redis key holding the unix timestamp of the most recent successful upstream
-# fetch per source. Shared across all uvicorn workers (a per-process value
-# would skew under multi-worker / multi-replica deployments). Read by the
-# /health/ready readiness probe to compute upstream freshness; written on every
-# successful upstream fetch. No TTL — the value's *age* is the staleness
-# signal, so it must persist until the next success overwrites it.
 _UPSTREAM_LAST_SUCCESS_KEY = "health:upstream_last_success:{source}"
 
-# Static key the readiness probe writes-then-reads to prove a live Redis
-# round-trip (validates the write path — a PING alone passes on a read-only
-# replica or a maxmemory-evicting instance). Short TTL so it self-expires and
-# never lingers as dead state.
 _READINESS_PROBE_KEY = "health:readiness_probe"
 _READINESS_PROBE_TTL = 10
 
@@ -171,8 +153,6 @@ async def cache_set(key: str, value: str, ttl: int) -> None:
     """Set value in cache with TTL. Fails silently."""
     try:
         redis = await get_redis()
-        # redis-py 8.0 deprecates setex(); set(ex=) is the semantic equivalent
-        # (atomic key+TTL write, overwrites unconditionally, no NX/XX).
         await redis.set(key, value, ex=ttl)
     except Exception as e:
         logger.warning("Cache write error for %s: %s", key, e)
@@ -191,8 +171,6 @@ async def cache_hget(hash_key: str, field: str) -> str | None:
     """Get field from hash, or None on miss/error."""
     try:
         redis = await get_redis()
-        # decode_responses=True yields str at runtime; the command overloads
-        # still annotate bytes|str|None, so narrow at the Redis boundary.
         result = cast("str | None", await redis.hget(hash_key, field))
         return result
     except Exception as e:
@@ -272,8 +250,6 @@ async def probe_redis_round_trip() -> tuple[bool, float | None]:
 
     start = time.monotonic()
     try:
-        # asyncio.wait_for raises TimeoutError on expiry (a subclass of
-        # Exception), so a single except handles timeout + connection errors.
         ok = await asyncio.wait_for(_round_trip(), timeout=settings.READINESS_REDIS_TIMEOUT_SECONDS)
     except Exception as e:
         logger.warning("Redis readiness round-trip failed: %s", e)
@@ -319,7 +295,6 @@ def cache(
                         record_cache_hit(cache_key)
                         return orjson.loads(cached)  # type: ignore[no-any-return]
                     except orjson.JSONDecodeError as e:
-                        # Corrupted JSON - log warning (cache cleared on deployment)
                         logger.warning("Corrupted JSON in cache %s: %s", cache_key, e)
 
                 record_cache_miss(cache_key)
@@ -372,14 +347,12 @@ def cached(
     ) -> Callable[P, Awaitable[R]]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            # Build cache key using first argument (or "global" for no-arg functions)
             key_arg = str(args[0]) if args else "global"
             if key_transform:
                 key_arg = key_transform(key_arg)
 
             cache_key = re.sub(r"\{[^}]+\}", key_arg, key_template)
 
-            # Check cache (use orjson for faster parsing)
             cached_data = await cache_get(cache_key)
             if cached_data:
                 try:
@@ -391,25 +364,20 @@ def cached(
                         return model(**data) if data else None  # type: ignore[return-value]
                     return data  # type: ignore[no-any-return]
                 except orjson.JSONDecodeError as e:
-                    # Corrupted JSON - log warning (cache cleared on deployment)
                     logger.warning("Corrupted JSON in cache %s: %s", cache_key, e)
                 except Exception as e:
-                    # Pydantic validation error - log and continue to fetch fresh
                     logger.warning("Cache validation error for %s: %s", cache_key, e)
 
-            # Cache miss (or corrupted data that fell through) - execute function
             record_cache_miss(cache_key)
             result = await func(*args, **kwargs)
 
             if result is not None:
-                # Determine TTL (allow override based on result)
                 final_ttl = ttl
                 if ttl_if:
                     override = ttl_if(result)
                     if override is not None:
                         final_ttl = override
 
-                # Serialize (use orjson for speed, type: ignore needed as R is generic)
                 if model:
                     if is_list:
                         items = list(result)  # type: ignore[call-overload]
@@ -437,9 +405,6 @@ async def get_cache_stats() -> dict[str, Any]:
     try:
         redis = await get_redis()
 
-        # Get all keys and categorize them. decode_responses=True means the
-        # client returns str keys at runtime; the overloads still type these
-        # as list[bytes | str], so narrow at the Redis boundary.
         key_strings = cast("list[str]", await redis.keys("*"))
 
         shows_cached = sum(1 for k in key_strings if k.startswith("show:") and not k.endswith(":raw"))

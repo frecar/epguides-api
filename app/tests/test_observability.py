@@ -22,9 +22,6 @@ def test_observability_is_noop_without_sentry_dsn(monkeypatch):
 
 def test_observability_initialises_sentry_when_configured(monkeypatch):
     sentry_sdk_mock = Mock()
-    # init_observability() lazily imports these sentry_sdk submodules; the
-    # fakes must be seeded alongside the top-level mock or the from-imports
-    # blow up resolving submodules off a Mock parent.
     scrubber_mod = Mock()
     fastapi_mod = Mock()
     starlette_mod = Mock()
@@ -46,11 +43,6 @@ def test_observability_initialises_sentry_when_configured(monkeypatch):
     ):
         observability.init_observability(release="test-release")
 
-    # Assert against the exact kwargs the app really passes to
-    # sentry_sdk.init, not a constant defined elsewhere in this file --
-    # this is what actually proves include_local_variables,
-    # max_request_body_size, and the propagation targets can't be silently
-    # dropped or re-inherited from the SDK default.
     scrubber_mod.EventScrubber.assert_called_once_with(recursive=True)
     fastapi_mod.FastApiIntegration.assert_called_once_with()
     starlette_mod.StarletteIntegration.assert_called_once_with()

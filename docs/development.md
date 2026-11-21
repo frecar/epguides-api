@@ -177,6 +177,26 @@ make fix
 
 ---
 
+### Service contracts
+
+- The epguides CSV endpoint can return HTML with HTTP 200. Reject that body before CSV parsing and fall back to TVMaze when episode data is unavailable. Prefer a TVMaze ID recovered from the show page to a title search, which can select a different show. An IMDb reverse index avoids repeating that work for shows already seen.
+- Redis holds raw episode dictionaries separately from the validated episode cache. A refresh invalidates both keys because the validated cache is rebuilt from the raw data.
+- Swagger UI and ReDoc load CDN assets and initialize them with inline code. The middleware grants the relaxed content security policy only to those documentation routes.
+- Upstream freshness is shared across workers. A successful fetch writes its timestamp without a TTL so an old value distinguishes stale data from a deployment that has never fetched it. Multiprocess metrics take the maximum timestamp across workers.
+- The bounded Redis write/read probe distinguishes a live write path from a replica that answers PING. Redis problems can leave readiness degraded. The authoritative epguides source becomes unready when stale, with a startup grace period for an absent value. Read the top-level overall_ok field when monitoring readiness.
+- The request observability configuration excludes bodies and stack-frame locals, since tool-call parameters and credentials can be present there. Recursive redaction covers sensitive fields nested in captured context.
+- The LLM gateway retries once on connection problems, timeouts, HTTP 429, or server errors. Other client errors fall back immediately. Both JSON output forms are accepted for compatibility with gateways that ignore the response format hint.
+
+### Build and tool constraints
+
+- Build and runtime images use immutable base digests. The uv tool image uses the centrally synchronized exact version tag. Its runtime bytes are used to install locked dependencies in the builder. The dependency layer copies lock and project metadata before app code for cache reuse.
+- The production image applies available Debian security patches after selecting the base digest. The development container uses a writable bind mount for reloads and transient Python files.
+- The coverage runs isolate data per invocation because concurrent runs otherwise combine and remove the same coverage fragments. Ruff uses the resolved lockfile version locally and in CI. Host-run scripts must parse on Python 3.12, even though the application runtime is newer.
+- A scan suppression needs an identified finding, a reason, and review. Use the lifetime required by the scan policy and remove the suppression when an upgrade fixes the finding. OSV uses the dependency lockfile and Trivy checks the file tree and built image separately. The local OSV wrapper only permits the recognized offline cases to skip the scan.
+- Managed CI workflow blocks, public templates, and shared build helper copies are updated at their owning source. Preserve their provenance markers and the inline version annotations on pinned Actions.
+
+---
+
 ## 🐳 Docker Environments
 
 !!! info "Two Docker Compose Files"

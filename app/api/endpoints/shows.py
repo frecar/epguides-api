@@ -16,9 +16,6 @@ from app.services import llm_service, show_service
 
 router = APIRouter()
 
-# IMDB IDs are `tt` followed by digits — TVMaze accepts arbitrary digit
-# counts (7 is canonical but old/test entries vary). Rejecting non-matching
-# input here gives a 400 instead of letting TVMaze 404 it.
 _IMDB_ID_RE = re.compile(r"^tt\d+$")
 
 
@@ -103,7 +100,6 @@ async def search_shows(
     ]
 
 
-# MCP tool: lookup_by_imdb_id
 @router.get(
     "/by-imdb/{imdb_id}",
     response_model=ShowSchema,
@@ -138,8 +134,6 @@ async def get_show_by_imdb_id(
       isn't in the epguides catalog, or several catalog shows match and
       none can be chosen safely
     """
-    # Format gate: TVMaze rejects garbage anyway, but a 400 here is a
-    # better operator/UI signal than letting the 404 fall through.
     if not _IMDB_ID_RE.match(imdb_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -258,7 +252,6 @@ async def get_season_episodes(
     season_episodes = [ep for ep in episodes if ep.season == season_number]
 
     if not season_episodes:
-        # Check if show exists or just no episodes for this season
         if not episodes:
             show = await show_service.get_show(epguides_key)
             if not show:
@@ -353,15 +346,12 @@ async def get_show_episodes(
         search_lower = title_search.lower()
         episodes = [ep for ep in episodes if search_lower in ep.title.lower()]
 
-    # Apply natural language query if provided (requires LLM)
     if nlq and episodes:
         episodes_as_dicts = [ep.model_dump() for ep in episodes]
         llm_result = await llm_service.parse_natural_language_query(nlq, episodes_as_dicts)
         if llm_result is not None:
-            # LLM returned filtered results - convert back to schemas
             episodes = [EpisodeSchema(**ep) for ep in llm_result]
 
-    # Validate show exists if no results
     if not episodes:
         show = await show_service.get_show(epguides_key)
         if not show:
@@ -406,7 +396,6 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
             detail=f"Show not found: {epguides_key}",
         )
 
-    # Show with end_date has finished airing
     if show.end_date:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -420,7 +409,6 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
             detail="No episodes found",
         )
 
-    # Find first unreleased episode with a title
     next_ep = None
     for ep in episodes:
         if not ep.is_released and ep.title:
@@ -433,8 +421,6 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
             detail="No unreleased episodes found",
         )
 
-    # Smart cache: if the "next" episode date has passed, cache might be stale
-    # Invalidate and refetch to get updated episode list
     if next_ep.release_date < datetime.now(UTC).date():
         normalized_key = show_service.normalize_show_id(epguides_key)
         await invalidate_cache("episodes", normalized_key)

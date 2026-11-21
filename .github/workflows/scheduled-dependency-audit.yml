@@ -1,24 +1,8 @@
 name: EPGuides API scheduled dependency audit
 
-# OSV-Scanner runs per-PR in ci.yml, which catches a vulnerability a PR
-# INTRODUCES and nothing else. A repo with no PR activity accumulates live CVEs
-# silently, and a red default branch is discovered only when somebody happens to
-# open the next PR.
-#
-# That is not hypothetical: five fixable CVEs were recently found live across
-# several projects — django 6.0.7 (PYSEC-2026-3717) and sqlparse 0.5.5 (four of
-# them, two at CVSS 8.7) — and surfaced only because one turned an unrelated
-# feature PR red. Dependency maintenance should be a cycle, not chance discovery.
-#
-# The scan arguments are byte-identical to the per-PR job in ci.yml on purpose.
-# Two scanners disagreeing is worse than one: a scheduled audit scanning a
-# different lockfile set or config would be green while CI was red, with no way
-# to tell which was authoritative. Scanning through .osv-scanner.toml also means
-# deliberately-suppressed findings stay suppressed.
 
 on:
   schedule:
-    # Off the hour on purpose: :00 is when every other cron fires.
     - cron: "17 5 * * *"
   workflow_dispatch:
 

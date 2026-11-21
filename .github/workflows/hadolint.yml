@@ -1,14 +1,5 @@
 name: Dockerfile hygiene
 
-# Lints the production Dockerfile via hadolint
-# (https://github.com/hadolint/hadolint) to catch common anti-patterns
-# (unpinned `:latest` bases, mutable apt installs without
-# `--no-install-recommends`, missing healthcheck, running as root,
-# `ADD` vs `COPY`, etc.).
-#
-# `failure-threshold: error` keeps CI red only on real problems. Style
-# / info / warning findings show up as PR annotations without blocking
-# merges - the right friction tier for an established Dockerfile.
 
 on:
   push:
@@ -16,10 +7,6 @@ on:
   pull_request:
     branches: [main]
 
-# Keyed on the PR number when present (always distinct from any
-# push-to-main group) instead of github.ref alone, so a delayed
-# pull_request run can never collide with, and cancel, a push run on
-# main. push events fall through to github.ref unchanged.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -30,21 +17,13 @@ permissions:
 jobs:
   hadolint:
     name: hadolint
-    # GitHub-hosted: pull_request-reachable on a public repo, so fork code
-    # must not run on a self-hosted runner. hadolint-action pulls its image
-    # from ghcr.io (not Docker Hub), so there is no anonymous-pull-limit
-    # concern on a hosted runner.
     runs-on: ubuntu-latest
-    # Bounded ceiling so a wedged runner fails fast. hadolint is a fast
-    # lint; 15m only trips on a real hang.
     timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run hadolint
-        # Pinned to a specific version for supply-chain safety; bump
-        # deliberately when upstream releases security-relevant patches.
         uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: ./Dockerfile

@@ -99,7 +99,6 @@ async def test_mcp_endpoint_lookup_by_imdb_id(mock_lookup, async_client: AsyncCl
     data = response.json()
     assert "result" in data
     assert "content" in data["result"]
-    # Round-trip the JSON in the text content to confirm the bridge succeeded
     import json as _json
 
     payload = _json.loads(data["result"]["content"][0]["text"])
@@ -149,7 +148,7 @@ async def test_mcp_endpoint_invalid_json(async_client: AsyncClient):
         content="not json",
         headers={"Content-Type": "application/json"},
     )
-    assert response.status_code == 422  # FastAPI validation error for invalid JSON
+    assert response.status_code == 422
     data = response.json()
     assert "detail" in data
 
@@ -158,7 +157,7 @@ async def test_mcp_endpoint_invalid_json(async_client: AsyncClient):
 async def test_mcp_endpoint_missing_body(async_client: AsyncClient):
     """Test MCP endpoint with missing body."""
     response = await async_client.post("/mcp")
-    assert response.status_code == 422  # FastAPI validation error for missing required body
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio

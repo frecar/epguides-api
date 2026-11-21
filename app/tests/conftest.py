@@ -12,11 +12,6 @@ from httpx import ASGITransport, AsyncClient
 
 from scripts.compute_xdist_workers import current_selection, redis_db_for_worker
 
-# Each xdist worker gets its own Redis database. The suite deliberately uses
-# fixed cache keys to exercise production caching behavior, so sharing DB 0
-# makes otherwise-independent tests overwrite one another when they run in
-# parallel. The capacity selector caps the normal path at eight workers, safely
-# within Redis's default 16 logical databases.
 _XDIST_WORKER = os.environ.get("PYTEST_XDIST_WORKER", "")
 _XDIST_REDIS_DB = redis_db_for_worker(_XDIST_WORKER)
 if _XDIST_REDIS_DB is not None:
@@ -78,9 +73,9 @@ def _warn_if_coverage_datafile_unisolated(config: pytest.Config) -> None:
     capture and always lands in the warnings summary, pass or fail.
     """
     if not config.pluginmanager.has_plugin("_cov"):
-        return  # --cov not requested; pytest-cov never activated
+        return
     if os.environ.get("COVERAGE_FILE"):
-        return  # already isolated (Makefile / pre-commit hook, or a caller who set it)
+        return
 
     config.issue_config_time_warning(
         pytest.PytestConfigWarning(
