@@ -345,7 +345,6 @@ async def test_get_next_episode_with_unreleased_episodes_after_released_ones(
     from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
     from app.models.schemas import create_show_schema
 
-    # Create a show without end_date (simulating the scenario)
     mock_show = create_show_schema(
         epguides_key="fallout",
         title="Fallout",
@@ -373,7 +372,6 @@ async def test_get_next_episode_with_unreleased_episodes_after_released_ones(
         },
     ]
 
-    # Mock processed episodes for get_episodes
     mock_get_episodes.return_value = [
         EpisodeSchema(
             season=1,
@@ -521,11 +519,6 @@ async def test_lookup_by_imdb_not_found(mock_lookup, async_client: AsyncClient):
     assert "tt9999999" in response.json()["detail"]
 
 
-# =============================================================================
-# Seasons Endpoint Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.services.show_service.get_seasons")
 @patch("app.services.show_service.get_show")
@@ -624,11 +617,6 @@ async def test_get_season_episodes_not_found(mock_get_show, mock_get_episodes, a
     assert response.status_code == 404
 
 
-# =============================================================================
-# Refresh Parameter Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.api.endpoints.shows.show_service.invalidate_show_cache")
 @patch("app.api.endpoints.shows.invalidate_cache")
@@ -643,11 +631,6 @@ async def test_get_show_with_refresh(mock_get_show, mock_invalidate, mock_invali
     # Verify cache was invalidated
     assert mock_invalidate.called
     assert mock_invalidate_show.called
-
-
-# =============================================================================
-# Error Path Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -786,11 +769,6 @@ async def test_get_latest_episode_none_released(mock_get_episodes, async_client:
 
     assert response.status_code == 404
     assert "No released episodes found" in response.json()["detail"]
-
-
-# =============================================================================
-# Filter Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio

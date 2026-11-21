@@ -26,11 +26,6 @@ def _histo_count(histogram: Histogram, **labels: Any) -> float:
     return 0.0
 
 
-# =============================================================================
-# _convert_show_id_to_title Tests
-# =============================================================================
-
-
 def test_convert_show_id_camel_case():
     """Test CamelCase show ID is converted to spaced title."""
     assert epguides._convert_show_id_to_title("SharkTank") == "Shark Tank"
@@ -51,11 +46,6 @@ def test_convert_show_id_all_lowercase_with_common_words():
 def test_convert_show_id_single_word():
     """Test single-word show ID is returned unchanged."""
     assert epguides._convert_show_id_to_title("Friends") == "Friends"
-
-
-# =============================================================================
-# _add_word_boundaries Tests
-# =============================================================================
 
 
 def test_add_word_boundaries_common_words():
@@ -89,11 +79,6 @@ def test_add_word_boundaries_avoids_false_prefix_splits():
     assert result == "there"
 
 
-# =============================================================================
-# _extract_imdb_id Tests
-# =============================================================================
-
-
 def test_extract_imdb_id_from_url():
     """Test IMDB ID extraction from standard URL."""
     html = '<a href="https://www.imdb.com/title/tt0903747/">IMDB</a>'
@@ -110,11 +95,6 @@ def test_extract_imdb_id_not_found():
     """Test returns None when no IMDB ID in HTML."""
     html = "<html><body>No IMDB link here</body></html>"
     assert epguides._extract_imdb_id(html) is None
-
-
-# =============================================================================
-# _extract_title Tests
-# =============================================================================
 
 
 def test_extract_title_from_h2_link():
@@ -139,11 +119,6 @@ def test_extract_title_not_found():
     """Test returns None when no title found in HTML."""
     html = "<html><body>No title</body></html>"
     assert epguides._extract_title(html) is None
-
-
-# =============================================================================
-# _clean_unicode_text Tests
-# =============================================================================
 
 
 def test_clean_unicode_text_normal():
@@ -174,11 +149,6 @@ def test_clean_unicode_text_no_encoding():
     result = epguides._clean_unicode_text(response)
     assert result == "Text"
     assert response.encoding == "utf-8"
-
-
-# =============================================================================
-# _parse_episode_rows Tests
-# =============================================================================
 
 
 def test_parse_episode_rows_tvmaze_format():
@@ -227,11 +197,6 @@ def test_parse_episode_rows_short_row_keeps_numeric_partial():
     assert "title" not in result[0]
 
 
-# =============================================================================
-# _extract_csv_url_and_maze_id Tests
-# =============================================================================
-
-
 def test_extract_csv_url_tvrage_format_with_plus():
     """Test TVRage format with plus sign in rage ID."""
     html = '<a href="exportToCSV.asp?rage=123+456">Export</a>'
@@ -249,11 +214,6 @@ def test_extract_csv_url_no_export_link():
     assert url is None
     assert columns == {}
     assert maze_id is None
-
-
-# =============================================================================
-# extract_poster_url Tests
-# =============================================================================
 
 
 def test_extract_poster_url_none_data():
@@ -283,11 +243,6 @@ def test_extract_poster_url_falls_back_to_medium():
     assert epguides.extract_poster_url(data) == "https://example.com/medium.jpg"
 
 
-# =============================================================================
-# parse_date_string Edge Cases
-# =============================================================================
-
-
 def test_parse_date_string_iso_format():
     """Test ISO date format parsing."""
     result = epguides.parse_date_string("2020-01-15")
@@ -311,11 +266,6 @@ def test_parse_date_string_future_century_correction():
     assert result.year == 1968
 
 
-# =============================================================================
-# _get_show_title Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.services.epguides.get_all_shows_metadata")
 async def test_get_show_title_from_metadata(mock_get_metadata):
@@ -336,11 +286,6 @@ async def test_get_show_title_not_in_metadata(mock_get_metadata):
     result = await epguides._get_show_title("UnknownShow")
     assert result is not None
     assert result == "Unknown Show"
-
-
-# =============================================================================
-# _search_tvmaze_by_title Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -382,11 +327,6 @@ async def test_search_tvmaze_success(mock_client_class):
     result = await epguides._search_tvmaze_by_title("Test Show")
     assert result is not None
     assert result["id"] == 123
-
-
-# =============================================================================
-# _fetch_tvmaze_episodes Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -451,11 +391,6 @@ async def test_fetch_tvmaze_episodes_error(mock_client_class):
     assert result == []
 
 
-# =============================================================================
-# get_show_metadata Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.services.epguides._fetch_url")
 async def test_get_show_metadata_no_imdb_id(mock_fetch):
@@ -480,11 +415,6 @@ async def test_get_show_metadata_imdb_but_no_title(mock_fetch):
     assert result is not None
     assert result[0] == "tt1234567"
     assert result[1] == "Unknown"
-
-
-# =============================================================================
-# Upstream Metrics — _fetch_url instrumentation
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -571,11 +501,6 @@ async def test_fetch_url_records_epguides_connect_error(mock_client_class):
     assert UPSTREAM_REQUESTS.labels(source="epguides", outcome="http_error")._value.get() == before + 1
 
 
-# =============================================================================
-# Upstream Metrics — _tvmaze_get instrumentation
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("httpx.AsyncClient")
 async def test_tvmaze_get_records_success(mock_client_class):
@@ -654,11 +579,6 @@ async def test_tvmaze_get_passes_kwargs_to_client(mock_client_class):
     await epguides._tvmaze_get("https://api.tvmaze.com/singlesearch/shows", params={"q": "test"})
 
     mock_client.get.assert_called_once_with("https://api.tvmaze.com/singlesearch/shows", params={"q": "test"})
-
-
-# =============================================================================
-# Upstream Metrics — fetch_csv parse_error recording
-# =============================================================================
 
 
 @pytest.mark.asyncio

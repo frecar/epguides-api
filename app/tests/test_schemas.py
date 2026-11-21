@@ -20,10 +20,6 @@ from app.models.schemas import (
     create_show_schema,
 )
 
-# =============================================================================
-# EpisodeSchema Tests
-# =============================================================================
-
 
 def test_episode_schema_valid():
     """Test creating a valid episode schema."""
@@ -125,11 +121,6 @@ def test_episode_schema_rejects_zero_runtime():
         )
 
 
-# =============================================================================
-# SeasonSchema Tests
-# =============================================================================
-
-
 def test_season_schema_valid():
     """Test creating a valid season schema."""
     season = SeasonSchema(
@@ -182,11 +173,6 @@ def test_season_schema_rejects_negative_episode_count():
         )
 
 
-# =============================================================================
-# ShowListSchema Tests
-# =============================================================================
-
-
 def test_show_list_schema_computed_fields():
     """Test computed URL fields on ShowListSchema."""
     show = ShowListSchema(
@@ -213,11 +199,6 @@ def test_show_list_schema_with_metadata():
     assert show.country == "US"
     assert show.start_date == date(2008, 1, 20)
     assert show.end_date == date(2013, 9, 29)
-
-
-# =============================================================================
-# ShowSchema Tests
-# =============================================================================
 
 
 def test_show_schema_computed_fields():
@@ -286,11 +267,6 @@ def test_show_schema_rejects_negative_total_episodes():
         )
 
 
-# =============================================================================
-# ShowDetailsSchema Tests
-# =============================================================================
-
-
 def test_show_details_schema_inherits_computed_fields():
     """Test ShowDetailsSchema inherits computed fields from ShowSchema."""
     show = ShowDetailsSchema(
@@ -320,11 +296,6 @@ def test_show_details_schema_empty_episodes():
         episodes=[],
     )
     assert show.episodes == []
-
-
-# =============================================================================
-# create_show_schema Factory Tests
-# =============================================================================
 
 
 def test_create_show_schema_minimal():
@@ -381,11 +352,6 @@ def test_create_show_schema_computed_fields_work():
     )
     assert "TestShow" in show.api_self_url
     assert "tt1234567" in show.external_imdb_url
-
-
-# =============================================================================
-# PaginatedResponse Tests
-# =============================================================================
 
 
 def test_paginated_response_basic():
@@ -487,11 +453,6 @@ def test_paginated_response_serialization():
     assert data["items"] == [{"key": "value"}]
     assert data["total"] == 1
     assert data["page"] == 1
-
-
-# =============================================================================
-# Schema Serialization Tests
-# =============================================================================
 
 
 def test_show_schema_json_serialization():

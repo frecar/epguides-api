@@ -16,14 +16,8 @@ class Settings(BaseSettings):
     The .env file is loaded automatically if present.
     """
 
-    # -------------------------------------------------------------------------
-    # Application
-    # -------------------------------------------------------------------------
     PROJECT_NAME: str = "Epguides API"
 
-    # -------------------------------------------------------------------------
-    # Redis Configuration
-    # -------------------------------------------------------------------------
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
@@ -36,14 +30,8 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     CACHE_TTL_SECONDS: int = 604800  # 7 days - episodes air weekly at most
 
-    # -------------------------------------------------------------------------
-    # API Configuration
-    # -------------------------------------------------------------------------
     API_BASE_URL: str = "http://localhost:3000/"
 
-    # -------------------------------------------------------------------------
-    # LLM Configuration (Optional - for smart natural language queries)
-    # -------------------------------------------------------------------------
     # Set LLM_API_URL to your OpenAI-compatible gateway (e.g. a local Ollama,
     # vLLM, llama.cpp server, or any hosted endpoint). Empty/unset disables
     # natural-language queries; structured filters always work.
@@ -56,14 +44,8 @@ class Settings(BaseSettings):
     LLM_MODEL_NAME: str = "auto"
     LLM_ALLOW_EXTERNAL: bool = False
 
-    # -------------------------------------------------------------------------
-    # HTTP Configuration
-    # -------------------------------------------------------------------------
     HTTP_TIMEOUT_SECONDS: float = 5.0  # Timeout for external HTTP requests
 
-    # -------------------------------------------------------------------------
-    # Readiness / Deep-Health Configuration
-    # -------------------------------------------------------------------------
     # /health/ready flips to a degraded (HTTP 503) state when no successful
     # upstream (epguides.com) fetch has happened within this many hours. The
     # cache hides upstream outages for up to its TTL, so a longer-than-cadence
@@ -85,16 +67,10 @@ class Settings(BaseSettings):
     # probes are called frequently and must answer fast.
     READINESS_REDIS_TIMEOUT_SECONDS: float = 2.0
 
-    # -------------------------------------------------------------------------
-    # Logging Configuration
-    # -------------------------------------------------------------------------
     LOG_LEVEL: str = "INFO"  # pragma: no cover - class body; covered at import time
     LOG_FORMAT: str = "json"  # "json" for structured output, "text" for human-readable
     LOG_REQUESTS: bool = True
 
-    # -------------------------------------------------------------------------
-    # Observability (Optional)
-    # -------------------------------------------------------------------------
     SENTRY_DSN: str | None = None
     SENTRY_TRACES_SAMPLE_RATE: float = 0.0
     SENTRY_PROFILES_SAMPLE_RATE: float = 0.0
@@ -107,5 +83,4 @@ class Settings(BaseSettings):
     )
 
 
-# Global settings instance - loaded once at import time
 settings = Settings()  # pragma: no cover - executed before coverage starts

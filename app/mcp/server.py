@@ -15,18 +15,10 @@ from app.services import show_service
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# JSON-RPC Error Codes
-# =============================================================================
-
 _ERROR_METHOD_NOT_FOUND = -32601
 _ERROR_INVALID_PARAMS = -32602
 _ERROR_INTERNAL = -32603
 
-
-# =============================================================================
-# Tool Definitions
-# =============================================================================
 
 _TOOLS = [
     {
@@ -166,11 +158,6 @@ _TOOLS = [
 ]
 
 
-# =============================================================================
-# MCP Server
-# =============================================================================
-
-
 class MCPServer:
     """
     MCP server for Epguides API.
@@ -195,7 +182,6 @@ class MCPServer:
         params = request.get("params", {})
         self._request_id = request.get("id")
 
-        # Route to handler
         handlers = {
             "initialize": self._handle_initialize,
             "resources/list": self._handle_resources_list,
@@ -213,10 +199,6 @@ class MCPServer:
         except Exception as e:
             logger.exception("Error handling %s request", method)
             return self._error(_ERROR_INTERNAL, f"Internal error: {e}")
-
-    # -------------------------------------------------------------------------
-    # Protocol Handlers
-    # -------------------------------------------------------------------------
 
     async def _handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle MCP initialize request."""
@@ -275,7 +257,6 @@ class MCPServer:
         tool_name = params.get("name", "")
         arguments = params.get("arguments", {})
 
-        # Route to tool handler
         tool_handlers = {
             "search_shows": self._tool_search_shows,
             "lookup_by_imdb_id": self._tool_lookup_by_imdb_id,
@@ -295,10 +276,6 @@ class MCPServer:
         except Exception as e:
             logger.exception("Error executing tool %s", tool_name)
             return self._error(_ERROR_INTERNAL, f"Tool execution error: {e}")
-
-    # -------------------------------------------------------------------------
-    # Tool Implementations
-    # -------------------------------------------------------------------------
 
     async def _tool_search_shows(self, args: dict[str, Any]) -> dict[str, Any]:
         """Search for shows by title."""
@@ -410,10 +387,6 @@ class MCPServer:
 
         result = [season.model_dump() for season in seasons]
         return self._success(self._text_content(json.dumps(result, indent=2, default=str)))
-
-    # -------------------------------------------------------------------------
-    # Response Helpers
-    # -------------------------------------------------------------------------
 
     def _success(self, result: dict[str, Any]) -> dict[str, Any]:
         """Build successful JSON-RPC response."""

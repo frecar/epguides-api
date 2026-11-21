@@ -54,16 +54,10 @@ _UPSTREAM_LAST_SUCCESS_KEY = "health:upstream_last_success:{source}"
 _READINESS_PROBE_KEY = "health:readiness_probe"
 _READINESS_PROBE_TTL = 10
 
-# =============================================================================
-# Type Variables
-# =============================================================================
 
 P = ParamSpec("P")
 R = TypeVar("R")
 
-# =============================================================================
-# Global Connection Pool
-# =============================================================================
 
 _redis_pool: ConnectionPool | None = None
 _redis_client: Redis | None = None
@@ -162,11 +156,6 @@ async def extend_cache_ttl(key_prefix: str, key_suffix: str, new_ttl: int) -> bo
         return False
 
 
-# =============================================================================
-# Simple Cache Helpers
-# =============================================================================
-
-
 async def cache_get(key: str) -> str | None:
     """Get raw value from cache, or None on miss/error."""
     try:
@@ -219,11 +208,6 @@ async def cache_exists(key: str) -> bool:
         return bool(count > 0)
     except Exception:
         return False
-
-
-# =============================================================================
-# Readiness / Upstream-Freshness Helpers
-# =============================================================================
 
 
 async def mark_upstream_success(source: str) -> None:
@@ -298,11 +282,6 @@ async def probe_redis_round_trip() -> tuple[bool, float | None]:
     if not ok:
         return False, None
     return True, (time.monotonic() - start) * 1000.0
-
-
-# =============================================================================
-# Caching Decorators
-# =============================================================================
 
 
 def cache(
@@ -398,7 +377,6 @@ def cached(
             if key_transform:
                 key_arg = key_transform(key_arg)
 
-            # Replace any {placeholder} with the key_arg value
             cache_key = re.sub(r"\{[^}]+\}", key_arg, key_template)
 
             # Check cache (use orjson for faster parsing)
@@ -423,7 +401,6 @@ def cached(
             record_cache_miss(cache_key)
             result = await func(*args, **kwargs)
 
-            # Cache the result
             if result is not None:
                 # Determine TTL (allow override based on result)
                 final_ttl = ttl
@@ -451,11 +428,6 @@ def cached(
     return decorator
 
 
-# =============================================================================
-# Cache Statistics
-# =============================================================================
-
-
 async def get_cache_stats() -> dict[str, Any]:
     """
     Get cache statistics for monitoring.
@@ -470,7 +442,6 @@ async def get_cache_stats() -> dict[str, Any]:
         # as list[bytes | str], so narrow at the Redis boundary.
         key_strings = cast("list[str]", await redis.keys("*"))
 
-        # Categorize keys
         shows_cached = sum(1 for k in key_strings if k.startswith("show:") and not k.endswith(":raw"))
         episodes_cached = sum(1 for k in key_strings if k.startswith("episodes:"))
         seasons_cached = sum(1 for k in key_strings if k.startswith("seasons:"))
@@ -522,11 +493,6 @@ async def get_cache_stats() -> dict[str, Any]:
             "status": "error",
             "error": str(e),
         }
-
-
-# =============================================================================
-# Cache Age Gauge Refresh
-# =============================================================================
 
 
 def _classify_ttl(remaining: int) -> int:

@@ -12,10 +12,6 @@ import pytest
 from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS, get_version
 from app.services import epguides, show_service
 
-# =============================================================================
-# get_version() Tests
-# =============================================================================
-
 
 def test_get_version_from_version_file():
     """Test get_version reads from VERSION file when it exists."""
@@ -30,12 +26,10 @@ def test_get_version_from_version_file():
 
 def test_get_version_from_env_variable(monkeypatch, tmp_path):
     """Test get_version falls back to APP_VERSION env var."""
-    # Make VERSION file not exist
     monkeypatch.setenv("APP_VERSION", "789")
 
     with patch("pathlib.Path.exists", return_value=False):
         result = get_version()
-        # Should return env var value
         assert result == "789"
 
 
@@ -92,11 +86,6 @@ def test_get_version_git_fails_returns_dev(monkeypatch):
         mock_run.return_value.stdout = ""
         result = get_version()
         assert result == "dev"
-
-
-# =============================================================================
-# Show Service Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -195,7 +184,6 @@ async def test_get_show_does_not_set_end_date_with_unreleased_episodes(
 
     from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
 
-    # Mock show data from epguides
     mock_get_metadata.return_value = [
         {
             "directory": "fallout",
@@ -261,7 +249,6 @@ async def test_get_show_sets_end_date_when_all_episodes_released(
 
     from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
 
-    # Mock show data from epguides
     mock_get_metadata.return_value = [
         {
             "directory": "finishedshow2",
@@ -301,11 +288,6 @@ async def test_get_show_sets_end_date_when_all_episodes_released(
     expected_date = epguides.parse_date_string(old_date_2)
     assert expected_date is not None
     assert result.end_date == expected_date.date()
-
-
-# =============================================================================
-# Episode Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -375,11 +357,6 @@ async def test_get_episodes_filters_invalid_entries(mock_get_episodes):
     assert episodes[0].title == "Valid"
 
 
-# =============================================================================
-# Cache Invalidation Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.core.cache.get_redis")
 async def test_invalidate_show_cache(mock_get_redis):
@@ -399,11 +376,6 @@ async def test_invalidate_show_cache(mock_get_redis):
     # former would leave a stale raw layer the schema layer re-derives from.
     assert "episodes:breakingbad" in call_args
     assert "episodes_raw:breakingbad" in call_args
-
-
-# =============================================================================
-# Edge Cases
-# =============================================================================
 
 
 def test_normalize_show_id_edge_cases():
@@ -469,11 +441,6 @@ async def test_search_shows_no_results(mock_get_metadata, mock_cache_get, mock_c
     assert len(results) == 0
 
 
-# =============================================================================
-# Corrupted Cache Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.services.epguides.get_all_shows_metadata")
 @patch("app.services.show_service.cache_get")
@@ -510,11 +477,6 @@ async def test_corrupted_cache_invalid_json_returns_fresh_data(mock_cache_set, m
 
     assert len(shows) == 1
     assert shows[0].title == "Game of Thrones"
-
-
-# =============================================================================
-# Show Service Helper Function Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -785,11 +747,6 @@ def test_show_ttl_ongoing():
     assert ttl is None
 
 
-# =============================================================================
-# Epguides Service Tests
-# =============================================================================
-
-
 def test_parse_date_string_century_fix():
     """Test date parsing fixes century for future years."""
     # Year 99 should become 1999, not 2099
@@ -938,11 +895,6 @@ def test_parse_episode_rows():
     assert result[1]["title"] == "Second Episode"
 
 
-# =============================================================================
-# LLM Service Tests
-# =============================================================================
-
-
 def test_llm_episode_summary_truncation():
     """Test that episode summaries are truncated for LLM context."""
     from app.services import llm_service
@@ -950,11 +902,6 @@ def test_llm_episode_summary_truncation():
     # This is tested implicitly through the search function
     # Just verify the module loads
     assert llm_service is not None
-
-
-# =============================================================================
-# Show Index and Cache Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -1150,11 +1097,6 @@ async def test_get_show_runtime_cache_miss(mock_hget):
     assert result is None
 
 
-# =============================================================================
-# Episode Enrichment Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.services.show_service.get_episodes")
 async def test_calculate_episode_stats(mock_get_episodes):
@@ -1276,11 +1218,6 @@ def test_build_show_updates_no_end_date_for_ongoing():
     assert updates["total_episodes"] == 10
 
 
-# =============================================================================
-# Additional Epguides Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.services.epguides._get_show_title", return_value=None)
 @patch("app.services.epguides._fetch_url")
@@ -1367,11 +1304,6 @@ async def test_get_tvmaze_seasons_error(mock_client_class):
     result = await epguides.get_tvmaze_seasons("12345")
 
     assert result == []
-
-
-# =============================================================================
-# TVMaze Fallback Functions Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -1691,11 +1623,6 @@ async def test_get_show_metadata_not_found(mock_fetch):
     assert result is None
 
 
-# =============================================================================
-# Season and TVMaze Integration Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.services.show_service.epguides.get_show_poster")
 @patch("app.services.show_service.epguides.get_tvmaze_seasons")
@@ -1836,11 +1763,6 @@ async def test_get_poster_url_no_maze(mock_maze):
     assert result is None
 
 
-# =============================================================================
-# Logging Config Tests
-# =============================================================================
-
-
 def test_development_formatter():
     """Test DevelopmentFormatter formats log records."""
     from app.core.logging_config import DevelopmentFormatter
@@ -1855,11 +1777,6 @@ def test_setup_logging_returns_logger():
 
     logger = setup_logging()
     assert logger is not None
-
-
-# =============================================================================
-# LLM Service Additional Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -1884,11 +1801,6 @@ async def test_parse_natural_language_query_llm_disabled():
         result = await llm_service.parse_natural_language_query("test query", episodes)
 
     assert result is None
-
-
-# =============================================================================
-# Additional Show Service Edge Case Tests
-# =============================================================================
 
 
 def test_map_csv_row_to_show():
@@ -1970,11 +1882,6 @@ def test_build_season_stats_updates_dates():
     assert stats[1]["episode_count"] == 3
 
 
-# =============================================================================
-# Additional Epguides Tests
-# =============================================================================
-
-
 def test_parse_date_string_future_century():
     """Test parse_date_string handles future year correction."""
     # Year that would be > current year + 2 is adjusted
@@ -1989,12 +1896,10 @@ def test_parse_date_string_future_century():
 @patch("app.services.epguides._fetch_url")
 async def test_get_episodes_data_parses_csv(mock_fetch):
     """Test get_episodes_data parses CSV from epguides page."""
-    # Mock the page response with CSV link
     page_response = MagicMock()
     page_response.status_code = 200
     page_response.text = '<a href="exportToCSVmaze.asp?maze=12345">Export</a>'
 
-    # Mock the CSV response
     csv_response = MagicMock()
     csv_response.status_code = 200
     csv_response.text = "season,episode,airdate,title\n1,1,01 Jan 20,Pilot"
@@ -2166,11 +2071,6 @@ def test_parse_episode_exception_handling():
     assert result is None  # Should catch exception and return None
 
 
-# =============================================================================
-# Additional Epguides Edge Case Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.services.epguides._fetch_url")
 async def test_get_show_metadata_no_imdb_id(mock_fetch):
@@ -2214,7 +2114,6 @@ async def test_merge_tvmaze_episode_data_non_200(mock_client_class):
     episodes = [{"season": "1", "number": "1", "title": "Pilot"}]
     result = await epguides._merge_tvmaze_episode_data(episodes, "12345")
 
-    # Should return original episodes unchanged
     assert result == episodes
 
 
@@ -2253,7 +2152,6 @@ async def test_merge_tvmaze_episode_data_handles_exception(mock_client_class):
     episodes = [{"season": "1", "number": "1", "title": "Pilot"}]
     result = await epguides._merge_tvmaze_episode_data(episodes, "12345")
 
-    # Should return original episodes unchanged
     assert result == episodes
 
 
@@ -2274,11 +2172,6 @@ async def test_get_tvmaze_seasons_non_200(mock_client_class, mock_cache_get, moc
     result = await epguides.get_tvmaze_seasons("99999")
 
     assert result == []
-
-
-# =============================================================================
-# LLM Service Edge Case Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -2347,11 +2240,6 @@ async def test_query_llm_invalid_indices_type(mock_client_class, mock_settings):
     assert result is None  # Should return None for invalid response
 
 
-# =============================================================================
-# Logging Config Tests
-# =============================================================================
-
-
 def test_setup_logging_debug_mode(monkeypatch):
     """Test setup_logging uses DevelopmentFormatter in debug mode."""
     from app.core import logging_config
@@ -2407,11 +2295,6 @@ def test_setup_logging_json_format(monkeypatch):
 
     logger = logging_config.setup_logging()
     assert logger is not None
-
-
-# =============================================================================
-# Cache Decorator Edge Case Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -2472,11 +2355,6 @@ def test_parse_date_string_century_correction():
 
     assert result is not None
     assert result.year == 1950  # Century corrected from 2050
-
-
-# =============================================================================
-# Additional Coverage Tests - epguides.py
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -2617,11 +2495,6 @@ async def test_fetch_tvmaze_episodes_non_200(mock_client_class):
     result = await epguides._fetch_tvmaze_episodes("12345")
 
     assert result == []
-
-
-# =============================================================================
-# Error Handling Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -2810,11 +2683,6 @@ async def test_merge_tvmaze_episode_data_image_no_original_or_medium(mock_client
     assert result[0]["poster_url"] == ""  # Should be empty string
 
 
-# =============================================================================
-# Additional Coverage Tests - llm_service.py
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.services.llm_service._query_llm")
 @patch("app.services.llm_service.settings")
@@ -2876,11 +2744,6 @@ async def test_query_llm_json_decode_error(mock_client_class):
     result = await llm_service._query_llm("test query", episodes)
 
     assert result is None
-
-
-# =============================================================================
-# Additional Coverage Tests - show_service.py
-# =============================================================================
 
 
 def test_parse_date_month_year_format():
@@ -3304,11 +3167,6 @@ def test_bridge_title_fallback_ignores_blank_titles():
     """A blank catalogue title must not substring-match every name."""
     rows = [{"title": "", "directory": "blank", "TVmaze": ""}]
     assert show_service._bridge_tvmaze_to_catalogue(rows, {"id": 9, "name": "Anything"}) == (None, "title_bridge_miss")
-
-
-# =============================================================================
-# get_show — imdb_id reverse-index keep-warm path
-# =============================================================================
 
 
 @pytest.mark.asyncio

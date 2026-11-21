@@ -62,11 +62,6 @@ def _local_hooks() -> dict[str, dict]:
     return hooks
 
 
-# --------------------------------------------------------------------------
-# Wiring contract
-# --------------------------------------------------------------------------
-
-
 def test_osv_config_present_and_parses() -> None:
     """`.osv-scanner.toml` exists and is valid TOML (zero ignores is valid)."""
     import tomllib

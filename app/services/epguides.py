@@ -33,10 +33,6 @@ _DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; EpguidesBot/1.0; +https://epguides.frecar.no)",
 }
 
-# =============================================================================
-# Date Parsing
-# =============================================================================
-
 
 def parse_date_string(date_string: str) -> datetime | None:
     """
@@ -69,11 +65,6 @@ def parse_date_string(date_string: str) -> datetime | None:
             continue
 
     return None
-
-
-# =============================================================================
-# HTTP Utilities
-# =============================================================================
 
 
 def _clean_unicode_text(response: httpx.Response) -> str:
@@ -127,11 +118,6 @@ async def _fetch_url(url: str) -> httpx.Response | None:
         logger.error("Unexpected error fetching %s: %s: %s", url, type(e).__name__, e)
         record_upstream_request("epguides", "http_error")
         return None
-
-
-# =============================================================================
-# CSV Fetching
-# =============================================================================
 
 
 # Leading markers that identify an HTML document body returned where CSV was
@@ -210,11 +196,6 @@ async def fetch_csv(url: str) -> list[list[str]]:
         return []
 
 
-# =============================================================================
-# Show Metadata
-# =============================================================================
-
-
 @cache(ttl_seconds=CACHE_TTL_SHOWS_METADATA_SECONDS, key_prefix="shows_metadata")
 async def get_all_shows_metadata() -> list[dict[str, str]]:
     """
@@ -233,22 +214,12 @@ async def get_all_shows_metadata() -> list[dict[str, str]]:
     return list(csv.DictReader(io.StringIO(text, newline="")))
 
 
-# =============================================================================
-# Episode Data
-# =============================================================================
-
 # Column mappings for different CSV export formats
 _TVRAGE_COLUMNS = {"season": 1, "number": 2, "release_date": 4, "title": 5}
 _TVMAZE_COLUMNS = {"season": 1, "number": 2, "release_date": 3, "title": 4}
 
-# TVMaze API base URL
 _TVMAZE_API_URL = "https://api.tvmaze.com"
 _TVMAZE_API_HOST = httpx.URL(_TVMAZE_API_URL).host
-
-
-# =============================================================================
-# TVMaze HTTP helper
-# =============================================================================
 
 
 async def _tvmaze_get(url: str, *, follow_redirects: bool = False, **kwargs: Any) -> httpx.Response | None:
@@ -288,11 +259,6 @@ async def _tvmaze_get(url: str, *, follow_redirects: bool = False, **kwargs: Any
         logger.warning("TVMaze fetch error for %s: %s", url, e)
         record_upstream_request("tvmaze", "http_error")
         return None
-
-
-# =============================================================================
-# TVMaze Episode Fetching (Fallback)
-# =============================================================================
 
 
 async def _search_tvmaze_by_title(title: str) -> dict[str, Any] | None:
@@ -387,7 +353,6 @@ async def _fetch_tvmaze_episodes(maze_id: str) -> list[dict[str, Any]]:
             if not all([season, number, name, airdate]):
                 continue
 
-            # Clean HTML from summary
             summary = ep.get("summary") or ""
             if summary:
                 summary = re.sub(r"<[^>]+>", "", summary).strip()
@@ -561,7 +526,6 @@ def _add_word_boundaries(text: str) -> str:
                 result = prefix + " " + rest
                 break
 
-    # Clean up multiple spaces
     result = re.sub(r"\s+", " ", result).strip()
 
     return result
@@ -729,7 +693,6 @@ async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: st
                 "poster_url": poster_url,
             }
 
-        # Merge TVMaze data into episodes
         for episode in episodes:
             try:
                 key = (int(episode.get("season", 0)), int(episode.get("number", 0)))
@@ -747,11 +710,6 @@ async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: st
         return episodes
 
 
-# =============================================================================
-# TVMaze Images
-# =============================================================================
-
-# Default placeholder when no poster is available
 _DEFAULT_POSTER_URL = "https://static.tvmaze.com/images/no-img/no-img-portrait-text.png"
 
 
@@ -938,10 +896,6 @@ def _parse_episode_rows(rows: list[list[str]], column_map: dict[str, int]) -> li
     return episodes
 
 
-# =============================================================================
-# IMDB Metadata
-# =============================================================================
-
 # Regex patterns for extracting IMDB data from show pages
 _IMDB_URL_PATTERN = re.compile(r"imdb\.com/title/(tt\d+)", re.IGNORECASE)
 _H2_LINK_PATTERN = re.compile(
@@ -987,12 +941,10 @@ async def get_show_metadata(show_id: str) -> tuple[str, str] | None:
 
 def _extract_imdb_id(html: str) -> str | None:
     """Extract IMDB ID from page HTML."""
-    # Try direct IMDB URL
     match = _IMDB_URL_PATTERN.search(html)
     if match:
         return match.group(1)
 
-    # Try H2 link
     match = _H2_LINK_PATTERN.search(html)
     if match:
         return match.group(1)
@@ -1002,17 +954,14 @@ def _extract_imdb_id(html: str) -> str | None:
 
 def _extract_title(html: str) -> str | None:
     """Extract show title from page HTML."""
-    # Try H2 with link
     match = _H2_LINK_PATTERN.search(html)
     if match:
         return match.group(2).strip()
 
-    # Try simple H2
     match = _H2_SIMPLE_PATTERN.search(html)
     if match:
         return match.group(1).strip()
 
-    # Fallback to title tag
     match = _TITLE_TAG_PATTERN.search(html)
     if match:
         return match.group(1).strip()

@@ -5,16 +5,9 @@ Centralizes hardcoded values that should be consistent across the codebase.
 These constants are immutable and should not be modified at runtime.
 """
 
-# =============================================================================
-# External Service URLs
-# =============================================================================
-
 EPGUIDES_BASE_URL = "http://www.epguides.com"
 """Base URL for epguides.com - the primary data source."""
 
-# =============================================================================
-# Versioning
-# =============================================================================
 
 MCP_PROTOCOL_VERSION = "2025-06-18"
 """Model Context Protocol version this server implements."""
@@ -66,12 +59,8 @@ def get_version() -> str:
     return "dev"
 
 
-# Cached version (computed once at import time)
 VERSION = get_version()
 
-# =============================================================================
-# Episode Configuration
-# =============================================================================
 
 EPISODE_RELEASE_THRESHOLD_HOURS = 80
 """
@@ -81,9 +70,6 @@ This accounts for timezone differences and delayed availability.
 Episodes that aired less than this many hours ago are marked as unreleased.
 """
 
-# =============================================================================
-# Date Parsing
-# =============================================================================
 
 DATE_FORMATS = (
     "%d %b %y",  # e.g., "20 Jan 08"
@@ -96,9 +82,6 @@ Supported date format strings for parsing episode release dates.
 Order matters - formats are tried in sequence until one succeeds.
 """
 
-# =============================================================================
-# Caching Defaults
-# =============================================================================
 
 CACHE_TTL_SHOWS_METADATA_SECONDS = 2592000  # 30 days
 """Cache TTL for the master show list (new shows added infrequently)."""

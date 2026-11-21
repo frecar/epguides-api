@@ -102,11 +102,6 @@ def hermetic_app() -> Iterator[TestClient]:
             yield client
 
 
-# ---------------------------------------------------------------------------
-# The gate itself
-# ---------------------------------------------------------------------------
-
-
 def test_api_contract_holds_for_all_anonymous_get_routes(hermetic_app: TestClient) -> None:
     """Every anonymous GET route: HTTP 200 + body matches its declared schema.
 

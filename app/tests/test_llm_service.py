@@ -234,14 +234,12 @@ async def test_llm_successful_query(mock_client_class, mock_settings, no_host_en
     mock_settings.LLM_ALLOW_EXTERNAL = False
     mock_settings.LLM_MODEL_NAME = "auto"
 
-    # Mock episodes
     episodes = [
         {"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"},
         {"season": 1, "number": 2, "title": "Cat's in the Bag", "release_date": "2008-01-27"},
         {"season": 2, "number": 1, "title": "Seven Thirty-Seven", "release_date": "2009-03-08"},
     ]
 
-    # Mock HTTP response
     mock_response = AsyncMock()
     mock_response.status_code = 200
     mock_response.json = lambda: {"choices": [{"message": {"content": "[0, 2]"}}]}  # Return indices 0 and 2
@@ -372,7 +370,6 @@ async def test_llm_limits_episodes_to_100(mock_client_class, mock_settings, no_h
     mock_settings.LLM_ALLOW_EXTERNAL = False
     mock_settings.LLM_MODEL_NAME = "auto"
 
-    # Create 120 episodes
     episodes = [{"season": 1, "number": i, "title": f"Episode {i}", "release_date": "2008-01-20"} for i in range(120)]
 
     mock_response = AsyncMock()

@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 _THINK_TAG_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
 
-# LLM configuration
 _LLM_TIMEOUT_SECONDS = 30.0  # Longer timeout for processing episode summaries
 _MAX_EPISODES_FOR_CONTEXT = 100  # Include more episodes since we have summaries
 
@@ -72,7 +71,6 @@ async def parse_natural_language_query(
     Note:
         Returns [] for empty episode lists regardless of LLM config.
     """
-    # Fast path: empty episodes always returns empty
     if not episodes:
         return []
 
@@ -226,7 +224,6 @@ def _retry_delay(response: httpx.Response) -> float:
 
 def _build_prompt(query: str, episode_summaries: list[dict[str, Any]]) -> str:
     """Build the LLM prompt for episode filtering."""
-    # Calculate season info for the prompt
     seasons: dict[int, list[int]] = {}
     for ep in episode_summaries:
         s = ep.get("s", 0)

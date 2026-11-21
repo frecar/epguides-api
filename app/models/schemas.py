@@ -12,10 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 from app.core.config import settings
 from app.core.constants import EPGUIDES_BASE_URL
 
-# =============================================================================
-# Episode Schema
-# =============================================================================
-
 
 class EpisodeSchema(BaseModel):
     """
@@ -35,11 +31,6 @@ class EpisodeSchema(BaseModel):
     poster_url: str | None = Field(default=None, description="Episode still image URL from TVMaze")
 
 
-# =============================================================================
-# Season Schema
-# =============================================================================
-
-
 class SeasonSchema(BaseModel):
     """
     Season data with poster and summary.
@@ -56,11 +47,6 @@ class SeasonSchema(BaseModel):
     api_episodes_url: str = Field(..., description="API endpoint for episodes in this season")
 
     model_config = ConfigDict(populate_by_name=True)
-
-
-# =============================================================================
-# Show Schemas
-# =============================================================================
 
 
 class ShowListSchema(BaseModel):
@@ -169,11 +155,6 @@ class ShowDetailsSchema(ShowSchema):
     """
 
     episodes: list[EpisodeSchema] = Field(..., description="All episodes for the show")
-
-
-# =============================================================================
-# Factory Functions
-# =============================================================================
 
 
 def create_show_schema(

@@ -32,10 +32,6 @@ from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware, S
 from app.core.observability import init_observability
 from app.exceptions import EpguidesAPIException, ExternalServiceError
 
-# =============================================================================
-# Logging Setup
-# =============================================================================
-
 
 def _initialize_logging() -> None:
     """Initialize logging with fallback to basic config."""
@@ -68,11 +64,6 @@ _READINESS_UPSTREAM = "epguides"
 # =============================================================================
 
 init_observability(release=os.environ.get("GIT_SHA", VERSION))
-
-
-# =============================================================================
-# Application Lifespan
-# =============================================================================
 
 
 async def _cache_age_refresh_loop() -> None:
@@ -113,10 +104,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await close_redis_pool()
     logger.info("Application shutdown complete")
 
-
-# =============================================================================
-# Application Instance
-# =============================================================================
 
 # Tag metadata for Swagger UI grouping
 OPENAPI_TAGS = [
@@ -192,18 +179,12 @@ curl "https://epguides.frecar.no/shows/Severance/episodes/next"
 )
 
 
-# =============================================================================
-# Middleware
-# =============================================================================
-
 # Request ID tracking (outermost - runs first, available to all other middleware)
 app.add_middleware(RequestIDMiddleware)
 
-# Request logging (if enabled)
 if settings.LOG_REQUESTS:
     app.add_middleware(RequestLoggingMiddleware)
 
-# Security headers on all responses
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - public read-only API, allow all origins but no credentials
@@ -214,11 +195,6 @@ app.add_middleware(
     allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
 )
-
-
-# =============================================================================
-# Exception Handlers
-# =============================================================================
 
 
 @app.exception_handler(EpguidesAPIException)
@@ -306,17 +282,8 @@ async def internal_error_handler(
     )
 
 
-# =============================================================================
-# Routers
-# =============================================================================
-
 app.include_router(shows.router, prefix="/shows", tags=["Shows"])
 app.include_router(mcp.router, tags=["MCP"])
-
-
-# =============================================================================
-# Root Endpoints
-# =============================================================================
 
 
 @app.get("/", include_in_schema=False)
@@ -430,7 +397,6 @@ async def _build_readiness_report() -> tuple[str, int, dict[str, object]]:
         else:
             upstream_check["status"] = "ok"
 
-    # --- Collapse to an overall status + HTTP code ------------------------
     if upstream_stale:
         overall, http_code = "unready", status.HTTP_503_SERVICE_UNAVAILABLE
     elif not redis_ok:

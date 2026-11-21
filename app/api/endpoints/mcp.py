@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Singleton MCP server instance
 _mcp_server = MCPServer()
 
 

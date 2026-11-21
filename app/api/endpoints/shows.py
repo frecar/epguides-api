@@ -22,11 +22,6 @@ router = APIRouter()
 _IMDB_ID_RE = re.compile(r"^tt\d+$")
 
 
-# =============================================================================
-# List & Search Endpoints
-# =============================================================================
-
-
 @router.get(
     "/",
     response_model=PaginatedResponse[ShowListSchema],
@@ -49,7 +44,6 @@ async def list_shows(
     """
     page_items, total = await show_service.get_shows_page(page, limit)
 
-    # Convert to simplified list schema
     items = [
         ShowListSchema(
             epguides_key=show.epguides_key,
@@ -161,11 +155,6 @@ async def get_show_by_imdb_id(
     return show
 
 
-# =============================================================================
-# Individual Show Endpoints
-# =============================================================================
-
-
 @router.get(
     "/{epguides_key}",
     response_model=ShowSchema | ShowDetailsSchema,
@@ -198,7 +187,6 @@ async def get_show_metadata(
 
     **Note:** The `epguides_key` is case-insensitive.
     """
-    # Invalidate cache if refresh requested
     if refresh:
         normalized_key = show_service.normalize_show_id(epguides_key)
         await invalidate_cache("episodes", normalized_key)
@@ -217,11 +205,6 @@ async def get_show_metadata(
         return ShowDetailsSchema(**show.model_dump(), episodes=episodes)
 
     return show
-
-
-# =============================================================================
-# Season Endpoints
-# =============================================================================
 
 
 @router.get(
@@ -283,11 +266,6 @@ async def get_season_episodes(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Season {season_number} not found")
 
     return season_episodes
-
-
-# =============================================================================
-# Episode Endpoints
-# =============================================================================
 
 
 @router.get(
@@ -356,7 +334,6 @@ async def get_show_episodes(
 
     Use `?refresh=true` to bypass cache and fetch fresh data. Useful when checking for new episodes.
     """
-    # Invalidate cache if refresh requested
     if refresh:
         normalized_key = show_service.normalize_show_id(epguides_key)
         await invalidate_cache("episodes", normalized_key)
@@ -364,7 +341,6 @@ async def get_show_episodes(
 
     episodes = await show_service.get_episodes(epguides_key)
 
-    # Apply structured filters first
     if season is not None:
         episodes = [ep for ep in episodes if ep.season == season]
         if episode is not None:
@@ -464,7 +440,6 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
         await invalidate_cache("episodes", normalized_key)
         episodes = await show_service.get_episodes(epguides_key)
 
-        # Find next episode again with fresh data
         for ep in episodes:
             if not ep.is_released and ep.title:
                 return ep

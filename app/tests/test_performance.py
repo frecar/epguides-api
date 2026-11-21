@@ -20,18 +20,9 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.models.schemas import EpisodeSchema, SeasonSchema, create_show_schema
 
-# =============================================================================
-# Constants
-# =============================================================================
-
 PERF_TARGET_MS = 20  # Target response time (warning if exceeded)
 PERF_LIMIT_MS = 50  # Hard limit (fail if exceeded)
 PERF_SAMPLES = 5
-
-
-# =============================================================================
-# Fixtures
-# =============================================================================
 
 
 @pytest.fixture
@@ -90,11 +81,6 @@ def mock_seasons():
     ]
 
 
-# =============================================================================
-# Performance Assertion Helper
-# =============================================================================
-
-
 def assert_performance(elapsed_ms: float, endpoint: str) -> None:
     """
     Assert endpoint performance meets requirements.
@@ -143,11 +129,6 @@ async def measure_endpoint(client: AsyncClient, method: str, url: str, **kwargs)
     return median(samples)
 
 
-# =============================================================================
-# Health Endpoint Performance Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 async def test_perf_health_check(perf_client):
     """Test /health endpoint performance."""
@@ -169,11 +150,6 @@ async def test_perf_health_cache(mock_stats, perf_client):
     mock_stats.return_value = {"status": "connected", "total_keys": 100}
     elapsed = await measure_endpoint(perf_client, "GET", "/health/cache")
     assert_performance(elapsed, "GET /health/cache")
-
-
-# =============================================================================
-# Shows Endpoint Performance Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -214,11 +190,6 @@ async def test_perf_get_show_with_episodes(mock_get_show, mock_get_eps, mock_sho
     assert_performance(elapsed, "GET /shows/{key}?include=episodes")
 
 
-# =============================================================================
-# Seasons Endpoint Performance Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 @patch("app.services.show_service.get_seasons")
 async def test_perf_get_seasons(mock_get_seasons, mock_seasons, perf_client):
@@ -235,11 +206,6 @@ async def test_perf_get_season_episodes(mock_get_eps, mock_episodes, perf_client
     mock_get_eps.return_value = mock_episodes
     elapsed = await measure_endpoint(perf_client, "GET", "/shows/testshow/seasons/1/episodes")
     assert_performance(elapsed, "GET /shows/{key}/seasons/{num}/episodes")
-
-
-# =============================================================================
-# Episodes Endpoint Performance Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -282,11 +248,6 @@ async def test_perf_get_latest_episode(mock_get_eps, mock_episodes, perf_client)
     mock_get_eps.return_value = mock_episodes
     elapsed = await measure_endpoint(perf_client, "GET", "/shows/testshow/episodes/latest")
     assert_performance(elapsed, "GET /shows/{key}/episodes/latest")
-
-
-# =============================================================================
-# MCP Endpoint Performance Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -357,9 +318,6 @@ async def test_perf_mcp_get_episodes(mock_get_eps, mock_episodes, perf_client):
     assert_performance(elapsed, "POST /mcp (get_episodes)")
 
 
-# =============================================================================
-# Live Redis Integration Performance Tests
-# =============================================================================
 # These tests require Redis to be running (via `make up`).
 # They test real cache performance, not just endpoint overhead.
 # Skipped automatically if Redis is unavailable.
@@ -440,7 +398,6 @@ async def test_live_perf_cache_operations():
     # Cleanup
     await cache_delete(test_key)
 
-    # Assert performance
     assert set_time < 10, f"cache_set exceeded 10ms: {set_time:.1f}ms"
     assert get_time < 5, f"cache_get exceeded 5ms: {get_time:.1f}ms"
 
@@ -490,7 +447,6 @@ async def test_live_perf_hash_operations():
     redis = await get_redis()
     test_hash = "perf_test:hash"
 
-    # Setup test data
     await redis.hset(test_hash, "key1", "value1")
     await redis.hset(test_hash, "key2", "value2")
 
