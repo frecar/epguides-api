@@ -5,6 +5,7 @@
 
 UV := uv
 RUN := $(UV) run
+DOCS_RUN := $(UV) run --no-project --isolated --with-requirements docs/requirements.txt
 
 help:
 	@echo "Epguides API"
@@ -167,10 +168,10 @@ audit-osv:
 	bash scripts/audit_osv.sh
 
 docs:
-	$(RUN) mkdocs serve
+	$(DOCS_RUN) mkdocs serve
 
 docs-build:
-	$(RUN) mkdocs build
+	$(DOCS_RUN) mkdocs build --strict
 
 clean:
 	rm -rf .mypy_cache .pytest_cache .ruff_cache .coverage htmlcov/
