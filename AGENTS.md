@@ -76,6 +76,7 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 - **Verify queue admission after release.** On a merge-queue repo, a released PR is not done until the queue shows it admitted at its authored head (or `state == "MERGED"`); a dequeued entry needs a fresh exact-head READY heartbeat before retrying.
 
 ### Commits & conventions
+- **Omit new code comments by default.** Use precise names, simple control flow, and well-scoped functions to make the code explain itself. Add a comment only for essential context the code cannot express, such as a non-obvious invariant, external constraint, or safety rationale. Keep required tool directives and legal notices.
 - <!-- HARD-NO:BEGIN commit-attribution -->**Never** add `Co-Authored-By` or any AI-attribution line — commits are the operator's own work.<!-- HARD-NO:END commit-attribution -->
 - **Never** fix production by ad-hoc SSH. Fix in the repo, commit, deploy.
 - **Manage estate state declaratively, through the project's IaC layer — not by hand.** DNS, containers/services, secrets, and network/cert config each have a config home — edit there and converge/deploy, never by hand-editing a vendor dashboard or console, hand-curling a mutation API, or an ad-hoc host edit, whenever an IaC path exists or can reasonably be added. **Exception:** vendor state with no IaC path — file an operator-action issue to track the manual step, don't silently skip it.
