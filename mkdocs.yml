@@ -4,7 +4,7 @@ site_description: Free REST API for TV show data, episode lists, air dates, and 
 site_url: https://epguides-api.readthedocs.io/
 repo_url: https://github.com/frecar/epguides-api
 repo_name: frecar/epguides-api
-edit_uri: edit/main/docs/
+edit_uri: ''
 
 theme:
   name: material
@@ -33,7 +33,11 @@ theme:
     repo: fontawesome/brands/github
 
 hooks:
-  - scripts/build_api_discovery.py
+  - scripts/build_site_discovery.py
+
+watch:
+  - README.md
+  - Makefile
 
 nav:
   - Home: index.md
