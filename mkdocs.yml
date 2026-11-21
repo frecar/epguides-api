@@ -1,5 +1,3 @@
-# MkDocs configuration
-# https://www.mkdocs.org/user-guide/configuration/
 
 site_name: Epguides API
 site_description: Free REST API for TV show data, episode lists, air dates, and summaries. MCP server for AI assistants. Access thousands of TV series with smart caching and AI-powered search.

@@ -27,7 +27,6 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 
-# Minimum system interpreter the host-run scripts must stay parseable under.
 _HOST_PYTHON_VERSION = "3.12"
 
 
@@ -84,9 +83,6 @@ def test_guard_rejects_314_only_syntax(tmp_path: Path) -> None:
     probe = tmp_path / "probe.py"
     source = "try:\n    pass\nexcept ValueError, TypeError:\n    pass\n"
     probe.write_text(source)
-    # Sanity: PEP 758 IS valid on the test interpreter (the 3.14 container,
-    # where the suite runs) — confirms the bug is purely an interpreter-version
-    # mismatch, not malformed code. `requires-python >=3.14` guarantees this.
     assert sys.version_info >= (3, 14)
     compile(source, str(probe), "exec")
     result = _compile_under_host_python(probe)

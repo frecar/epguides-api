@@ -15,10 +15,7 @@ from app.services import epguides, show_service
 
 def test_get_version_from_version_file():
     """Test get_version reads from VERSION file when it exists."""
-    # The VERSION file exists in the project root (created by pre-commit hook)
-    # This test verifies it reads successfully
     result = get_version()
-    # Should return a numeric string (from VERSION file) or "dev"
     assert result is not None
     assert isinstance(result, str)
     assert len(result) > 0
@@ -40,7 +37,6 @@ def test_get_version_file_read_error(monkeypatch):
     with patch("pathlib.Path.exists", return_value=True):
         with patch("pathlib.Path.read_text", side_effect=OSError("Permission denied")):
             result = get_version()
-            # Should fall back to env var
             assert result == "fallback"
 
 
@@ -52,7 +48,6 @@ def test_get_version_env_dev_ignored(monkeypatch):
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "999\n"
         result = get_version()
-        # Should use git, not "dev" env var
         assert result == "999"
 
 
@@ -139,20 +134,16 @@ async def test_search_shows(mock_get_metadata, mock_cache_get, mock_cache_set):
 
 def test_parse_date_string():
     """Test date parsing with various formats."""
-    # Test standard format
     result = epguides.parse_date_string("20 Jan 08")
     assert result is not None
     assert result.year == 2008
 
-    # Test alternative format
     result = epguides.parse_date_string("20/Jan/08")
     assert result is not None
 
-    # Test invalid date
     result = epguides.parse_date_string("invalid")
     assert result is None
 
-    # Test empty string
     result = epguides.parse_date_string("")
     assert result is None
 
@@ -167,7 +158,7 @@ def test_normalize_show_id():
 def test_parse_imdb_id():
     """Test IMDB ID parsing."""
     assert show_service._parse_imdb_id("tt0903747") == "tt0903747"
-    assert show_service._parse_imdb_id("tt123456") == "tt0123456"  # Padded
+    assert show_service._parse_imdb_id("tt123456") == "tt0123456"
     assert show_service._parse_imdb_id("invalid") == "invalid"
 
 
@@ -193,9 +184,6 @@ async def test_get_show_does_not_set_end_date_with_unreleased_episodes(
         }
     ]
 
-    # Create episode data with:
-    # - Some released episodes (old dates)
-    # - Some unreleased episodes (future dates)
     threshold = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
     old_date = (threshold - timedelta(days=30)).strftime("%d %b %y")
     future_date = (datetime.now() + timedelta(days=30)).strftime("%d %b %y")
@@ -218,7 +206,6 @@ async def test_get_show_does_not_set_end_date_with_unreleased_episodes(
 
     result = await show_service.get_show("fallout")
 
-    # Should NOT have end_date set because there are unreleased episodes
     assert result is not None
     assert result.end_date is None
 
@@ -258,10 +245,9 @@ async def test_get_show_sets_end_date_when_all_episodes_released(
         }
     ]
 
-    # Create episode data with all episodes released (old dates)
     threshold = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
     old_date_1 = (threshold - timedelta(days=60)).strftime("%d %b %y")
-    old_date_2 = (threshold - timedelta(days=30)).strftime("%d %b %y")  # Last episode
+    old_date_2 = (threshold - timedelta(days=30)).strftime("%d %b %y")
 
     mock_episodes_data = [
         {
@@ -281,10 +267,8 @@ async def test_get_show_sets_end_date_when_all_episodes_released(
 
     result = await show_service.get_show("finishedshow2")
 
-    # Should have end_date set to the last episode's release date
     assert result is not None
     assert result.end_date is not None
-    # Verify it's the last episode's date (old_date_2)
     expected_date = epguides.parse_date_string(old_date_2)
     assert expected_date is not None
     assert result.end_date == expected_date.date()
@@ -300,7 +284,6 @@ async def test_get_episodes_returns_sorted_list(mock_get_metadata, mock_get_epis
     threshold = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS + 1)
     old_date = threshold.strftime("%d %b %y")
 
-    # Episodes in wrong order
     mock_get_episodes.return_value = [
         {"season": 2, "number": 1, "title": "S2E1", "release_date": old_date},
         {"season": 1, "number": 2, "title": "S1E2", "release_date": old_date},
@@ -347,7 +330,7 @@ async def test_get_episodes_filters_invalid_entries(mock_get_episodes):
         {"season": 1, "number": 1, "title": "Valid", "release_date": old_date},
         {"season": 1, "number": None, "title": "No Number", "release_date": old_date},
         {"season": None, "number": 2, "title": "No Season", "release_date": old_date},
-        {"season": 1, "number": 3, "title": "", "release_date": old_date},  # Empty title
+        {"season": 1, "number": 3, "title": "", "release_date": old_date},
         {"season": 1, "number": 4, "title": "No Date", "release_date": ""},
     ]
 
@@ -367,41 +350,32 @@ async def test_invalidate_show_cache(mock_get_redis):
     await show_service.invalidate_show_cache("breakingbad")
 
     mock_redis.delete.assert_called_once()
-    # Verify the keys being deleted
     call_args = mock_redis.delete.call_args[0]
     assert "show:breakingbad" in call_args
     assert "seasons:breakingbad" in call_args
-    # Both episode cache layers must be cleared on refresh (#298): the
-    # model-validated list and the raw fetched dicts. Clearing only the
-    # former would leave a stale raw layer the schema layer re-derives from.
     assert "episodes:breakingbad" in call_args
     assert "episodes_raw:breakingbad" in call_args
 
 
 def test_normalize_show_id_edge_cases():
     """Test show ID normalization edge cases."""
-    # Mixed case with spaces
     assert show_service.normalize_show_id("The Office") == "office"
     assert show_service.normalize_show_id("THE OFFICE") == "office"
 
-    # No "the" prefix
     assert show_service.normalize_show_id("Friends") == "friends"
 
-    # Multiple spaces
     assert show_service.normalize_show_id("Game of Thrones") == "gameofthrones"
 
 
 def test_parse_date_string_edge_cases():
     """Test date parsing edge cases."""
-    # Various valid formats
     assert epguides.parse_date_string("01 Jan 20") is not None
     assert epguides.parse_date_string("31/Dec/99") is not None
 
-    # Invalid inputs
     assert epguides.parse_date_string(None) is None
     assert epguides.parse_date_string("") is None
     assert epguides.parse_date_string("not a date") is None
-    assert epguides.parse_date_string("2024-13-45") is None  # Invalid date
+    assert epguides.parse_date_string("2024-13-45") is None
 
 
 @pytest.mark.asyncio
@@ -415,7 +389,6 @@ async def test_search_shows_case_insensitive(mock_get_metadata, mock_cache_get, 
         {"directory": "got", "title": "Game of Thrones"},
     ]
 
-    # Search with different cases
     results1 = await show_service.search_shows("BREAKING")
     results2 = await show_service.search_shows("breaking")
     results3 = await show_service.search_shows("Breaking")
@@ -447,13 +420,11 @@ async def test_search_shows_no_results(mock_get_metadata, mock_cache_get, mock_c
 @patch("app.services.show_service.cache_set")
 async def test_corrupted_cache_html_returns_fresh_data(mock_cache_set, mock_cache_get, mock_get_metadata):
     """Test that corrupted HTML cache data is handled gracefully."""
-    # Simulate corrupted cache with HTML content (like what caused the 500)
     mock_cache_get.return_value = '<html><meta name="viewport" content="width=device-width"></html>'
     mock_get_metadata.return_value = [
         {"directory": "BreakingBad", "title": "Breaking Bad", "network": "AMC"},
     ]
 
-    # Should not raise, should return fresh data
     shows = await show_service.get_all_shows()
 
     assert len(shows) == 1
@@ -466,13 +437,11 @@ async def test_corrupted_cache_html_returns_fresh_data(mock_cache_set, mock_cach
 @patch("app.services.show_service.cache_set")
 async def test_corrupted_cache_invalid_json_returns_fresh_data(mock_cache_set, mock_cache_get, mock_get_metadata):
     """Test that invalid JSON cache data is handled gracefully."""
-    # Simulate corrupted cache with invalid JSON
     mock_cache_get.return_value = "not valid json {{"
     mock_get_metadata.return_value = [
         {"directory": "GOT", "title": "Game of Thrones", "network": "HBO"},
     ]
 
-    # Should not raise, should return fresh data
     shows = await show_service.get_all_shows()
 
     assert len(shows) == 1
@@ -492,7 +461,7 @@ async def test_get_shows_page(mock_get_metadata, mock_cache_set, mock_cache_get)
 
     assert total == 25
     assert len(shows) == 10
-    assert shows[0].title == "Show 10"  # Page 2 starts at index 10
+    assert shows[0].title == "Show 10"
 
 
 @pytest.mark.asyncio
@@ -574,9 +543,7 @@ def test_map_csv_row_to_dict():
 def test_clean_title_normal():
     """Test title cleaning with normal input."""
     assert show_service._clean_title("Breaking Bad") == "Breaking Bad"
-    # Titles without leading space get strip() applied
     assert show_service._clean_title("Trailing  ") == "Trailing"
-    # Titles with leading space get lstrip() (unicode corruption case)
     assert show_service._clean_title("  Padded  ") == "Padded  "
 
 
@@ -587,10 +554,8 @@ def test_clean_title_empty():
 
 def test_clean_title_special_la_carte():
     """Test title cleaning for corrupted À character."""
-    # " la carte" pattern gets special handling
     assert show_service._clean_title(" la carte") == "À La Carte"
-    # " la " prefix gets À prepended
-    assert show_service._clean_title(" la Maison") == "Àla Maison"  # lstrip removes the space
+    assert show_service._clean_title(" la Maison") == "Àla Maison"
 
 
 def test_parse_total_episodes():
@@ -615,11 +580,9 @@ def test_parse_date():
     assert result is not None
     assert result.year == 2020
 
-    # Month-year format
     result = show_service._parse_date("Sep 2020")
     assert result is not None
 
-    # Invalid
     assert show_service._parse_date(None) is None
     assert show_service._parse_date("TBA") is None
     assert show_service._parse_date("???") is None
@@ -657,11 +620,9 @@ def test_parse_episode_valid():
 
 def test_parse_episode_invalid():
     """Test episode parsing with invalid data."""
-    # Missing required fields
     invalid = {"season": "1", "title": "Pilot"}
     assert show_service._parse_episode(invalid, None) is None
 
-    # Invalid date
     invalid_date = {"season": "1", "number": "1", "title": "Pilot", "release_date": "invalid"}
     assert show_service._parse_episode(invalid_date, None) is None
 
@@ -672,7 +633,7 @@ def test_parse_release_date():
     assert result is not None
 
     assert show_service._parse_release_date(None) is None
-    assert show_service._parse_release_date(123) is None  # Not a string
+    assert show_service._parse_release_date(123) is None
     assert show_service._parse_release_date("") is None
 
 
@@ -724,7 +685,7 @@ def test_episodes_ttl_has_unreleased():
     ]
 
     ttl = show_service._episodes_ttl(episodes)
-    assert ttl is None  # Use default TTL
+    assert ttl is None
 
 
 def test_show_ttl_finished():
@@ -749,7 +710,6 @@ def test_show_ttl_ongoing():
 
 def test_parse_date_string_century_fix():
     """Test date parsing fixes century for future years."""
-    # Year 99 should become 1999, not 2099
     result = epguides.parse_date_string("01 Jan 99")
     assert result is not None
     assert result.year == 1999
@@ -880,7 +840,6 @@ def test_extract_title_not_found():
 
 def test_parse_episode_rows():
     """Test episode row parsing."""
-    # Note: function doesn't skip header row, caller should handle that
     rows = [
         ["1", "1", "01 Jan 20", "", "pilot", "Pilot Episode"],
         ["1", "2", "08 Jan 20", "", "ep2", "Second Episode"],
@@ -899,8 +858,6 @@ def test_llm_episode_summary_truncation():
     """Test that episode summaries are truncated for LLM context."""
     from app.services import llm_service
 
-    # This is tested implicitly through the search function
-    # Just verify the module loads
     assert llm_service is not None
 
 
@@ -925,8 +882,8 @@ async def test_get_show_by_key_cache_hit(mock_hget):
 @patch("app.services.show_service.get_all_shows")
 async def test_get_show_by_key_fallback_to_list(mock_get_all, mock_exists, mock_hget):
     """Test _get_show_by_key falls back to list scan."""
-    mock_hget.return_value = None  # Cache miss
-    mock_exists.return_value = True  # Index exists but key not found
+    mock_hget.return_value = None
+    mock_exists.return_value = True
 
     mock_get_all.return_value = [
         show_service.ShowSchema(epguides_key="test", title="Test Show"),
@@ -946,8 +903,8 @@ async def test_get_show_by_key_fallback_to_list(mock_get_all, mock_exists, mock_
 @patch("app.services.show_service.get_all_shows", new_callable=AsyncMock)
 async def test_get_show_by_key_builds_index(mock_get_all, mock_redis, mock_exists, mock_hget):
     """Test _get_show_by_key builds index when missing."""
-    mock_hget.side_effect = [None, None]  # First lookup fails, then after index build also fails
-    mock_exists.return_value = False  # Index doesn't exist
+    mock_hget.side_effect = [None, None]
+    mock_exists.return_value = False
 
     mock_pipe = MagicMock()
     mock_pipe.execute = AsyncMock()
@@ -961,7 +918,6 @@ async def test_get_show_by_key_builds_index(mock_get_all, mock_redis, mock_exist
 
     result = await show_service._get_show_by_key("test")
 
-    # Falls back to list scan
     assert result is not None
 
 
@@ -984,7 +940,6 @@ async def test_build_show_index_success(mock_get_all, mock_redis):
 
     await show_service._build_show_index()
 
-    # Verify pipeline was used
     mock_redis_client.pipeline.assert_called_once()
 
 
@@ -998,7 +953,6 @@ async def test_build_show_index_handles_error(mock_get_all, mock_redis):
         show_service.ShowSchema(epguides_key="test", title="Test Show"),
     ]
 
-    # Should not raise
     await show_service._build_show_index()
 
 
@@ -1009,8 +963,8 @@ async def test_build_show_index_handles_error(mock_get_all, mock_redis):
 @patch("app.services.show_service.cache_get")
 async def test_get_show_creates_from_scrape(mock_cache_get, mock_enrich, mock_scrape, mock_get_by_key):
     """Test get_show creates show from scrape when not in cache."""
-    mock_cache_get.return_value = None  # No cached show
-    mock_get_by_key.return_value = None  # Not in index
+    mock_cache_get.return_value = None
+    mock_get_by_key.return_value = None
     mock_scrape.return_value = show_service.ShowSchema(epguides_key="new", title="New Show")
     mock_enrich.return_value = show_service.ShowSchema(epguides_key="new", title="New Show Enriched")
 
@@ -1174,12 +1128,11 @@ async def test_calculate_episode_stats_never_calls_get_episodes_data(mock_raw_fe
         EpisodeSchema(season=s, number=e, title=f"S{s}E{e}", release_date=date(2020, 1, 1), is_released=True)
         for s in range(1, 21)
         for e in range(1, 51)
-    ]  # 1000-episode fixture
+    ]
     mock_get_episodes.return_value = large_catalog
 
     stats = await show_service._calculate_episode_stats("onepiece")
 
-    # The raw upstream fetch must never be called from _calculate_episode_stats
     mock_raw_fetch.assert_not_called()
     assert stats is not None
     assert stats.valid_episode_count == 1000
@@ -1208,7 +1161,7 @@ def test_build_show_updates_no_end_date_for_ongoing():
 
     show = show_service.ShowSchema(epguides_key="test", title="Test")
     stats = show_service._EpisodeStats()
-    stats.has_unreleased = True  # Still has unreleased episodes
+    stats.has_unreleased = True
     stats.last_release_date = date(2020, 3, 1)
     stats.valid_episode_count = 10
 
@@ -1256,10 +1209,8 @@ async def test_get_episodes_data_no_csv_url(mock_fetch, mock_cache_get, mock_cac
 @patch("app.services.epguides._fetch_url")
 async def test_get_episodes_data_tvmaze_fallback(mock_fetch, mock_get_title, mock_search, mock_episodes):
     """Test get_episodes_data uses TVMaze fallback when epguides fails."""
-    # epguides fails
     mock_fetch.return_value = None
 
-    # TVMaze fallback succeeds
     mock_get_title.return_value = "Test Show"
     mock_search.return_value = {"id": 12345, "name": "Test Show"}
     mock_episodes.return_value = [
@@ -1428,9 +1379,9 @@ async def test_fetch_tvmaze_episodes_skips_incomplete(mock_client_class):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = [
-        {"season": 1, "number": 1, "name": "Pilot"},  # Missing airdate
-        {"season": 1, "number": 2, "airdate": "2020-01-01"},  # Missing name
-        {"season": 1, "number": 3, "name": "Complete", "airdate": "2020-01-08"},  # Complete
+        {"season": 1, "number": 1, "name": "Pilot"},
+        {"season": 1, "number": 2, "airdate": "2020-01-01"},
+        {"season": 1, "number": 3, "name": "Complete", "airdate": "2020-01-08"},
     ]
 
     mock_client = AsyncMock()
@@ -1446,16 +1397,13 @@ async def test_fetch_tvmaze_episodes_skips_incomplete(mock_client_class):
 
 def test_convert_show_id_to_title():
     """Test _convert_show_id_to_title handles various formats."""
-    # CamelCase
     assert epguides._convert_show_id_to_title("SharkTank") == "Shark Tank"
     assert epguides._convert_show_id_to_title("GameOfThrones") == "Game Of Thrones"
 
-    # Lowercase with common words
     assert epguides._convert_show_id_to_title("sharktank") == "shark tank"
     assert epguides._convert_show_id_to_title("breakingbad") == "breaking bad"
     assert epguides._convert_show_id_to_title("theoffice") == "the office"
 
-    # Already spaced
     assert epguides._convert_show_id_to_title("the office") == "the office"
 
 
@@ -1784,7 +1732,6 @@ async def test_parse_natural_language_query_empty_episodes():
     """Test parse_natural_language_query with empty episodes."""
     from app.services import llm_service
 
-    # Test with empty episodes - should return empty list
     result = await llm_service.parse_natural_language_query("test query", [])
 
     assert result == []
@@ -1819,9 +1766,8 @@ def test_map_csv_row_to_show():
 
 def test_parse_episode_with_exception():
     """Test _parse_episode handles exceptions gracefully."""
-    # Item with invalid data that could cause exception
     invalid_item = {
-        "season": None,  # Will cause issue when trying to convert to int
+        "season": None,
         "number": "1",
         "title": "Test",
         "release_date": "01 Jan 20",
@@ -1849,10 +1795,9 @@ async def test_get_show_by_key_rebuilds_index(mock_get_all, mock_redis, mock_exi
     mock_redis_client.pipeline.return_value = mock_pipe
     mock_redis.return_value = mock_redis_client
 
-    # First call returns None, second call after index build returns data
     cached_show = {"epguides_key": "test", "title": "Test Show"}
     mock_hget.side_effect = [None, json.dumps(cached_show)]
-    mock_exists.return_value = False  # Index doesn't exist
+    mock_exists.return_value = False
 
     mock_get_all.return_value = [
         show_service.ShowSchema(epguides_key="test", title="Test Show"),
@@ -1876,7 +1821,6 @@ def test_build_season_stats_updates_dates():
 
     stats = show_service._build_season_stats(episodes)
 
-    # premiere_date should be earliest, end_date should be latest
     assert stats[1]["premiere_date"] == date(2020, 1, 1)
     assert stats[1]["end_date"] == date(2020, 2, 1)
     assert stats[1]["episode_count"] == 3
@@ -1884,11 +1828,9 @@ def test_build_season_stats_updates_dates():
 
 def test_parse_date_string_future_century():
     """Test parse_date_string handles future year correction."""
-    # Year that would be > current year + 2 is adjusted
     result = epguides.parse_date_string("01 Jan 99")
 
     assert result is not None
-    # 99 should be interpreted as 1999, not 2099
     assert result.year < 2050
 
 
@@ -1908,20 +1850,18 @@ async def test_get_episodes_data_parses_csv(mock_fetch):
 
     result = await epguides.get_episodes_data("test")
 
-    # Should get episodes from CSV
     assert isinstance(result, list)
 
 
 def test_parse_episode_rows_handles_index_error():
     """Test _parse_episode_rows handles index errors."""
     rows = [
-        ["1"],  # Too short row
+        ["1"],
     ]
     column_map = {"season": 0, "number": 1, "release_date": 2, "title": 5}
 
     result = epguides._parse_episode_rows(rows, column_map)
 
-    # Should return empty or skip invalid rows
     assert isinstance(result, list)
 
 
@@ -1941,24 +1881,20 @@ async def test_enrich_show_metadata_finished_show(mock_stats, mock_poster, mock_
     show = show_service.ShowSchema(epguides_key="test", title="Test", end_date=date(2020, 1, 1))
     await show_service._enrich_show_metadata(show, "test")
 
-    # Should extend cache TTL for finished show
     assert mock_extend.call_count == 2
 
 
 def test_parse_episode_raises_exception():
     """Test _parse_episode handles exception in EpisodeSchema creation."""
-    # Create item that will cause exception during schema creation
     item = {
         "season": "1",
         "number": "1",
         "title": "Test",
         "release_date": "01 Jan 20",
-        "imdb_rating": "not_a_float",  # This could cause issues
+        "imdb_rating": "not_a_float",
     }
 
-    # Should not raise, should return None or episode
     result = show_service._parse_episode(item, None)
-    # Either returns a valid episode or None
     assert result is None or isinstance(result, show_service.EpisodeSchema)
 
 
@@ -1976,14 +1912,12 @@ async def test_build_show_index_with_runtime():
     with patch("app.services.show_service.get_redis", new_callable=AsyncMock) as mock_redis:
         mock_redis.return_value = mock_redis_client
         with patch("app.services.show_service.get_all_shows", new_callable=AsyncMock) as mock_get_all:
-            # Show WITH runtime
             mock_get_all.return_value = [
                 show_service.ShowSchema(epguides_key="test", title="Test Show", run_time_min=60),
             ]
 
             await show_service._build_show_index()
 
-            # Should call hset for both show_index and runtime_index
             assert mock_pipe.hset.call_count >= 2
 
 
@@ -2016,9 +1950,8 @@ async def test_enrich_show_with_episode_stats(mock_updates, mock_stats, mock_pos
 @patch("app.services.show_service._build_show_index")
 async def test_get_show_runtime_rebuilds_index(mock_build, mock_exists, mock_hget):
     """Test _get_show_runtime rebuilds index when missing."""
-    # First hget returns None, second returns value after rebuild
     mock_hget.side_effect = [None, "60"]
-    mock_exists.return_value = False  # Index doesn't exist
+    mock_exists.return_value = False
 
     result = await show_service._get_show_runtime("test")
 
@@ -2032,7 +1965,7 @@ async def test_get_show_runtime_rebuilds_index(mock_build, mock_exists, mock_hge
 async def test_get_show_runtime_not_found(mock_exists, mock_hget):
     """Test _get_show_runtime returns None when not found."""
     mock_hget.return_value = None
-    mock_exists.return_value = True  # Index exists but key not found
+    mock_exists.return_value = True
 
     result = await show_service._get_show_runtime("test")
 
@@ -2045,22 +1978,20 @@ async def test_calculate_episode_stats_with_invalid_dates(mock_data):
     """Test _calculate_episode_stats skips items without valid dates."""
     mock_data.return_value = [
         {"season": "1", "number": "1", "title": "Valid", "release_date": "01 Jan 20"},
-        {"season": "1", "number": "2", "title": "No Date"},  # Missing release_date
-        {"season": "1", "number": "3", "title": "Invalid", "release_date": "not a date"},  # Invalid
+        {"season": "1", "number": "2", "title": "No Date"},
+        {"season": "1", "number": "3", "title": "Invalid", "release_date": "not a date"},
     ]
 
     result = await show_service._calculate_episode_stats("test")
 
-    # Only the first episode should be counted as valid
     assert result is not None
     assert result.valid_episode_count == 1
 
 
 def test_parse_episode_exception_handling():
     """Test _parse_episode catches exceptions during schema creation."""
-    # Item that would cause ValueError in int conversion
     item = {
-        "season": "one",  # Invalid - not an int
+        "season": "one",
         "number": "1",
         "title": "Test",
         "release_date": "01 Jan 20",
@@ -2068,7 +1999,7 @@ def test_parse_episode_exception_handling():
 
     result = show_service._parse_episode(item, None)
 
-    assert result is None  # Should catch exception and return None
+    assert result is None
 
 
 @pytest.mark.asyncio
@@ -2124,8 +2055,8 @@ async def test_merge_tvmaze_episode_data_skips_invalid(mock_client_class):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = [
-        {"season": None, "number": 1, "summary": "Test"},  # Invalid - no season
-        {"season": 1, "number": None, "summary": "Test"},  # Invalid - no number
+        {"season": None, "number": 1, "summary": "Test"},
+        {"season": 1, "number": None, "summary": "Test"},
     ]
 
     mock_client = AsyncMock()
@@ -2136,7 +2067,6 @@ async def test_merge_tvmaze_episode_data_skips_invalid(mock_client_class):
     episodes = [{"season": "1", "number": "1", "title": "Pilot"}]
     result = await epguides._merge_tvmaze_episode_data(episodes, "12345")
 
-    # Should return original episodes (no TVMaze data merged)
     assert result == episodes
 
 
@@ -2195,14 +2125,13 @@ async def test_query_llm_with_summary_truncation(mock_client_class, mock_setting
     mock_client.__aenter__.return_value = mock_client
     mock_client_class.return_value = mock_client
 
-    # Episode with a very long summary (>150 chars)
     episodes = [
         {
             "season": 1,
             "number": 1,
             "title": "Pilot",
             "release_date": "2020-01-01",
-            "summary": "A" * 200,  # Long summary that should be truncated
+            "summary": "A" * 200,
         }
     ]
 
@@ -2226,7 +2155,7 @@ async def test_query_llm_invalid_indices_type(mock_client_class, mock_settings):
 
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = {"choices": [{"message": {"content": '"not a list"'}}]}  # String instead of list
+    mock_response.json.return_value = {"choices": [{"message": {"content": '"not a list"'}}]}
 
     mock_client = AsyncMock()
     mock_client.post.return_value = mock_response
@@ -2237,7 +2166,7 @@ async def test_query_llm_invalid_indices_type(mock_client_class, mock_settings):
 
     result = await llm_service._query_llm("test query", episodes)
 
-    assert result is None  # Should return None for invalid response
+    assert result is None
 
 
 def test_setup_logging_debug_mode(monkeypatch):
@@ -2247,7 +2176,6 @@ def test_setup_logging_debug_mode(monkeypatch):
     monkeypatch.setattr(logging_config.settings, "LOG_LEVEL", "DEBUG")
     monkeypatch.setattr(logging_config.settings, "LOG_FORMAT", "text")
 
-    # Should not raise
     logger = logging_config.setup_logging()
     assert logger is not None
 
@@ -2306,7 +2234,6 @@ async def test_cached_decorator_raw_data_return():
     async def get_raw_data(key: str) -> dict:
         return {"raw": "data", "key": key}
 
-    # Test with cache HIT - should return cached raw data
     with patch.object(cache, "cache_get", return_value='{"cached": "value"}'):
         result = await get_raw_data("test")
 
@@ -2319,7 +2246,6 @@ async def test_get_show_metadata_imdb_without_title(mock_fetch):
     """Test get_show_metadata when IMDB found but no title."""
     mock_response = MagicMock()
     mock_response.status_code = 200
-    # HTML with IMDB link but no parseable title
     mock_response.text = '<a href="https://www.imdb.com/title/tt0903747/">IMDB</a>'
     mock_fetch.return_value = mock_response
 
@@ -2339,8 +2265,6 @@ def test_extract_imdb_id_from_direct_url():
 
 def test_extract_imdb_id_from_h2_link_fallback():
     """Test _extract_imdb_id fallback to H2 link pattern."""
-    # HTML that doesn't match direct "imdb.com/title/" pattern
-    # but matches H2 link pattern with /title/ path
     html = '<h2><a href="/title/tt1234567">Show Title</a></h2>'
     result = epguides._extract_imdb_id(html)
     assert result == "tt1234567"
@@ -2348,13 +2272,10 @@ def test_extract_imdb_id_from_h2_link_fallback():
 
 def test_parse_date_string_century_correction():
     """Test parse_date_string corrects century for far future years."""
-    # Python strptime with %y: 00-68 -> 2000-2068, 69-99 -> 1969-1999
-    # So "01 Jan 50" parses as 2050, which is > current year + 2 (~2028)
-    # The code should correct it to 1950
     result = epguides.parse_date_string("01 Jan 50")
 
     assert result is not None
-    assert result.year == 1950  # Century corrected from 2050
+    assert result.year == 1950
 
 
 @pytest.mark.asyncio
@@ -2596,7 +2517,7 @@ async def test_get_all_shows_raw_empty_upstream(mock_get_metadata, mock_cache_ge
     result = await show_service._get_all_shows_raw()
 
     assert result == []
-    mock_cache_set.assert_not_called()  # Should not cache empty result
+    mock_cache_set.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -2612,7 +2533,6 @@ async def test_enrich_show_metadata_task_exception(mock_stats, mock_poster, mock
     show = show_service.ShowSchema(epguides_key="test", title="Test Show")
     result = await show_service._enrich_show_metadata(show, "test")
 
-    # Should still return the show, just without enrichments
     assert result is not None
     assert result.title == "Test Show"
     assert result.imdb_id is None
@@ -2621,31 +2541,27 @@ async def test_enrich_show_metadata_task_exception(mock_stats, mock_poster, mock
 
 def test_add_word_boundaries_with_prefix_the():
     """Test _add_word_boundaries handles 'the' prefix via prefix detection."""
-    # "thecat" - "cat" is NOT a common word, so prefix detection should kick in
     result = epguides._add_word_boundaries("thecat")
     assert result == "the cat"
 
 
 def test_add_word_boundaries_with_prefix_a():
     """Test _add_word_boundaries handles 'a' prefix via prefix detection."""
-    # "adog" - "dog" is NOT a common word, so prefix detection should kick in
     result = epguides._add_word_boundaries("adog")
     assert result == "a dog"
 
 
 def test_add_word_boundaries_with_prefix_a_before_an():
     """Test _add_word_boundaries processes 'a' before 'an' prefix."""
-    # "anox" - prefixes are checked in order: the, a, an
-    # "a" matches first, so "anox" becomes "a nox" not "an ox"
     result = epguides._add_word_boundaries("anox")
-    assert result == "a nox"  # "a" prefix matches before "an"
+    assert result == "a nox"
 
 
 def test_parse_episode_rows_empty_row():
     """Test _parse_episode_rows skips empty rows."""
     rows = [
         ["1", "1", "01 Jan 20", "", "pilot", "Pilot Episode"],
-        [],  # Empty row - should be skipped
+        [],
         ["1", "2", "08 Jan 20", "", "ep2", "Second Episode"],
     ]
     column_map = {"season": 0, "number": 1, "release_date": 2, "title": 5}
@@ -2668,7 +2584,7 @@ async def test_merge_tvmaze_episode_data_image_no_original_or_medium(mock_client
             "season": 1,
             "number": 1,
             "summary": "<p>Test summary</p>",
-            "image": {"thumbnail": "http://example.com/thumb.jpg"},  # No original or medium
+            "image": {"thumbnail": "http://example.com/thumb.jpg"},
         }
     ]
 
@@ -2680,7 +2596,7 @@ async def test_merge_tvmaze_episode_data_image_no_original_or_medium(mock_client
     episodes = [{"season": "1", "number": "1", "title": "Pilot"}]
     result = await epguides._merge_tvmaze_episode_data(episodes, "12345")
 
-    assert result[0]["poster_url"] == ""  # Should be empty string
+    assert result[0]["poster_url"] == ""
 
 
 @pytest.mark.asyncio
@@ -2753,7 +2669,7 @@ def test_parse_date_month_year_format():
     assert result is not None
     assert result.year == 2020
     assert result.month == 1
-    assert result.day == 1  # Should default to 1st of month
+    assert result.day == 1
 
 
 def test_parse_date_iso_format():
@@ -2771,11 +2687,6 @@ def test_parse_date_invalid_format():
     result = show_service._parse_date("not a date")
 
     assert result is None
-
-
-# =============================================================================
-# get_show_by_imdb_id + _find_show_by_title (#229)
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -2807,7 +2718,7 @@ async def test_get_show_by_imdb_id_happy_path(mock_lookup, mock_metadata, _mock_
 
 @pytest.mark.asyncio
 @patch("app.services.show_service.record_by_imdb_bridge_miss")
-@patch("app.services.show_service.cache_get", return_value=None)  # Stage 1 (reverse index) miss
+@patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
 async def test_get_show_by_imdb_id_tvmaze_404(mock_lookup, _mock_cache_get, mock_record_miss):
     """TVMaze has no record for this IMDB ID → None, and the bridge-miss
@@ -2821,7 +2732,7 @@ async def test_get_show_by_imdb_id_tvmaze_404(mock_lookup, _mock_cache_get, mock
 
 @pytest.mark.asyncio
 @patch("app.services.show_service.record_by_imdb_bridge_miss")
-@patch("app.services.show_service.cache_get", return_value=None)  # Stage 1 (reverse index) miss
+@patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.services.epguides.get_all_shows_metadata")
 @patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
 async def test_get_show_by_imdb_id_tvmaze_missing_name(mock_lookup, mock_metadata, _mock_cache_get, mock_record_miss):
@@ -2923,13 +2834,13 @@ async def test_get_show_by_imdb_id_local_index_hit_stale_imdb(mock_cache_get, mo
     mock_get_show.return_value = _make(
         epguides_key="chicagofire",
         title="Chicago Fire",
-        imdb_id=None,  # stale local record without imdb_id
+        imdb_id=None,
         network="NBC",
     )
 
     result = await show_service.get_show_by_imdb_id("tt2261391")
     assert result is not None
-    assert result.imdb_id == "tt2261391"  # trusted the input
+    assert result.imdb_id == "tt2261391"
     assert result.epguides_key == "chicagofire"
 
 
@@ -2990,7 +2901,7 @@ async def test_get_show_by_imdb_id_tvmaze_path_populates_reverse_index(
 ):
     """When TVMaze stage succeeds and bridges to a local show, the reverse
     index is populated so future lookups skip TVMaze."""
-    mock_cache_get.return_value = None  # reverse index miss
+    mock_cache_get.return_value = None
     mock_lookup.return_value = {"name": "Breaking Bad"}
     mock_metadata.return_value = [
         {"directory": "breakingbad", "title": "Breaking Bad", "network": "AMC", "run time": "60 min"},
@@ -2998,16 +2909,12 @@ async def test_get_show_by_imdb_id_tvmaze_path_populates_reverse_index(
 
     result = await show_service.get_show_by_imdb_id("tt0903747")
     assert result is not None
-    # Verify the index was written
     write_calls = [c for c in mock_cache_set.call_args_list if c.args[0].startswith("imdb_to_key:")]
     assert len(write_calls) == 1
     assert write_calls[0].args[0] == "imdb_to_key:tt0903747"
     assert write_calls[0].args[1] == "breakingbad"
 
 
-# Master-list rows shaped like the real CSV, with the real TVMaze ids of the
-# shows #474 reproduced. "Lioness" is the trap: TVMaze names tt13111078
-# "Lioness", and a title bridge picks "Lioness (2021)" — a different show.
 _MASTER_ROWS_474 = [
     {"title": "Wednesday", "directory": "Wednesday", "TVmaze": "53647", "start date": "Nov 2022"},
     {"title": "Wednesday 9:30 (8:30 Central)", "directory": "Wednesday930830Central", "TVmaze": ""},
@@ -3015,7 +2922,6 @@ _MASTER_ROWS_474 = [
     {"title": "The Leftovers", "directory": "Leftovers", "TVmaze": "138", "start date": "Jun  2014"},
     {"title": "Lioness (2021)", "directory": "Lioness", "TVmaze": "70321", "start date": "Jan 2021"},
     {"title": "Lioness (2023)", "directory": "SpecialOpsLioness", "TVmaze": "50415", "start date": "Jul 2023"},
-    # The master list repeats some rows verbatim; that is not ambiguity.
     {"title": "Lioness (2023)", "directory": "SpecialOpsLioness", "TVmaze": "50415", "start date": "Jul 2023"},
 ]
 
@@ -3032,7 +2938,7 @@ _MASTER_ROWS_474 = [
 )
 @patch("app.services.show_service.record_by_imdb_bridge_miss")
 @patch("app.services.show_service.cache_set")
-@patch("app.services.show_service.cache_get", return_value=None)  # cold reverse index
+@patch("app.services.show_service.cache_get", return_value=None)
 @patch("app.services.epguides.get_all_shows_metadata")
 @patch("app.services.epguides.lookup_tvmaze_by_imdb", new_callable=AsyncMock)
 async def test_get_show_by_imdb_id_cold_index_bridges_by_tvmaze_id(
@@ -3178,7 +3084,7 @@ async def test_get_show_indexes_when_imdb_mapping_missing(mock_cached, mock_cach
     from app.models.schemas import ShowSchema
 
     mock_cached.return_value = ShowSchema(epguides_key="bb", title="Breaking Bad", imdb_id="tt0903747")
-    mock_cache_get.return_value = None  # No existing index entry
+    mock_cache_get.return_value = None
 
     result = await show_service.get_show("breakingbad")
 
@@ -3196,7 +3102,7 @@ async def test_get_show_skips_index_when_imdb_mapping_present(mock_cached, mock_
     from app.models.schemas import ShowSchema
 
     mock_cached.return_value = ShowSchema(epguides_key="bb", title="Breaking Bad", imdb_id="tt0903747")
-    mock_cache_get.return_value = "bb"  # Index already populated
+    mock_cache_get.return_value = "bb"
 
     result = await show_service.get_show("breakingbad")
 

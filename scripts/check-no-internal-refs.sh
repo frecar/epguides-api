@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Scan tracked project files for private deployment references before they
-# reach the public repository. The regex is assembled so this checker does not
-# match itself when the whole tree is scanned.
 forbidden_regex='a[s]gard|s[e]ntinel|carlsen[.]io|10[.]168|10[.]88|cluster'
 
 is_allowlisted_match() {
@@ -11,7 +8,6 @@ is_allowlisted_match() {
     local line="$2"
     local remaining="$line"
 
-    # WHY: public package metadata uses the maintainer email address.
     if [[ "$file" == "pyproject.toml" ]]; then
         remaining="${remaining//fredrik@carlsen.io/}"
     fi
@@ -36,7 +32,6 @@ violations=0
 for file in "${files[@]}"; do
     [[ -f "$file" ]] || continue
 
-    # The checker intentionally contains the blocked patterns.
     [[ "$file" == "scripts/check-no-internal-refs.sh" ]] && continue
 
     while IFS= read -r match; do

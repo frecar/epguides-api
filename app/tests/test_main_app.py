@@ -50,7 +50,6 @@ async def test_cache_health_endpoint():
 def test_epguides_exception_handler():
     """Test custom exception handler for EpguidesAPIException."""
 
-    # Create a test route that raises our exception
     @app.get("/test-epguides-error")
     async def raise_epguides_error():
         raise EpguidesAPIException("Test error")
@@ -78,7 +77,7 @@ def test_external_service_exception_handler():
 
 def test_validation_error_includes_request_id():
     """Test that validation errors include request_id."""
-    response = client.get("/shows/search?query=x")  # Too short (min_length=2)
+    response = client.get("/shows/search?query=x")
     assert response.status_code == 422
     data = response.json()
     assert "request_id" in data
@@ -99,7 +98,7 @@ def test_request_id_header_present():
     response = client.get("/health")
     assert response.status_code == 200
     assert "X-Request-ID" in response.headers
-    assert len(response.headers["X-Request-ID"]) == 32  # UUID4 hex
+    assert len(response.headers["X-Request-ID"]) == 32
 
 
 def test_request_id_unique_per_request():
@@ -161,13 +160,10 @@ async def test_cache_age_refresh_loop_calls_refresh_then_sleeps():
 def test_middleware_exception_handling():
     """Test middleware logs and re-raises exceptions."""
 
-    # Create a test route that raises an exception
     @app.get("/test-middleware-error")
     async def raise_error():
         raise RuntimeError("Test middleware error")
 
-    # The middleware logs the error and re-raises it
-    # TestClient will re-raise the exception
     with pytest.raises(RuntimeError, match="Test middleware error"):
         client.get("/test-middleware-error")
 
@@ -176,12 +172,9 @@ def test_initialize_logging_fallback():
     """Test logging initialization fallback."""
     from app.main import _initialize_logging
 
-    # Test that it works with normal setup
     _initialize_logging()
 
-    # Test fallback when setup_logging fails
     with patch("app.core.logging_config.setup_logging", side_effect=Exception("Config error")):
-        # Should not raise - falls back to basicConfig
         _initialize_logging()
 
 
@@ -190,7 +183,6 @@ def test_security_headers_present():
     response = client.get("/health")
     assert response.status_code == 200
 
-    # Verify all security headers
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["X-XSS-Protection"] == "0"
@@ -206,11 +198,8 @@ def test_docs_paths_get_relaxed_csp():
     for path in ("/docs", "/redoc"):
         response = client.get(path)
         csp = response.headers["Content-Security-Policy"]
-        # Must allow jsdelivr CDN (where Swagger UI bundle + ReDoc live)
         assert "https://cdn.jsdelivr.net" in csp, f"{path}: missing CDN allowance ({csp})"
-        # Must allow inline scripts for SwaggerUIBundle / Redoc init blocks
         assert "'unsafe-inline'" in csp, f"{path}: missing unsafe-inline ({csp})"
-        # Strict default still applies
         assert "default-src 'none'" in csp, f"{path}: lost default-src 'none' ({csp})"
 
 
@@ -226,7 +215,6 @@ def test_security_headers_on_error_responses():
     response = client.get("/shows/nonexistentshow")
     assert response.status_code == 404
 
-    # Security headers should still be present
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["Strict-Transport-Security"] == "max-age=63072000; includeSubDomains; preload"
@@ -327,7 +315,7 @@ def test_404_returns_json_content_type():
 
 def test_validation_error_returns_errors_list():
     """Test that validation errors include an errors list."""
-    response = client.get("/shows/search?query=x")  # Too short
+    response = client.get("/shows/search?query=x")
     assert response.status_code == 422
     data = response.json()
     assert "errors" in data
@@ -385,7 +373,6 @@ async def test_readiness_unready_when_upstream_stale():
     """Upstream older than the threshold → 'unready', HTTP 503 with a reason."""
     import time
 
-    # 48h old against a 24h default threshold.
     stale_ts = time.time() - (48 * 3600)
 
     with (
@@ -427,7 +414,6 @@ async def test_readiness_bootstrapping_within_cold_start_grace():
     """Absent marker within the cold-start grace window → 200, 'ok' overall."""
     import time
 
-    # Pretend the process just started so we are inside the grace window.
     with (
         patch("app.main.probe_redis_round_trip", new=AsyncMock(return_value=(True, 1.0))),
         patch("app.main.get_upstream_last_success", new=AsyncMock(return_value=None)),
@@ -450,7 +436,6 @@ async def test_readiness_stale_when_no_fetch_after_grace_window():
 
     from app.main import settings as main_settings
 
-    # Process started long ago: grace window has elapsed with no success.
     long_ago = time.time() - (main_settings.UPSTREAM_FRESHNESS_COLD_START_GRACE_SECONDS + 60)
 
     with (
@@ -488,12 +473,9 @@ async def test_readiness_overall_ok_is_collision_proof_on_degraded_body():
 
     assert response.status_code == 200
     data = response.json()
-    # The unsound substring assertion would false-pass on this degraded body:
     assert data["status"] == "degraded"
     assert '"status":"ok"' in response.text.replace(" ", "")
-    # ...while the collision-proof marker correctly reads unhealthy:
     assert data["overall_ok"] is False
-    # And the key exists ONLY at the top level — never in nested check objects.
     assert all("overall_ok" not in check for check in data["checks"].values())
 
 

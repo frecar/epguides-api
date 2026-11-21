@@ -1,19 +1,7 @@
 version: 2
 updates:
-  # uv ecosystem — updates pyproject.toml + uv.lock directly (the repo is
-  # uv-managed; there is no requirements.txt at the project root for pip
-  # to scan).
   - package-ecosystem: "uv"
     directory: "/"
-    # Hold a new release for 3 days before opening a version-update PR. For a
-    # freshly malicious release — an upstream account takeover or a typosquat —
-    # advisory feeds are lagged by construction and cannot break the chain, and
-    # a green CI run is not evidence either: CI installs and executes the new
-    # package before any merge. A release-age cooldown buys the window in which
-    # an advisory, a yank, or the maintainer's own retraction appears.
-    #
-    # This does NOT delay security fixes: `cooldown` is a version-update option
-    # only, and Dependabot security updates are created regardless of it.
     cooldown:
       default-days: 3
     schedule:
@@ -24,7 +12,6 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "deps"
-    # Include transitive deps so CVEs in indirect packages also get auto-PRs.
     allow:
       - dependency-type: "all"
     groups:
@@ -35,10 +22,6 @@ updates:
           - "minor"
           - "patch"
 
-  # pip ecosystem, docs/ scope — docs/requirements.txt exists and is what the
-  # pip advisories flag (e.g. setuptools, mkdocs-material), but the uv entry
-  # above only covers the project root, so nothing ever opens PRs for it
-  # (frecar/epguides-api#489). Same weekly cadence + 3-day cooldown as uv.
   - package-ecosystem: "pip"
     directory: "/docs"
     cooldown:
@@ -54,15 +37,6 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    # Hold a new release for 3 days before opening a version-update PR. For a
-    # freshly malicious release — an upstream account takeover or a typosquat —
-    # advisory feeds are lagged by construction and cannot break the chain, and
-    # a green CI run is not evidence either: CI installs and executes the new
-    # package before any merge. A release-age cooldown buys the window in which
-    # an advisory, a yank, or the maintainer's own retraction appears.
-    #
-    # This does NOT delay security fixes: `cooldown` is a version-update option
-    # only, and Dependabot security updates are created regardless of it.
     cooldown:
       default-days: 3
     schedule:
@@ -70,45 +44,12 @@ updates:
     labels:
       - "dependencies"
       - "ci"
-    # actions/checkout and docker/login-action are centrally managed by an
-    # upstream template-sync bot (a marker-region block inside ci.yml plus
-    # the whole trivy-fs-nightly.yml file), not maintained directly in this
-    # repo. Without this ignore, dependabot bumps the pin here directly,
-    # then the next sync run reverts it back to the (until-then-stale)
-    # upstream template, and dependabot re-opens the same bump the
-    # following week — an infinite ping-pong observed live over two
-    # consecutive days. These two pins now only move via the upstream
-    # template (bumped there) plus the sync it drives.
-    #
-    # Trade-off, accepted deliberately: this ignore is dependency-name-
-    # scoped for the whole repo, not just the synced marker region — the
-    # non-templated actions/checkout uses elsewhere in ci.yml also stop
-    # getting automatic dependabot bumps. Compensating control: a periodic
-    # dependency-freshness audit still catches a stale pin there.
-    # docker/login-action has no such collateral: it is only used inside
-    # the synced marker region in this repo.
     ignore:
       - dependency-name: "actions/checkout"
       - dependency-name: "docker/login-action"
 
-  # docker ecosystem — tracks the Dockerfile's `FROM` + `COPY --from` image
-  # digests so a pinned `tag@sha256:` stays fresh via a reviewed bump rather
-  # than rotting at a frozen digest. Weekly (matching the uv cadence) + grouped
-  # into one PR. These bumps are deliberately EXCLUDED from auto-merge (see
-  # dependabot-auto-merge.yml): a base/tool-image swap is a supply-chain change
-  # that no required check inspects at the image-layer level, so it needs human
-  # review before merge.
   - package-ecosystem: "docker"
     directory: "/"
-    # Hold a new release for 3 days before opening a version-update PR. For a
-    # freshly malicious release — an upstream account takeover or a typosquat —
-    # advisory feeds are lagged by construction and cannot break the chain, and
-    # a green CI run is not evidence either: CI installs and executes the new
-    # package before any merge. A release-age cooldown buys the window in which
-    # an advisory, a yank, or the maintainer's own retraction appears.
-    #
-    # This does NOT delay security fixes: `cooldown` is a version-update option
-    # only, and Dependabot security updates are created regardless of it.
     cooldown:
       default-days: 3
     schedule:
@@ -124,13 +65,6 @@ updates:
       docker-images:
         patterns:
           - "*"
-    # Pin the prod Python base image to the stable 3.14.x line. Dependabot
-    # otherwise proposes python:3.15.0rc* pre-releases for the production
-    # Dockerfile. Two complementary rules: semver-major blocks the 3.14 ->
-    # 3.15 category, and the Bundler-syntax versions bound also catches
-    # the pre-release tags (3.15.0a*/b*/rc*) that sort below 3.15.0 GA.
-    # 3.14.x patch bumps still flow. Remove both rules (or raise the
-    # bound) when 3.15 reaches GA and we deliberately move to it.
     ignore:
       - dependency-name: "python"
         update-types:

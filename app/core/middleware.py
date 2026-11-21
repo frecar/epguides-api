@@ -45,7 +45,6 @@ def get_request_id(request: Request) -> str:
     return getattr(request.state, "request_id", "unknown")
 
 
-# Security headers applied to every response
 SECURITY_HEADERS: dict[str, str] = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -56,11 +55,6 @@ SECURITY_HEADERS: dict[str, str] = {
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
 }
 
-# Swagger UI and ReDoc need to load assets from jsdelivr CDN + run inline
-# scripts/styles to initialise the SwaggerUIBundle. The strict CSP above blocks
-# all of that, leaving /docs and /redoc visually blank in the browser (issue
-# #223). Use a relaxed CSP scoped to those paths only; the rest of the API
-# stays on the strict default-src 'none'.
 _DOCS_PATHS: tuple[str, ...] = ("/docs", "/redoc", "/docs/oauth2-redirect")
 _DOCS_CSP = (
     "default-src 'none'; "
@@ -96,7 +90,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         for header, value in SECURITY_HEADERS.items():
             response.headers[header] = value
-        # Docs paths (Swagger UI + ReDoc) need a relaxed CSP — see #223.
         if request.url.path in _DOCS_PATHS:
             response.headers["Content-Security-Policy"] = _DOCS_CSP
         return response
@@ -120,7 +113,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         """Process request and log details."""
         start_time = time.perf_counter()
 
-        # Extract request info once
         method = request.method
         path = request.url.path
         client_host = request.client.host if request.client else None

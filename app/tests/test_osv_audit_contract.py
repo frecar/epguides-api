@@ -27,8 +27,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-# Absolute bash path so spawning the subprocess never depends on the
-# (deliberately narrowed) PATH the tests construct for the script.
 _BASH = shutil.which("bash") or "/bin/bash"
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -38,18 +36,11 @@ CI_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "ci.yml"
 OSV_CONFIG = _REPO_ROOT / ".osv-scanner.toml"
 AUDIT_SCRIPT = _REPO_ROOT / "scripts" / "audit_osv.sh"
 
-# The workflow owns the version; the contract requires the correct action
-# and an immutable commit rather than duplicating its changing SHA.
 _OSV_ACTION = "google/osv-scanner-action/osv-scanner-action@"
 
 
 def _local_hooks() -> dict[str, dict]:
     config = yaml.safe_load(PRE_COMMIT.read_text(encoding="utf-8"))
-    # Every `repo: local` block, not just the first. This config has carried
-    # more than one for a long time, so a `return` on the first silently hid
-    # the rest — and a new block added above made hooks look DELETED rather
-    # than shadowed. The duplicate check keeps a real id collision loud
-    # instead of last-one-wins.
     hooks: dict[str, dict] = {}
     for repo in config["repos"]:
         if repo.get("repo") != "local":
@@ -97,8 +88,6 @@ def test_pre_push_runs_audit_osv() -> None:
     assert hook["stages"] == ["pre-push"]
     assert hook["always_run"] is True
     assert hook["pass_filenames"] is False
-    # Deliberately a SEPARATE hook from ci-parity (OSV needs the advisory DB;
-    # ci-parity is offline-deterministic) — they must not be merged.
     assert "ci-parity" in hooks
     assert hook["entry"] != hooks["ci-parity"]["entry"]
 
@@ -122,7 +111,6 @@ def test_ci_has_authoritative_online_osv_job() -> None:
     scan_args = osv_step["with"]["scan-args"]
     assert "--lockfile=uv.lock" in scan_args
     assert "--config=.osv-scanner.toml" in scan_args
-    # The audit job is one of ci-gate's required `needs`, so the OSV step gates.
     assert "audit" in config["jobs"]["ci-gate"]["needs"]
 
 
@@ -139,11 +127,6 @@ def test_ci_osv_contract_rejects_missing_or_mutable_ref(tmp_path: Path, monkeypa
         test_ci_has_authoritative_online_osv_job()
 
 
-# --------------------------------------------------------------------------
-# Exit-code behaviour (script run end-to-end against a stubbed osv-scanner)
-# --------------------------------------------------------------------------
-
-
 def _run_audit(tmp_path: Path, *, stub: str | None, rc: int = 0, out: str = "") -> subprocess.CompletedProcess:
     """Run scripts/audit_osv.sh with an optional stub `osv-scanner` on PATH.
 
@@ -152,17 +135,11 @@ def _run_audit(tmp_path: Path, *, stub: str | None, rc: int = 0, out: str = "") 
     """
     work = tmp_path / "repo"
     (work / "scripts").mkdir(parents=True)
-    # Copy the real script + a placeholder lockfile + config so the prereq
-    # gates pass and only the classification logic is under test.
     (work / "scripts" / "audit_osv.sh").write_bytes(AUDIT_SCRIPT.read_bytes())
     (work / "scripts" / "audit_osv.sh").chmod(0o755)
     (work / "uv.lock").write_text("# placeholder lockfile\n", encoding="utf-8")
     (work / ".osv-scanner.toml").write_text("# no ignores\n", encoding="utf-8")
 
-    # Keep the inherited PATH so the script's own helper utilities (dirname,
-    # grep, cd/pwd) resolve; we only ADD a stub osv-scanner ahead of it (or,
-    # for the binary-absent case, add nothing — the host genuinely has no
-    # osv-scanner installed, asserted by the caller).
     env = dict(os.environ)
     if stub is not None:
         bindir = tmp_path / "bin"

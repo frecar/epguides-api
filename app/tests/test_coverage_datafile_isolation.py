@@ -58,11 +58,6 @@ def _make_target_recipe(makefile_text: str, target: str) -> str:
 
 def _local_hooks() -> dict[str, dict]:
     config = yaml.safe_load(PRE_COMMIT.read_text(encoding="utf-8"))
-    # Every `repo: local` block, not just the first. This config has carried
-    # more than one for a long time, so a `return` on the first silently hid
-    # the rest — and a new block added above made hooks look DELETED rather
-    # than shadowed. The duplicate check keeps a real id collision loud
-    # instead of last-one-wins.
     hooks: dict[str, dict] = {}
     for repo in config["repos"]:
         if repo.get("repo") != "local":

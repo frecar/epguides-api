@@ -87,24 +87,21 @@ async def search_shows_fast(query: str) -> list[ShowSchema]:
     raw = await _get_all_shows_raw()
     query_lower = query.lower()
     matches = [item for item in raw if query_lower in item.get("title", "").lower()]
-    return [ShowSchema(**item) for item in matches[:100]]  # Limit results
+    return [ShowSchema(**item) for item in matches[:100]]
 
 
 async def _get_all_shows_raw() -> list[dict[str, Any]]:
     """Get raw show data (cached as dicts, not Pydantic models)."""
     cache_key = "shows:all:raw"
 
-    # Check cache (use orjson for faster parsing)
     cached_data = await cache_get(cache_key)
     if cached_data:
         try:
             result: list[dict[str, Any]] = orjson.loads(cached_data)
             return result
         except orjson.JSONDecodeError as e:
-            # Corrupted JSON - log warning (cache cleared on deployment)
             logger.warning("Corrupted JSON in cache %s: %s", cache_key, e)
 
-    # Fetch and cache (use orjson for faster serialization)
     raw_data = await epguides.get_all_shows_metadata()
     if not raw_data:
         logger.warning("No show data returned from epguides — upstream may be down")
@@ -137,7 +134,6 @@ async def _get_show_by_key(normalized_id: str) -> ShowSchema | None:
     if data := await cache_hget("show_index", normalized_id):
         return ShowSchema(**json.loads(data))
 
-    # Build index if missing, retry lookup
     if not await cache_exists("show_index"):
         await _build_show_index()
         if data := await cache_hget("show_index", normalized_id):
@@ -181,9 +177,6 @@ async def search_shows(query: str) -> list[ShowSchema]:
     return await search_shows_fast(query)
 
 
-# Reverse index `imdb_id → epguides_key`. Populated lazily by `get_show`
-# (every time a show is enriched with its imdb_id, we record the mapping).
-# Long TTL because an imdb_id ↔ epguides_key binding is essentially static.
 _IMDB_INDEX_KEY = "imdb_to_key:{imdb_id}"
 
 
@@ -263,12 +256,8 @@ async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
     Returns:
         ShowSchema bridging IMDB ID → epguides_key, or None if no bridge.
     """
-    # Stage 1: local reverse index (warm shows we've already enriched)
     local = await _lookup_local_by_imdb(imdb_id)
     if local:
-        # The index says this imdb_id maps to local.epguides_key; trust
-        # the binding. Use the input imdb_id verbatim in case the local
-        # record's imdb_id is stale or missing.
         if local.imdb_id != imdb_id:
             local = create_show_schema(
                 epguides_key=local.epguides_key,
@@ -284,14 +273,11 @@ async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
             )
         return local
 
-    # Stage 2: TVMaze bridge for shows the index hasn't seen yet
     tvmaze = await epguides.lookup_tvmaze_by_imdb(imdb_id)
     if not tvmaze:
         _record_by_imdb_miss(imdb_id, "tvmaze_lookup_miss")
         return None
 
-    # Raw master-list rows (not `get_all_shows()`): only the raw CSV dicts
-    # carry the `TVmaze` id column.
     rows = await epguides.get_all_shows_metadata()
     if not rows:
         _record_by_imdb_miss(imdb_id, "catalogue_unavailable")
@@ -304,8 +290,6 @@ async def get_show_by_imdb_id(imdb_id: str) -> ShowSchema | None:
 
     show = ShowSchema(**{**_map_csv_row_to_dict(row), "imdb_id": imdb_id})
 
-    # Populate the reverse index so future lookups for this imdb_id hit
-    # Stage 1 directly.
     await _index_show_by_imdb(show.epguides_key, imdb_id)
     return show
 
@@ -529,7 +513,6 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
     """Enrich show with IMDB ID, poster, and episode stats."""
     updates: dict[str, Any] = {}
 
-    # Parallel fetch only what's needed
     tasks: list[Any] = []
     task_keys: list[str] = []
 
@@ -546,7 +529,6 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Apply results (skip tasks that raised exceptions)
     for key, result in zip(task_keys, results, strict=False):
         if isinstance(result, Exception):
             logger.warning("Enrichment task '%s' failed for %s: %s", key, normalized_id, result)
@@ -561,7 +543,6 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
     if updates:
         show = show.model_copy(update=updates)
 
-    # Extend cache for finished shows
     if show.end_date:
         await extend_cache_ttl("episodes", normalized_id, TTL_1_YEAR)
         await extend_cache_ttl("show", normalized_id, TTL_1_YEAR)
@@ -657,11 +638,9 @@ def _build_show_updates(show: ShowSchema, stats: _EpisodeStats) -> dict[str, dat
     """Build update dict for show based on episode statistics."""
     updates: dict[str, date | int] = {}
 
-    # Derive end_date if missing and all episodes are released
     if not show.end_date and not stats.has_unreleased and stats.last_release_date:
         updates["end_date"] = stats.last_release_date
 
-    # Always use actual episode count (more accurate than CSV)
     if stats.valid_episode_count > 0:
         updates["total_episodes"] = stats.valid_episode_count
 
@@ -693,7 +672,6 @@ def _parse_episode(item: dict[str, Any], run_time_min: int | None) -> EpisodeSch
 
         is_released = datetime.now(UTC) - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS) > release_date
 
-        # Get summary and poster_url if available (from TVMaze)
         summary = item.get("summary", "") or ""
         poster_url = item.get("poster_url", "") or ""
 
@@ -775,16 +753,13 @@ def _parse_date(date_str: str | None) -> date | None:
 
     date_str = date_str.strip()
 
-    # Skip placeholder values
     if any(re.match(p, date_str, re.IGNORECASE) for p in _DATE_PLACEHOLDER_PATTERNS):
         return None
 
-    # Try epguides parser first
     parsed = epguides.parse_date_string(date_str)
     if parsed:
         return parsed.date()
 
-    # Try month-year formats
     for fmt in _MONTH_YEAR_FORMATS:
         try:
             parsed_dt = datetime.strptime(date_str, fmt).replace(tzinfo=UTC)
@@ -824,11 +799,9 @@ def _clean_title(title: str) -> str:
     if not title:
         return title
 
-    # Fix corrupted unicode that leaves leading space
     if title.startswith(" ") and len(title) > 1:
         title_lower = title.lower()
 
-        # Known fixes for corrupted "À" character
         if " la carte" in title_lower:
             return "À La Carte"
         if title_lower.startswith(" la "):

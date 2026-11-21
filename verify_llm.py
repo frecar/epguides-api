@@ -39,7 +39,6 @@ async def verify_llm():
     print()
     print("🧪 Testing LLM with sample query...")
 
-    # Sample episodes for testing
     test_episodes = [
         {"season": 1, "number": 1, "title": "Pilot", "release_date": "2008-01-20"},
         {"season": 1, "number": 2, "title": "Cat's in the Bag", "release_date": "2008-01-27"},

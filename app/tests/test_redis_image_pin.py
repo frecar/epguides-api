@@ -34,13 +34,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 MIN_REDIS_VERSION = (7, 4, 11)
 
-# name:tag@sha256:<64hex> — both a human-reviewable tag AND an immutable digest.
 _PINNED_RE = re.compile(r"^[^@\s:]+:[^@\s]+@sha256:[0-9a-f]{64}$")
 
 
 def _parse_redis_version(image: str) -> tuple[int, int, int] | None:
-    # Strip the @sha256:<digest> pin before extracting the tag, otherwise a
-    # naive rsplit(":") would grab the digest hex instead of the version.
     ref = image.rsplit("@", maxsplit=1)[0]
     tag = ref.rsplit(":", maxsplit=1)[-1]
     version = tag.split("-", maxsplit=1)[0]

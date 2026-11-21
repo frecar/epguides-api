@@ -40,18 +40,12 @@ def _write(tmp_path: Path, content: str) -> None:
     (tmp_path / "Dockerfile").write_text(content)
 
 
-# --- the repo invariant -----------------------------------------------------
-
-
 def test_repo_dockerfile_passes_the_guard() -> None:
     result = _run(_REPO_ROOT)
     assert result.returncode == 0, (
         f"the repo Dockerfile must keep its python FROM digest-pinned and its uv "
         f"COPY --from a bare version tag (no digest); guard said:\n{result.stderr}"
     )
-
-
-# --- the guard has teeth ----------------------------------------------------
 
 
 def test_guard_flags_tag_only_from(tmp_path: Path) -> None:
@@ -84,7 +78,6 @@ def test_guard_passes_fully_pinned_including_copy_from(tmp_path: Path) -> None:
 
 
 def test_guard_passes_uv_bare_version_tag(tmp_path: Path) -> None:
-    # The central-version-managed uv image must be a bare version tag (no digest).
     _write(
         tmp_path,
         f"FROM {_PINNED_PY} AS builder\nCOPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /uv\n",
@@ -93,8 +86,6 @@ def test_guard_passes_uv_bare_version_tag(tmp_path: Path) -> None:
 
 
 def test_guard_forbids_uv_with_digest(tmp_path: Path) -> None:
-    # A digest on the central-version-managed uv image is a hard error: the
-    # version sync would not update it, so tag and digest desync on the next bump.
     uv_digest = "ghcr.io/astral-sh/uv:0.11.21@sha256:" + "f" * 64
     _write(tmp_path, f"FROM {_PINNED_PY} AS builder\nCOPY --from={uv_digest} /uv /uv\n")
     result = _run(tmp_path)
@@ -117,9 +108,6 @@ def test_guard_fails_closed_on_no_dockerfile(tmp_path: Path) -> None:
     assert "no Dockerfile" in result.stderr
 
 
-# --- three-surface wiring parity (no-drift, mirrors the ci-parity contract) --
-
-
 def test_guard_wired_into_all_enforcement_surfaces() -> None:
     script = "scripts/check_base_image_digest_pin_drift.py"
 
@@ -130,8 +118,6 @@ def test_guard_wired_into_all_enforcement_surfaces() -> None:
     assert script in ci, "the lint job must run the digest-pin guard so it gates"
 
     config = yaml.safe_load((_REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
-    # Every `repo: local` block, not just the first — this config carries
-    # several, so `next(...)` inspected only the earliest.
     local = {"hooks": [h for r in config["repos"] if r.get("repo") == "local" for h in r["hooks"]]}
     entries = [h["entry"] for h in local["hooks"]]
     assert any(script in e for e in entries), "a pre-commit hook must run the digest-pin guard"

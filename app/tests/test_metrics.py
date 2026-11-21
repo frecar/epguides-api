@@ -54,11 +54,9 @@ class TestCacheTypeFromKey:
         assert cache_type_from_key("standalone") == "unknown"
 
     def test_extracts_first_segment_only(self) -> None:
-        # Key like "season:show_id:5" should still classify as "season".
         assert cache_type_from_key("season:show_id:5") == "season"
 
     def test_empty_key_returns_unknown(self) -> None:
-        # No colon at all → unknown bucket (don't crash on edge case).
         assert cache_type_from_key("") == "unknown"
 
 
@@ -79,7 +77,7 @@ class TestRecordCacheHitMiss:
 
     def test_different_types_are_separate_series(self) -> None:
         before_show = CACHE_HITS.labels(type="show")._value.get()
-        record_cache_hit("episodes:abc")  # different type
+        record_cache_hit("episodes:abc")
         after_show = CACHE_HITS.labels(type="show")._value.get()
         assert after_show == before_show, "Recording an episodes hit should not bump the show counter"
 
@@ -111,8 +109,6 @@ class TestRenderMetrics:
         assert "epguides_cache_misses_total" in text
 
     def test_includes_type_label_in_exposition(self) -> None:
-        # Use a unique type marker so this test is hermetic regardless of
-        # other tests' side effects on shared counters.
         record_cache_hit("uniqkey:test-label")
         body, _ = render_metrics()
         text = body.decode("utf-8")
@@ -130,31 +126,23 @@ class TestMultiprocessMode:
     """
 
     def test_render_falls_back_to_default_registry_when_env_var_unset(self) -> None:
-        # Ensure PROMETHEUS_MULTIPROC_DIR is NOT set in the test environment.
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("PROMETHEUS_MULTIPROC_DIR", None)
             body, content_type = render_metrics()
             assert isinstance(body, bytes)
             assert isinstance(content_type, str)
-            # In single-process mode the cache counters defined at module
-            # import time should be visible in the exposition output.
             assert "epguides_cache_hits_total" in body.decode("utf-8")
 
     def test_render_uses_multiprocess_collector_when_env_var_set(self, tmp_path) -> None:
-        # Point at a temp dir so MultiProcessCollector can read whatever
-        # mmap files exist (likely none, but the code path executes).
         with patch.dict(os.environ, {"PROMETHEUS_MULTIPROC_DIR": str(tmp_path)}):
             body, content_type = render_metrics()
-            # Body may be empty (no .db files in the temp dir), but the
-            # call must succeed without raising.
             assert isinstance(body, bytes)
             assert isinstance(content_type, str)
 
     def test_mark_worker_dead_noop_when_env_var_unset(self) -> None:
-        # Should not raise when multiproc mode is not active.
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("PROMETHEUS_MULTIPROC_DIR", None)
-            mark_worker_dead(99999)  # arbitrary PID, no-op
+            mark_worker_dead(99999)
 
     def test_mark_worker_dead_invokes_multiprocess_cleanup(self, tmp_path) -> None:
         with patch.dict(os.environ, {"PROMETHEUS_MULTIPROC_DIR": str(tmp_path)}):
@@ -184,7 +172,7 @@ class TestMultiprocessMode:
 
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("PROMETHEUS_MULTIPROC_DIR", None)
-            _ensure_multiproc_dir()  # no exception
+            _ensure_multiproc_dir()
 
 
 class TestRecordUpstreamRequest:
@@ -280,8 +268,6 @@ class TestIngestFreshness:
 
     def test_record_success_is_per_source(self) -> None:
         record_ingest_success("tvmaze")
-        # Make epguides demonstrably older, then confirm tvmaze stamp does
-        # not bump it.
         INGEST_LAST_SUCCESS.labels(source="epguides").set(1.0)
         record_ingest_success("tvmaze")
         assert INGEST_LAST_SUCCESS.labels(source="epguides")._value.get() == 1.0
@@ -299,7 +285,6 @@ class TestIngestFreshness:
         assert INGEST_LAST_SUCCESS.labels(source="tvmaze")._value.get() == 1.0
 
     def test_init_seeds_all_sources(self) -> None:
-        # Dirty every source, then re-init resets them all to 0.
         for source in INGEST_SOURCES:
             INGEST_LAST_SUCCESS.labels(source=source).set(12345.0)
         init_ingest_freshness()

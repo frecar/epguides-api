@@ -93,17 +93,13 @@ up:
 	@echo ""
 	@make urls
 
-# `dev` is the conventional target name. `up` kept as an alias for
-# existing muscle memory.
 dev: up
 
 down:
 	docker compose down 2>/dev/null; docker compose -f docker-compose.prod.yml down 2>/dev/null
 
-# `stop` is the conventional target name.
 stop: down
 
-# `build` produces the production image without starting containers.
 build:
 	docker compose -f docker-compose.prod.yml -f docker-compose.build.yml build
 
@@ -125,15 +121,6 @@ deploy-prod:
 cache-clear:
 	docker exec $$(docker ps -qf "name=redis") redis-cli FLUSHALL 2>/dev/null || echo "Redis not running"
 
-# COVERAGE_FILE isolated to a fresh per-run temp dir (epguides-api#414):
-# [tool.coverage.run] has no `data_file` override, so coverage writes to the
-# default `.coverage` in the worktree CWD. Without isolation, two concurrent
-# invocations in the same worktree (this target, `make coverage`, the
-# pre-commit `tests-coverage` hook, or an ad-hoc scoped `pytest --cov=app.x`)
-# collide on it — pytest-cov's combine() step globs and DELETES sibling
-# `.coverage.*` files, silently corrupting the other run's total. Mirrors
-# Isolates via a fresh `mktemp -d` per invocation; POSIX mktemp/$?/rm -rf
-# need no `bash -c` wrapper under Make's default /bin/sh.
 test:
 	d=$$(mktemp -d); \
 	COVERAGE_FILE="$$d/.coverage" $(RUN) pytest --cov=app --cov-report=term-missing; \
@@ -158,38 +145,12 @@ check: format-check lint
 typecheck:
 	$(RUN) mypy app/ --config-file pyproject.toml --exclude 'app/tests/'
 
-# COVERAGE_FILE isolated to a fresh per-run temp dir (epguides-api#414) —
-# same rationale as `test` above.
 coverage:
 	d=$$(mktemp -d); \
 	COVERAGE_FILE="$$d/.coverage" $(RUN) pytest --cov=app --cov-report=term-missing --cov-report=html; \
 	rc=$$?; rm -rf "$$d"; exit $$rc
 	@echo "HTML report: htmlcov/index.html"
 
-# Local-vs-CI check PARITY target. Runs the exact DETERMINISTIC, locally
-# reproducible subset of CI so a clean `make ci-parity` guarantees the
-# corresponding CI lint/type steps go green — closing the push->red->fix
-# churn. A single pre-push hook invokes this one target, mirroring the CI
-# step set 1:1 so the two can't drift. Each line maps to a named CI step:
-#
-#   format-check + lint    -> ruff format --check + ruff check over the FULL
-#                             app/ tree (catches RUF100 unused-noqa in files
-#                             the pre-commit changed-file `--fix` pass skips).
-#   typecheck              -> mypy app/ (the pre-commit hooks have no mypy).
-#   check_no_external_llm   -> configured-LLM-endpoint lint over the full tree
-#                             (the pre-commit hook runs changed files only).
-#   host-py312 py_compile   -> compile scripts/*.py under a REAL CPython 3.12
-#                             (the minimum system interpreter those host-run
-#                             scripts must stay parseable under), mirroring the
-#                             "Host-interpreter syntax guard" CI step +
-#                             pre-commit hook.
-#   check_ci_resource_sizing -> no workflow step hardcodes a topology-specific
-#                             worker/CPU/memory ceiling, mirroring the "CI
-#                             resource-sizing guard" CI step.
-#
-# Coverage is NOT duplicated here: the `tests-coverage` pre-commit hook
-# already enforces `--cov-fail-under=95` on every commit, so the floor
-# already fires locally before any push.
 ci-parity: format-check lint typecheck
 	$(RUN) python scripts/check_no_external_llm.py
 	$(RUN) python scripts/check_no_private_git_deps.py
@@ -202,13 +163,6 @@ ci-parity: format-check lint typecheck
 ci: format-check lint test
 	@echo "All checks passed"
 
-# Local dependency-CVE check. Runs the SAME OSV-Scanner verdict CI runs
-# online (--lockfile=uv.lock --config=.osv-scanner.toml) so a vulnerable
-# lockfile bump is caught at `git push` instead of after the round-trip.
-# The wrapper warn-skips (exit 0) when osv-scanner is absent / there's no
-# lockfile / osv.dev is unreachable, and hard-fails (exit 1) only when the
-# scan ran and found an un-ignored vulnerability — so an offline push is
-# never blocked. CI's online OSV job is the authoritative backstop.
 audit-osv:
 	bash scripts/audit_osv.sh
 

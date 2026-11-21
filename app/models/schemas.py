@@ -60,7 +60,6 @@ class ShowListSchema(BaseModel):
     epguides_key: str = Field(..., description="Unique epguides identifier")
     title: str = Field(..., description="Show title")
 
-    # Basic metadata
     network: str | None = Field(None, description="TV network or streaming service")
     country: str | None = Field(None, description="Country of origin")
     start_date: date | None = Field(None, description="First episode air date")
@@ -87,11 +86,9 @@ class ShowSchema(BaseModel):
     Returned by individual show endpoints with full details.
     """
 
-    # Required fields
     epguides_key: str = Field(..., description="Unique epguides identifier")
     title: str = Field(..., description="Show title")
 
-    # Optional metadata
     imdb_id: str | None = Field(None, description="IMDB ID (format: tt1234567)")
     network: str | None = Field(None, description="TV network or streaming service")
     run_time_min: int | None = Field(None, ge=1, description="Average episode runtime in minutes")
@@ -101,7 +98,6 @@ class ShowSchema(BaseModel):
     total_episodes: int | None = Field(None, ge=0, description="Total episode count")
     poster_url: str | None = Field(None, description="Show poster image URL from TVMaze")
 
-    # Computed URL fields
     @computed_field
     def external_epguides_url(self) -> str:
         """URL to the show's page on epguides.com."""

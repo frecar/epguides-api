@@ -5,8 +5,6 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-        # mkdocs.yml uses `!!python/name:material.extensions.emoji.twemoji`
-        # tags from the mkdocs-material theme — these need unsafe loading.
         args: ['--unsafe']
       - id: check-json
       - id: check-toml
@@ -21,19 +19,6 @@ repos:
       - id: no-commit-to-branch
         args: ['--branch', 'main']
 
-  # Ruff via `uv run` — uv.lock is the SINGLE ruff version of record.
-  #
-  # The block this replaces carried `rev: v0.15.22` plus a note asking the
-  # reader to "keep in lockstep with the [dependency-groups].dev ruff pin
-  # (ruff==0.15.17)". All three had drifted apart: the note said 0.15.17, the
-  # rev said 0.15.22, and uv.lock resolved 0.16.3. That is the case against a
-  # hand-maintained second pin, written by the pin itself.
-  #
-  # Re-pinning the rev only resets the clock — dependency bumps touch
-  # pyproject/uv.lock and never a mirror rev, so the gap re-opens on every
-  # bump by construction. `repo: local` + `uv run --frozen ruff` removes the
-  # second pin entirely: no `rev:` left to drift, and pre-commit runs the exact
-  # same ruff as CI.
   - repo: local
     hooks:
       - id: ruff
@@ -49,14 +34,6 @@ repos:
         types_or: [python, pyi]
         require_serial: true
 
-  # Secret-scanning gate. Runs `gitleaks git --pre-commit --redact --staged`
-  # over the STAGED diff on every commit and blocks when a credential is
-  # detected — prevention against accidentally committing a real secret.
-  # Tuning + the known-safe fixture allowlist live in `.gitleaks.toml`
-  # (`[extend] useDefault = true`). `language: golang` — pre-commit
-  # auto-bootstraps Go, so no host toolchain is required. Stacks with the
-  # weaker `detect-private-key` hook above (PEM-only).
-  # NEVER bypass with `git commit --no-verify` or `SKIP=gitleaks`.
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
     hooks:
@@ -74,15 +51,6 @@ repos:
 
       - id: tests-coverage
         name: Run tests (95% coverage floor)
-        # COVERAGE_FILE isolated to a fresh per-run temp dir (epguides-api#414):
-        # [tool.coverage.run] has no `data_file` override, so coverage writes to
-        # the default `.coverage` in this worktree's CWD. Without isolation, this
-        # hook (firing on every commit) collides with any concurrent `make test`,
-        # `make coverage`, or ad-hoc scoped `pytest --cov=app.x` run in the SAME
-        # worktree — pytest-cov's combine() step globs and DELETES sibling
-        # `.coverage.*` files, so a concurrent run's data gets silently absorbed
-        # or wiped, producing a wrong-but-plausible coverage total with ZERO test
-        # failures. Isolates via a fresh `mktemp -d` per invocation.
         entry: >-
           bash -c 'd=$(mktemp -d);
           COVERAGE_FILE="$d/.coverage" uv run pytest --cov=app --cov-fail-under=95 -q;
@@ -125,9 +93,6 @@ repos:
 
       - id: base-image-digest-pin
         name: "Base image digest-pin check"
-        # Fail-closed: every external image a Dockerfile pulls (FROM + COPY
-        # --from) must be `tag@sha256:` so the build is reproducible. The
-        # script scans the whole tree itself, so filenames are not passed.
         entry: python3 scripts/check_base_image_digest_pin_drift.py
         language: system
         pass_filenames: false
@@ -136,10 +101,6 @@ repos:
 
       - id: ci-resource-sizing
         name: "CI resource-sizing guard"
-        # Fail-closed: no workflow step may hardcode a topology-specific
-        # worker/CPU/memory ceiling (`pytest -n 16`, `--maxprocesses=16`,
-        # `--memory=8g`). The script scans every workflow file itself, so
-        # filenames are not passed.
         entry: python3 scripts/check_ci_resource_sizing.py
         language: system
         pass_filenames: false
@@ -148,16 +109,6 @@ repos:
 
       - id: host-python312-syntax
         name: "Host-interpreter syntax guard (Python 3.12)"
-        # scripts/ runs under the system `python3` (a developer's machine / CI
-        # runner, possibly older than 3.14) via the `language: system` hooks
-        # above + `make ci-parity`, NOT the 3.14 `uv` venv. The repo is
-        # `requires-python >=3.14` + ruff `target-version=py314`, so the 3.14
-        # toolchain (incl. `ruff format`) will emit 3.14-only syntax — e.g.
-        # rewrite `except (A, B):` into PEP 758 `except A, B:`, a SyntaxError
-        # on Python < 3.14. Compile every host script under a REAL CPython 3.12
-        # (`--no-project` sidesteps the >=3.14 gate; py_compile needs only the
-        # interpreter grammar). Pairs with the ruff per-file-target-version
-        # py312 override in pyproject.toml (the fast lint+format layer).
         entry: uv run --python 3.12 --no-project python -m py_compile
         language: system
         files: ^scripts/.*\.py$
@@ -181,13 +132,6 @@ repos:
 
       - id: ci-parity
         name: "CI parity — deterministic CI checks"
-        # Closes the local-vs-CI check-parity gap. Runs the exact subset of
-        # the CI lint/type jobs that is deterministic + locally reproducible
-        # from the repo tree (full-tree ruff incl RUF100, mypy, configured-
-        # LLM-endpoint lint). Single `make ci-parity` target — one hook, no
-        # drift between this list and the CI step set. The 95%-coverage
-        # floor is already enforced on every commit by the `tests-coverage`
-        # hook above, so it is not duplicated here.
         entry: make ci-parity
         language: system
         always_run: true
@@ -196,19 +140,6 @@ repos:
 
       - id: audit-osv
         name: "Dependency-CVE check (OSV-Scanner vs uv.lock)"
-        # Shift-left of the CI "Security Audit" OSV-Scanner job: runs the
-        # SAME verdict (--lockfile=uv.lock --config=.osv-scanner.toml)
-        # locally at push time so a vulnerable lockfile bump is caught
-        # before the push round-trip. DELIBERATELY a separate hook from
-        # `ci-parity` above: ci-parity is offline-deterministic and runs
-        # the repo tree, whereas OSV needs the osv.dev advisory DB. The
-        # wrapper warn-skips (exit 0) when osv-scanner is absent / there's
-        # no lockfile / osv.dev is unreachable — so an offline push is
-        # NEVER hard-blocked — and hard-fails (exit 1) only when the scan
-        # ran and found an un-ignored vulnerability. CI's online OSV job is
-        # the authoritative backstop; do NOT silence a finding with
-        # --ignore-vuln — bump the dep or add a dated .osv-scanner.toml
-        # entry with reason + reviewer + CVSS-tiered ignoreUntil.
         entry: bash scripts/audit_osv.sh
         language: system
         always_run: true

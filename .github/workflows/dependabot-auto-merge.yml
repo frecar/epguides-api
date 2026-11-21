@@ -2,11 +2,6 @@ name: Dependabot Auto-Merge
 
 on:
   pull_request:
-  # Hourly sweep to rebase auto-merge-enabled PRs that fell behind main.
-  # Dependabot doesn't refire pull_request when main moves, so an
-  # `auto-merge enabled + behind main` PR stalls indefinitely without
-  # this. The rebase-stale job below re-triggers a branch update so
-  # auto-merge can fire once CI is green again.
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
@@ -17,14 +12,8 @@ permissions:
 
 jobs:
   auto-merge:
-    # Runs on PR-event (the original path). Skip during scheduled
-    # sweeps — the rebase-stale job below handles those.
     if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
-    # GitHub-hosted: public-repo, pull_request-reachable. Pure GitHub API
-    # calls (approve + enable auto-merge) — no self-hosted runner needed.
     runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-direct-untrusted-linux"]') || '["ubuntu-latest"]') }}
-    # Bounded ceiling so a wedged runner (hung gh API / metadata fetch /
-    # auto-merge wait) fails fast.
     timeout-minutes: 15
     steps:
       - name: Fetch Dependabot metadata
@@ -33,12 +22,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # The docker ecosystem (base/tool-image digest bumps) is excluded from
-      # auto-approve/auto-merge. A digest bump is non-semver-major, so it would
-      # otherwise sail through — but no required check inspects the image
-      # LAYERS, so a poisoned/wrong digest would land green-but-unexamined. An
-      # image swap is a supply-chain decision that needs human review; the bot
-      # still opens the PR + runs CI, a human approves + merges.
       - name: Auto-approve patch and minor updates
         if: >-
           steps.metadata.outputs.update-type != 'version-update:semver-major' &&
@@ -58,15 +41,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   rebase-stale:
-    # Hourly sweep: find auto-merge-enabled dependabot PRs that are
-    # behind main and trigger a branch update. Updating the branch
-    # retriggers CI; once green, GitHub's auto-merge fires the squash.
-    # `pull_request_target` would be an alternative but introduces
-    # security pitfalls (untrusted refs running with write perms);
-    # the explicit cron sweep + GH API is cleaner.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    # GitHub-hosted: scheduled/dispatch GitHub API sweep — no self-hosted
-    # runner needed.
     runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-direct-untrusted-linux"]') || '["ubuntu-latest"]') }}
     steps:
       - name: Rebase behind-main dependabot PRs

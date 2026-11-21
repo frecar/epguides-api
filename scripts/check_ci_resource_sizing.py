@@ -46,18 +46,8 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _WORKFLOWS_DIR = ".github/workflows"
 
-# A value is capacity-relative (allowed) rather than a fixed host-size count
-# when it is one of the well-known adaptive keywords, or when it clearly
-# is NOT a bare literal integer (a shell/GHA expansion, an env var, a
-# percentage). We only flag the unambiguous case: the flag is immediately
-# followed by a plain decimal integer.
 _ADAPTIVE_KEYWORDS = {"auto", "logical"}
 
-# (flag pattern, requires "pytest" on the same line, human label)
-# The `-n`/`-j` short flags are ambiguous with unrelated tools, so they are
-# only flagged on a line that also mentions pytest/xdist. The long flags are
-# specific enough to xdist/uvicorn/gunicorn-style worker sizing to flag
-# unconditionally.
 _FLAG_RULES: tuple[tuple[str, bool, str], ...] = (
     (r"-n", True, "pytest-xdist -n"),
     (r"--numprocesses", False, "pytest-xdist --numprocesses"),
@@ -68,14 +58,8 @@ _FLAG_RULES: tuple[tuple[str, bool, str], ...] = (
     (r"--memory", False, "--memory"),
 )
 
-# `KEY: <literal-int>` YAML-style resource ceilings, e.g. a service
-# container's `cpus: "2"` / `mem_limit: 512` (docker-compose-flavoured keys
-# that occasionally leak into `options:` blocks).
 _YAML_RESOURCE_KEYS: tuple[str, ...] = ("cpus", "mem_limit")
 
-# Env var pytest-xdist reads for the `auto` worker cap. A literal number here
-# is the same anti-pattern as `-n <N>` — it should be unset, "auto", or a
-# computed value, never a bare constant.
 _XDIST_ENV_RE = re.compile(r"PYTEST_XDIST_AUTO_NUM_WORKERS\s*[:=]\s*[\"']?(\d+)[\"']?\b")
 
 

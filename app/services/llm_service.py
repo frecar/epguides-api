@@ -23,12 +23,9 @@ logger = logging.getLogger(__name__)
 
 _THINK_TAG_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
 
-_LLM_TIMEOUT_SECONDS = 30.0  # Longer timeout for processing episode summaries
-_MAX_EPISODES_FOR_CONTEXT = 100  # Include more episodes since we have summaries
+_LLM_TIMEOUT_SECONDS = 30.0
+_MAX_EPISODES_FOR_CONTEXT = 100
 
-# Transient-failure retry policy: one retry (two attempts total) on 429/5xx
-# responses and network/timeout errors, then a clean fallback to non-LLM
-# filtering (return None). Non-retryable statuses (4xx other than 429) fail fast.
 _LLM_MAX_ATTEMPTS = 2
 _LLM_RETRY_BACKOFF_SECONDS = 0.5
 
@@ -38,10 +35,6 @@ def _parse_allowed_hosts(value: str) -> frozenset[str]:
     return frozenset(h.strip().lower() for h in value.split(",") if h.strip())
 
 
-# Optional host allow-list. When set (comma-separated hostnames), only matching
-# hosts are accepted for the LLM gateway URL. Empty/unset means no host
-# enforcement — any configured `LLM_API_URL` is accepted. Override per-deployment
-# by setting `ALLOWED_LLM_HOSTS` in the environment.
 _ALLOWED_LLM_HOSTS = _parse_allowed_hosts(os.environ.get("ALLOWED_LLM_HOSTS", ""))
 
 
@@ -101,7 +94,6 @@ def _get_llm_base_url() -> str | None:
         logger.debug("LLM API URL not configured, skipping natural language parsing")
         return None
 
-    # No allow-list configured -> no host enforcement.
     if not _ALLOWED_LLM_HOSTS:
         return base_url
 
@@ -147,17 +139,15 @@ async def _query_llm(
     Returns:
         Filtered episodes or None on error.
     """
-    # Prepare episode context for LLM (limit size to avoid token limits)
     episode_context: list[dict[str, Any]] = []
     for ep in episodes[:_MAX_EPISODES_FOR_CONTEXT]:
         ep_data: dict[str, Any] = {
-            "idx": len(episode_context),  # Pre-calculate index for LLM
+            "idx": len(episode_context),
             "s": ep.get("season"),
             "e": ep.get("number"),
             "title": ep.get("title"),
             "date": str(ep.get("release_date")),
         }
-        # Include truncated summary to save tokens
         summary = ep.get("summary")
         if summary:
             ep_data["plot"] = summary[:150] + "..." if len(summary) > 150 else summary
@@ -185,7 +175,6 @@ async def _query_llm(
                     },
                 )
             except httpx.RequestError as exc:
-                # Network/timeout error: retry once, then fall back cleanly.
                 if attempt >= _LLM_MAX_ATTEMPTS:
                     logger.warning("LLM request failed after %d attempt(s): %s", attempt, exc)
                     return None
@@ -196,8 +185,6 @@ async def _query_llm(
             if status == 200:
                 return _parse_llm_response(response.json(), episodes, query)
 
-            # Retry only transient upstream failures (429 rate-limit, 5xx server
-            # errors); other non-200s (400/401/404, ...) are not retryable.
             if (status == 429 or 500 <= status < 600) and attempt < _LLM_MAX_ATTEMPTS:
                 logger.warning(
                     "LLM API returned status %d (attempt %d/%d), retrying", status, attempt, _LLM_MAX_ATTEMPTS
@@ -280,7 +267,6 @@ def _parse_llm_response(
     """
     content = result.get("choices", [{}])[0].get("message", {}).get("content", "[]")
 
-    # Strip <think>...</think> blocks from reasoning models before JSON parsing
     content = _THINK_TAG_RE.sub("", content).strip()
 
     try:
@@ -289,9 +275,6 @@ def _parse_llm_response(
         logger.warning("Failed to parse LLM response as JSON: %s", content)
         return None
 
-    # Accept both `response_format: json_object` output `{"idx": [...]}` and a
-    # bare top-level `[...]` array (back-compat + gateways that ignore the
-    # response_format hint). Anything else is unusable -> clean fallback.
     if isinstance(parsed, dict):
         indices = parsed.get("idx", parsed.get("indices"))
     elif isinstance(parsed, list):

@@ -52,12 +52,8 @@ async def test_metrics_endpoint(async_client: AsyncClient):
     """The /metrics endpoint serves Prometheus exposition format."""
     response = await async_client.get("/metrics")
     assert response.status_code == 200
-    # Prometheus content-type starts with "text/plain" but includes version params.
     assert response.headers["content-type"].startswith("text/plain")
     body = response.text
-    # HELP/TYPE comments and metric names should be present regardless of
-    # whether any traffic has hit a counter yet (prometheus_client emits the
-    # series definition even at zero).
     assert "epguides_cache_hits_total" in body
     assert "epguides_cache_misses_total" in body
 
@@ -82,7 +78,7 @@ async def test_list_shows(mock_get_shows_page, async_client: AsyncClient):
             network="Network 1",
         ),
     ]
-    mock_get_shows_page.return_value = (mock_shows, 2)  # Returns (page_items, total)
+    mock_get_shows_page.return_value = (mock_shows, 2)
 
     response = await async_client.get("/shows/?page=1&limit=1")
     assert response.status_code == 200
@@ -270,7 +266,7 @@ async def test_get_next_episode(mock_get_episodes, mock_get_show, async_client: 
     mock_show = create_show_schema(
         epguides_key="breakingbad",
         title="Breaking Bad",
-        end_date=None,  # Show is not finished
+        end_date=None,
     )
     mock_get_show.return_value = mock_show
 
@@ -352,7 +348,6 @@ async def test_get_next_episode_with_unreleased_episodes_after_released_ones(
     )
     mock_get_all.return_value = [mock_show]
 
-    # Mock raw episode data for get_show's end_date derivation logic
     threshold = datetime.now() - timedelta(hours=EPISODE_RELEASE_THRESHOLD_HOURS)
     old_date = (threshold - timedelta(days=30)).strftime("%d %b %y")
     future_date = (datetime.now() + timedelta(days=30)).strftime("%d %b %y")
@@ -467,12 +462,12 @@ async def test_get_latest_episode_not_found(mock_get_episodes, async_client: Asy
 async def test_invalid_pagination(async_client: AsyncClient):
     """Test invalid pagination parameters."""
     response = await async_client.get("/shows/?page=0")
-    assert response.status_code == 422  # Validation error
+    assert response.status_code == 422
 
     response = await async_client.get("/shows/?limit=0")
     assert response.status_code == 422
 
-    response = await async_client.get("/shows/?limit=200")  # Exceeds max
+    response = await async_client.get("/shows/?limit=200")
     assert response.status_code == 422
 
 
@@ -480,12 +475,7 @@ async def test_invalid_pagination(async_client: AsyncClient):
 async def test_search_query_too_short(async_client: AsyncClient):
     """Test search query validation."""
     response = await async_client.get("/shows/search?query=a")
-    assert response.status_code == 422  # min_length=2
-
-
-# =============================================================================
-# Look-up by IMDB ID (#229)
-# =============================================================================
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -596,7 +586,7 @@ async def test_get_season_episodes_success(mock_get_show, mock_get_episodes, asy
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2  # Only season 1 episodes
+    assert len(data) == 2
     assert all(ep["season"] == 1 for ep in data)
 
 
@@ -628,7 +618,6 @@ async def test_get_show_with_refresh(mock_get_show, mock_invalidate, mock_invali
     response = await async_client.get("/shows/BreakingBad?refresh=true")
 
     assert response.status_code == 200
-    # Verify cache was invalidated
     assert mock_invalidate.called
     assert mock_invalidate_show.called
 
@@ -638,8 +627,8 @@ async def test_get_show_with_refresh(mock_get_show, mock_invalidate, mock_invali
 @patch("app.api.endpoints.shows.show_service.get_show")
 async def test_get_season_episodes_show_not_found(mock_get_show, mock_get_episodes, async_client: AsyncClient):
     """Test get_season_episodes with non-existent show."""
-    mock_get_episodes.return_value = []  # No episodes
-    mock_get_show.return_value = None  # Show doesn't exist
+    mock_get_episodes.return_value = []
+    mock_get_show.return_value = None
 
     response = await async_client.get("/shows/NonExistent/seasons/1/episodes")
 
@@ -712,7 +701,6 @@ async def test_get_next_episode_stale_cache(
     """Test get_next_episode invalidates stale cache."""
     mock_get_show.return_value = create_show_schema(epguides_key="test", title="Test Show")
 
-    # First call returns stale data (past date), second call returns fresh data
     stale_episode = EpisodeSchema(season=1, number=1, title="Stale", release_date=date(2020, 1, 1), is_released=False)
     fresh_episode = EpisodeSchema(season=1, number=2, title="Fresh", release_date=date(2030, 1, 1), is_released=False)
     mock_get_episodes.side_effect = [[stale_episode], [fresh_episode]]
@@ -733,7 +721,6 @@ async def test_get_next_episode_stale_no_new(
     """Test get_next_episode when stale cache refresh finds no unreleased."""
     mock_get_show.return_value = create_show_schema(epguides_key="test", title="Test Show")
 
-    # First call returns stale data, second call returns all released
     stale_episode = EpisodeSchema(season=1, number=1, title="Stale", release_date=date(2020, 1, 1), is_released=False)
     released_episode = EpisodeSchema(
         season=1, number=1, title="Now Released", release_date=date(2020, 1, 1), is_released=True
