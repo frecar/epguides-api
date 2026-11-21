@@ -476,11 +476,9 @@ async def get_cache_stats() -> dict[str, Any]:
         seasons_cached = sum(1 for k in key_strings if k.startswith("seasons:"))
         search_cached = sum(1 for k in key_strings if k.startswith("search:"))
 
-        # Check for master caches
         has_show_list = "shows:all:raw" in key_strings
         has_show_index = "show_index" in key_strings
 
-        # Get TTL for key caches
         ttls = {}
         for key_name, prefix in [
             ("shows_list", "shows:all:raw"),
@@ -490,7 +488,6 @@ async def get_cache_stats() -> dict[str, Any]:
                 ttl = await redis.ttl(prefix)
                 ttls[key_name] = ttl if ttl > 0 else "no expiry"
 
-        # Get Redis memory info
         info: dict[str, Any] = await redis.info("memory")
         used_memory = info.get("used_memory_human", "unknown")
         peak_memory = info.get("used_memory_peak_human", "unknown")
