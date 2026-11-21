@@ -5,8 +5,9 @@ Exposes MCP server functionality over HTTP for network access.
 """
 
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Body, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from app.mcp.server import MCPServer
@@ -25,75 +26,36 @@ _mcp_server = MCPServer()
     response_model_exclude_none=True,
     response_description="JSON-RPC 2.0 response",
 )
-async def mcp_endpoint(request: JSONRPCRequest) -> JSONResponse:
-    """
-    **Model Context Protocol** endpoint for AI assistant integration.
-
-    Send JSON-RPC 2.0 requests to interact with TV show data programmatically.
-
-    ---
-
-    ### 📚 Available Methods
-
-    | Method | Description |
-    |--------|-------------|
-    | `initialize` | Initialize connection, get server info |
-    | `tools/list` | List all available tools |
-    | `tools/call` | Execute a tool |
-    | `resources/list` | List available resources |
-    | `resources/read` | Read a resource |
-
-    ---
-
-    ### 🔧 Available Tools
-
-    | Tool | Description |
-    |------|-------------|
-    | `search_shows` | Search TV shows by title |
-    | `get_show` | Get show metadata |
-    | `get_episodes` | Get episode list |
-    | `get_next_episode` | Get next unreleased episode |
-    | `get_latest_episode` | Get latest aired episode |
-
-    ---
-
-    ### 📝 Examples
-
-    **Initialize:**
-    ```json
-    {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
-    ```
-
-    **List Tools:**
-    ```json
-    {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
-    ```
-
-    **Search Shows:**
-    ```json
-    {
-      "jsonrpc": "2.0",
-      "id": 1,
-      "method": "tools/call",
-      "params": {"name": "search_shows", "arguments": {"query": "breaking"}}
-    }
-    ```
-
-    **Get Episodes:**
-    ```json
-    {
-      "jsonrpc": "2.0",
-      "id": 1,
-      "method": "tools/call",
-      "params": {"name": "get_episodes", "arguments": {"epguides_key": "BreakingBad"}}
-    }
-    ```
-
-    ---
-
-    ### 📖 Documentation
-    See [MCP Server docs](https://epguides-api.readthedocs.io/en/latest/mcp-server/) for full reference.
-    """
+async def mcp_endpoint(
+    request: Annotated[
+        JSONRPCRequest,
+        Body(
+            openapi_examples={
+                "initialize": {
+                    "summary": "Get the protocol version and server capabilities",
+                    "value": {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+                },
+                "tools": {
+                    "summary": "Discover available tools and argument schemas",
+                    "value": {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+                },
+                "resources": {
+                    "summary": "Discover readable resources",
+                    "value": {"jsonrpc": "2.0", "id": 1, "method": "resources/list", "params": {}},
+                },
+                "search": {
+                    "summary": "Search for TV shows",
+                    "value": {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {"name": "search_shows", "arguments": {"query": "breaking"}},
+                    },
+                },
+            },
+        ),
+    ],
+) -> JSONResponse:
     try:
         body = request.model_dump(exclude_none=True)
         response = await _mcp_server.handle_request(body)

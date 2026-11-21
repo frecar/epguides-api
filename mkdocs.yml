@@ -32,6 +32,9 @@ theme:
   icon:
     repo: fontawesome/brands/github
 
+hooks:
+  - scripts/build_api_discovery.py
+
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
@@ -60,6 +63,7 @@ markdown_extensions:
       permalink: true
 
 extra:
+  public_api_base_url: https://epguides.frecar.no
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/frecar/epguides-api

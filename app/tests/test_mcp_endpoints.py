@@ -51,6 +51,21 @@ async def test_mcp_endpoint_initialize(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("example", "result_field"), [("initialize", "protocolVersion"), ("tools", "tools"), ("resources", "resources")]
+)
+async def test_documented_mcp_discovery_examples_work(async_client: AsyncClient, example: str, result_field: str):
+    response = await async_client.get("/openapi.json")
+    operation = response.json()["paths"]["/mcp"]["post"]
+    request_body = operation["requestBody"]["content"]["application/json"]
+
+    result = await async_client.post("/mcp", json=request_body["examples"][example]["value"])
+
+    assert result.status_code == 200
+    assert result_field in result.json()["result"]
+
+
+@pytest.mark.asyncio
 @patch("app.mcp.server.show_service.search_shows")
 async def test_mcp_endpoint_search_shows(mock_search_shows, async_client: AsyncClient):
     """Test MCP endpoint with search_shows tool call."""
