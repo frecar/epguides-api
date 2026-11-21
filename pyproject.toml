@@ -9,12 +9,12 @@ authors = [{name = "Fredrik Carlsen", email = "fredrik@carlsen.io"}]
 keywords = ["tv", "shows", "api", "epguides", "fastapi"]
 
 dependencies = [
-    "fastapi==0.162.5",
+    "fastapi==0.165.0",
     "uvicorn[standard]==0.54.0",
     "redis==8.1.0",
     "pydantic==2.14.3",
-    "pydantic-settings==2.16.2",
-    "python-multipart==0.0.33",
+    "pydantic-settings==2.16.3",
+    "python-multipart==0.0.34",
     "httpx==0.28.1",
     "python-dateutil==3.0.0",
     "prometheus-client==0.26.0",
