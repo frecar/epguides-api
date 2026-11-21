@@ -14,10 +14,6 @@ from httpx import AsyncClient
 
 from app.models.schemas import EpisodeSchema, create_show_schema
 
-# =============================================================================
-# Error Response Format Consistency
-# =============================================================================
-
 
 class TestErrorResponseFormat:
     """All error responses must include 'detail' and 'request_id' fields."""
@@ -58,11 +54,6 @@ class TestErrorResponseFormat:
         assert "request_id" in data
         assert isinstance(data["errors"], list)
         assert len(data["errors"]) > 0
-
-
-# =============================================================================
-# Pagination Edge Cases
-# =============================================================================
 
 
 class TestPaginationEdgeCases:
@@ -119,11 +110,6 @@ class TestPaginationEdgeCases:
         assert response.status_code == 422
 
 
-# =============================================================================
-# Search Edge Cases
-# =============================================================================
-
-
 class TestSearchEdgeCases:
     @pytest.mark.asyncio
     async def test_search_missing_query_param(self, async_client: AsyncClient):
@@ -147,11 +133,6 @@ class TestSearchEdgeCases:
         mock_search.return_value = []
         response = await async_client.get("/shows/search?query=bb")
         assert response.status_code == 200
-
-
-# =============================================================================
-# Episode Filter Combinations
-# =============================================================================
 
 
 class TestEpisodeFilterCombinations:
@@ -252,11 +233,6 @@ class TestEpisodeFilterCombinations:
         assert response.status_code == 422
 
 
-# =============================================================================
-# NLQ Graceful Degradation
-# =============================================================================
-
-
 class TestNLQGracefulDegradation:
     @pytest.mark.asyncio
     @patch("app.services.llm_service.parse_natural_language_query")
@@ -318,11 +294,6 @@ class TestNLQGracefulDegradation:
         assert data[0]["season"] == 1
 
 
-# =============================================================================
-# Season Endpoint Edge Cases
-# =============================================================================
-
-
 class TestSeasonEndpointEdgeCases:
     @pytest.mark.asyncio
     @patch("app.services.show_service.get_seasons")
@@ -355,11 +326,6 @@ class TestSeasonEndpointEdgeCases:
         response = await async_client.get("/shows/test/seasons/5/episodes")
         assert response.status_code == 404
         assert "Season 5 not found" in response.json()["detail"]
-
-
-# =============================================================================
-# Next/Latest Episode Edge Cases
-# =============================================================================
 
 
 class TestNextLatestEpisodeEdgeCases:
@@ -428,11 +394,6 @@ class TestNextLatestEpisodeEdgeCases:
         response = await async_client.get("/shows/test/episodes/latest")
         assert response.status_code == 200
         assert response.json()["title"] == "Latest Released"
-
-
-# =============================================================================
-# Show Details with Include Parameter
-# =============================================================================
 
 
 class TestShowDetailsInclude:

@@ -6,10 +6,6 @@
 UV := uv
 RUN := $(UV) run
 
-# =============================================================================
-# HELP
-# =============================================================================
-
 help:
 	@echo "Epguides API"
 	@echo ""
@@ -53,10 +49,6 @@ help:
 	@echo "  make open           Open Swagger in browser"
 	@echo "  make clean          Remove cache files"
 
-# =============================================================================
-# DOCTOR
-# =============================================================================
-
 doctor:
 	@echo "Environment Health Check"
 	@echo ""
@@ -86,20 +78,12 @@ open:
 	 (command -v open >/dev/null 2>&1 && open http://localhost:3000/docs) || \
 	 echo "Open http://localhost:3000/docs in your browser"
 
-# =============================================================================
-# SETUP
-# =============================================================================
-
 setup:
 	$(UV) sync
 	$(RUN) pre-commit install
 	$(RUN) pre-commit install --hook-type commit-msg
 	@echo ""
 	@echo "Setup complete. Run: make up"
-
-# =============================================================================
-# DEVELOPMENT
-# =============================================================================
 
 run:
 	$(RUN) uvicorn app.main:app --reload --port 3000
@@ -126,10 +110,6 @@ build:
 logs:
 	docker compose logs -f
 
-# =============================================================================
-# PRODUCTION
-# =============================================================================
-
 up-prod:
 	docker compose -f docker-compose.prod.yml -f docker-compose.build.yml build
 	docker compose -f docker-compose.prod.yml up -d
@@ -144,10 +124,6 @@ deploy-prod:
 
 cache-clear:
 	docker exec $$(docker ps -qf "name=redis") redis-cli FLUSHALL 2>/dev/null || echo "Redis not running"
-
-# =============================================================================
-# CODE QUALITY
-# =============================================================================
 
 # COVERAGE_FILE isolated to a fresh per-run temp dir (epguides-api#414):
 # [tool.coverage.run] has no `data_file` override, so coverage writes to the
@@ -236,19 +212,11 @@ ci: format-check lint test
 audit-osv:
 	bash scripts/audit_osv.sh
 
-# =============================================================================
-# DOCS
-# =============================================================================
-
 docs:
 	$(RUN) mkdocs serve
 
 docs-build:
 	$(RUN) mkdocs build
-
-# =============================================================================
-# CLEANUP
-# =============================================================================
 
 clean:
 	rm -rf .mypy_cache .pytest_cache .ruff_cache .coverage htmlcov/

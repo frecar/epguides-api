@@ -10,10 +10,6 @@ import pytest
 
 from app.core import cache
 
-# =============================================================================
-# Redis Connection Tests
-# =============================================================================
-
 
 @pytest.mark.asyncio
 async def test_get_redis_returns_client():
@@ -33,11 +29,6 @@ async def test_close_redis_pool():
         await cache.close_redis_pool()
         mock_client.close.assert_called_once()
         mock_pool.disconnect.assert_called_once()
-
-
-# =============================================================================
-# Cache Helper Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -176,11 +167,6 @@ async def test_cache_exists_handles_error():
         assert result is False
 
 
-# =============================================================================
-# Invalidate and Extend TTL Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 async def test_invalidate_cache_deletes_key():
     """Test invalidate_cache deletes the specified key."""
@@ -238,11 +224,6 @@ async def test_extend_cache_ttl_handles_error():
         assert result is False
 
 
-# =============================================================================
-# Cache Decorator Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 async def test_cache_decorator_returns_cached():
     """Test @cache decorator returns cached data."""
@@ -285,11 +266,6 @@ async def test_cache_decorator_handles_corrupted_json():
             result = await get_data("mykey")
             assert result == {"result": "fresh"}
             mock_set.assert_called_once()
-
-
-# =============================================================================
-# Cached Decorator Tests (Pydantic models)
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -408,11 +384,6 @@ async def test_cached_decorator_without_model():
         mock_set.assert_called_once()
 
 
-# =============================================================================
-# Cache Stats Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 async def test_get_cache_stats_returns_stats():
     """Test get_cache_stats returns cache statistics."""
@@ -464,11 +435,6 @@ async def test_cache_decorator_handles_redis_error():
         result = await get_data("mykey")
         # Should fall back to executing function
         assert result == {"result": "fresh"}
-
-
-# =============================================================================
-# Cache Age Gauge Helpers
-# =============================================================================
 
 
 def _agen(*items):
@@ -616,11 +582,6 @@ async def test_refresh_cache_age_gauges_exception_logs_warning(caplog):
         with caplog.at_level(logging.WARNING, logger="app.core.cache"):
             await cache.refresh_cache_age_gauges()
     assert "Failed to refresh cache age gauges" in caplog.text
-
-
-# =============================================================================
-# Readiness / Upstream-Freshness Helper Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio

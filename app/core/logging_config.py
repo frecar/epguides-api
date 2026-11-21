@@ -81,11 +81,9 @@ def setup_logging() -> logging.Logger:
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
-    # Configure console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.DEBUG)
 
-    # Select formatter based on LOG_FORMAT setting
     if _use_json_format():
         formatter: logging.Formatter = StructuredFormatter()
     else:

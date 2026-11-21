@@ -15,11 +15,6 @@ from app.main import app
 client = TestClient(app)
 
 
-# =============================================================================
-# Health Endpoint Tests
-# =============================================================================
-
-
 def test_health_check():
     """Test basic health check endpoint."""
     response = client.get("/health")
@@ -50,11 +45,6 @@ async def test_cache_health_endpoint():
     with patch("app.main.get_cache_stats", return_value=mock_stats):
         response = client.get("/health/cache")
         assert response.status_code == 200
-
-
-# =============================================================================
-# Exception Handler Tests
-# =============================================================================
 
 
 def test_epguides_exception_handler():
@@ -104,11 +94,6 @@ def test_not_found_returns_json_with_request_id():
     assert "request_id" in data
 
 
-# =============================================================================
-# Request ID Tests
-# =============================================================================
-
-
 def test_request_id_header_present():
     """Test that X-Request-ID header is present on all responses."""
     response = client.get("/health")
@@ -139,11 +124,6 @@ def test_get_request_id_fallback():
             pass
 
     assert get_request_id(FakeRequest()) == "unknown"
-
-
-# =============================================================================
-# Lifespan Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio
@@ -205,11 +185,6 @@ def test_initialize_logging_fallback():
         _initialize_logging()
 
 
-# =============================================================================
-# Security Headers Tests
-# =============================================================================
-
-
 def test_security_headers_present():
     """Test that security headers are added to all responses."""
     response = client.get("/health")
@@ -257,11 +232,6 @@ def test_security_headers_on_error_responses():
     assert response.headers["Strict-Transport-Security"] == "max-age=63072000; includeSubDomains; preload"
 
 
-# =============================================================================
-# CORS Tests
-# =============================================================================
-
-
 def test_cors_allows_all_origins():
     """Test that CORS allows all origins for this public API."""
     response = client.options(
@@ -285,11 +255,6 @@ def test_cors_only_allows_get_options():
     )
     allowed = response.headers.get("access-control-allow-methods", "")
     assert "GET" in allowed
-
-
-# =============================================================================
-# OpenAPI & Documentation Tests
-# =============================================================================
 
 
 def test_openapi_json_accessible():
@@ -322,11 +287,6 @@ def test_root_index():
     assert head_response.status_code == 200
 
 
-# =============================================================================
-# Health Endpoint Detail Tests
-# =============================================================================
-
-
 def test_health_check_response_structure():
     """Test health check returns correct structure with version."""
     response = client.get("/health")
@@ -347,11 +307,6 @@ def test_llm_health_check_response_structure():
     assert "api_url" in data
     assert "model" in data
     assert "allow_external" in data
-
-
-# =============================================================================
-# Error Handler Edge Cases
-# =============================================================================
 
 
 def test_404_returns_detail_field():
@@ -378,11 +333,6 @@ def test_validation_error_returns_errors_list():
     assert "errors" in data
     assert isinstance(data["errors"], list)
     assert len(data["errors"]) > 0
-
-
-# =============================================================================
-# Readiness (/health/ready) Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio

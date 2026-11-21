@@ -17,10 +17,6 @@ from app.core.logging_config import DevelopmentFormatter, StructuredFormatter, _
 from app.core.middleware import SECURITY_HEADERS, RequestIDMiddleware, SecurityHeadersMiddleware, get_request_id
 from app.models.mcp_schemas import JSONRPCError, JSONRPCRequest, JSONRPCResponse
 
-# =============================================================================
-# StructuredFormatter Tests
-# =============================================================================
-
 
 class TestStructuredFormatter:
     """Tests for the JSON structured log formatter."""
@@ -133,11 +129,6 @@ class TestStructuredFormatter:
         assert data["level"] == "ERROR"
 
 
-# =============================================================================
-# DevelopmentFormatter Tests
-# =============================================================================
-
-
 class TestDevelopmentFormatter:
     """Tests for the human-readable development log formatter."""
 
@@ -174,11 +165,6 @@ class TestDevelopmentFormatter:
         assert formatter.datefmt == "%Y-%m-%d %H:%M:%S"
 
 
-# =============================================================================
-# setup_logging Tests
-# =============================================================================
-
-
 class TestSetupLogging:
     """Tests for the setup_logging function."""
 
@@ -209,11 +195,6 @@ class TestSetupLogging:
         assert httpx_logger.level >= logging.WARNING
 
 
-# =============================================================================
-# _use_json_format Tests
-# =============================================================================
-
-
 class TestUseJsonFormat:
     """Tests for the _use_json_format helper."""
 
@@ -240,11 +221,6 @@ class TestUseJsonFormat:
 
         monkeypatch.setattr(logging_config.settings, "LOG_FORMAT", "Text")
         assert _use_json_format() is False
-
-
-# =============================================================================
-# get_request_id Tests
-# =============================================================================
 
 
 class TestGetRequestId:
@@ -277,11 +253,6 @@ class TestGetRequestId:
 
         with pytest.raises(AttributeError):
             get_request_id(BareRequest())
-
-
-# =============================================================================
-# SECURITY_HEADERS Tests
-# =============================================================================
 
 
 class TestSecurityHeaders:
@@ -332,11 +303,6 @@ class TestSecurityHeaders:
         for key, value in SECURITY_HEADERS.items():
             assert isinstance(value, str), f"{key} value is not a string"
             assert len(value) > 0, f"{key} value is empty"
-
-
-# =============================================================================
-# RequestIDMiddleware Tests
-# =============================================================================
 
 
 class TestRequestIDMiddlewareUnit:
@@ -401,11 +367,6 @@ class TestRequestIDMiddlewareUnit:
         assert len(ids) == 10
 
 
-# =============================================================================
-# SecurityHeadersMiddleware Tests
-# =============================================================================
-
-
 class TestSecurityHeadersMiddlewareUnit:
     """Unit tests for SecurityHeadersMiddleware dispatch method."""
 
@@ -425,11 +386,6 @@ class TestSecurityHeadersMiddlewareUnit:
 
         for header, value in SECURITY_HEADERS.items():
             assert result.headers[header] == value
-
-
-# =============================================================================
-# JSONRPCRequest Tests
-# =============================================================================
 
 
 class TestJSONRPCRequest:
@@ -490,11 +446,6 @@ class TestJSONRPCRequest:
         assert restored.params == original.params
 
 
-# =============================================================================
-# JSONRPCError Tests
-# =============================================================================
-
-
 class TestJSONRPCError:
     """Tests for the JSON-RPC 2.0 error model."""
 
@@ -535,11 +486,6 @@ class TestJSONRPCError:
         assert data["code"] == -32601
         assert data["message"] == "Method not found"
         assert data["data"] == "details"
-
-
-# =============================================================================
-# JSONRPCResponse Tests
-# =============================================================================
 
 
 class TestJSONRPCResponse:

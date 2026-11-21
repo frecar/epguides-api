@@ -8,10 +8,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# =============================================================================
-# Example Requests (for OpenAPI documentation)
-# =============================================================================
-
 _EXAMPLE_INITIALIZE: dict[str, Any] = {
     "jsonrpc": "2.0",
     "id": 1,
@@ -42,11 +38,6 @@ _EXAMPLE_RESOURCES_LIST: dict[str, Any] = {
     "method": "resources/list",
     "params": {},
 }
-
-
-# =============================================================================
-# Request/Response Models
-# =============================================================================
 
 
 class JSONRPCRequest(BaseModel):

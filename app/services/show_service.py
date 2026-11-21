@@ -38,9 +38,6 @@ from app.services import epguides
 
 logger = logging.getLogger(__name__)
 
-# =============================================================================
-# Constants
-# =============================================================================
 
 _DATE_PLACEHOLDER_PATTERNS = [r"^_+", r"^TBA", r"^TBD", r"^\?+", r"^N/A"]
 _MONTH_YEAR_FORMATS = ["%b %Y", "%B %Y", "%b %y", "%B %y"]
@@ -61,11 +58,6 @@ async def invalidate_show_cache(normalized_id: str) -> None:
         f"episodes:{normalized_id}",
         f"episodes_raw:{normalized_id}",
     )
-
-
-# =============================================================================
-# Public API
-# =============================================================================
 
 
 def normalize_show_id(show_id: str) -> str:
@@ -142,7 +134,6 @@ def _map_csv_row_to_dict(row: dict[str, str]) -> dict[str, Any]:
 
 async def _get_show_by_key(normalized_id: str) -> ShowSchema | None:
     """Get single show by key (O(1) Redis hash lookup)."""
-    # O(1) hash lookup
     if data := await cache_hget("show_index", normalized_id):
         return ShowSchema(**json.loads(data))
 
@@ -152,7 +143,6 @@ async def _get_show_by_key(normalized_id: str) -> ShowSchema | None:
         if data := await cache_hget("show_index", normalized_id):
             return ShowSchema(**json.loads(data))
 
-    # Fallback to list scan
     shows = await get_all_shows()
     return next((s for s in shows if normalize_show_id(s.epguides_key) == normalized_id), None)
 
@@ -471,7 +461,6 @@ async def get_seasons(show_id: str) -> list[SeasonSchema]:
     normalized_id = normalize_show_id(show_id)
     base_url = settings.API_BASE_URL.rstrip("/")
 
-    # Parallel fetch
     episodes, maze_id = await asyncio.gather(
         get_episodes(show_id),
         epguides.get_maze_id_for_show(normalized_id),
@@ -536,11 +525,6 @@ async def _fetch_tvmaze_season_data(
     return seasons, show_poster
 
 
-# =============================================================================
-# Private Helper Functions - Show Processing
-# =============================================================================
-
-
 async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSchema:
     """Enrich show with IMDB ID, poster, and episode stats."""
     updates: dict[str, Any] = {}
@@ -574,7 +558,6 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
         elif key == "stats" and isinstance(result, _EpisodeStats):
             updates.update(_build_show_updates(show, result))
 
-    # Apply all updates at once
     if updates:
         show = show.model_copy(update=updates)
 
@@ -627,11 +610,6 @@ async def _get_show_runtime(normalized_id: str) -> int | None:
             return int(data)
 
     return None
-
-
-# =============================================================================
-# Private Helper Functions - Episode Processing
-# =============================================================================
 
 
 class _EpisodeStats:
@@ -753,11 +731,6 @@ def _parse_release_date(release_date_str: Any) -> datetime | None:
     return epguides.parse_date_string(release_date_str)
 
 
-# =============================================================================
-# Private Helper Functions - Data Parsing
-# =============================================================================
-
-
 def _parse_imdb_id(imdb_id_raw: str) -> str:
     """
     Parse and format IMDB ID to standard format (tt + 7 digits).
@@ -819,16 +792,10 @@ def _parse_date(date_str: str | None) -> date | None:
         except ValueError:
             continue
 
-    # Try ISO format
     try:
         return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC).date()
     except ValueError, AttributeError:
         return None
-
-
-# =============================================================================
-# Private Helper Functions - CSV Mapping
-# =============================================================================
 
 
 def _map_csv_row_to_show(row: dict[str, str]) -> ShowSchema:

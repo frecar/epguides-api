@@ -85,7 +85,6 @@ RUN : "${OS_SECURITY_EPOCH:?OS_SECURITY_EPOCH build-arg is required}" \
 # unused installer and its independently vendored certificate/dependency set.
 RUN python -m pip uninstall --yes pip
 
-# Non-root user
 RUN groupadd -r -g 1000 appgroup && \
     useradd -r -u 1000 -g appgroup -s /sbin/nologin appuser
 

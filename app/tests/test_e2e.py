@@ -379,11 +379,6 @@ async def test_error_handling(async_client: AsyncClient):
     assert response.status_code == 404
 
 
-# =============================================================================
-# LLM Integration Tests
-# =============================================================================
-
-
 @pytest.mark.asyncio
 async def test_llm_health_endpoint(async_client: AsyncClient):
     """Test LLM health check endpoint returns correct structure."""
