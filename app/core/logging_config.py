@@ -28,13 +28,11 @@ class StructuredFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
 
-        # Add extra fields if present
         for field in _EXTRA_FIELDS:
             value = getattr(record, field, None)
             if value is not None:
                 log_data[field] = value
 
-        # Add exception info if present
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
 

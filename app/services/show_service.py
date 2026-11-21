@@ -479,13 +479,10 @@ async def get_seasons(show_id: str) -> list[SeasonSchema]:
     if not episodes:
         return []
 
-    # Build season stats
     season_stats = _build_season_stats(episodes)
 
-    # Get TVMaze metadata
     tvmaze_seasons, show_poster = await _fetch_tvmaze_season_data(maze_id)
 
-    # Build schemas
     return [
         SeasonSchema(
             number=num,
@@ -563,7 +560,6 @@ async def _enrich_show_metadata(show: ShowSchema, normalized_id: str) -> ShowSch
     tasks.append(_calculate_episode_stats(normalized_id))
     task_keys.append("stats")
 
-    # Execute all tasks in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     # Apply results (skip tasks that raised exceptions)

@@ -76,7 +76,6 @@ async def parse_natural_language_query(
     if not episodes:
         return []
 
-    # Check LLM configuration
     if not settings.LLM_ENABLED:
         logger.debug("LLM not enabled, skipping natural language parsing")
         return None
@@ -306,7 +305,6 @@ def _parse_llm_response(
     if not isinstance(indices, list):
         return None
 
-    # Filter to valid indices only
     filtered = [episodes[i] for i in indices if isinstance(i, int) and 0 <= i < len(episodes)]
 
     logger.info(

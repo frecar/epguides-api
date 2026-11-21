@@ -392,7 +392,6 @@ async def _fetch_tvmaze_episodes(maze_id: str) -> list[dict[str, Any]]:
             if summary:
                 summary = re.sub(r"<[^>]+>", "", summary).strip()
 
-            # Extract poster URL
             image = ep.get("image")
             poster_url = ""
             if image:
@@ -715,7 +714,6 @@ async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: st
             if not season or not number:
                 continue
 
-            # Extract summary
             summary = ep.get("summary") or ""
             if summary:
                 summary = re.sub(r"<[^>]+>", "", summary).strip()

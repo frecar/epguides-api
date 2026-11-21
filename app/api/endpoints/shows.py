@@ -246,7 +246,6 @@ async def get_seasons(epguides_key: str) -> list[SeasonSchema]:
     """
     seasons = await show_service.get_seasons(epguides_key)
     if not seasons:
-        # Check if show exists at all
         show = await show_service.get_show(epguides_key)
         if not show:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Show not found: {epguides_key}")
