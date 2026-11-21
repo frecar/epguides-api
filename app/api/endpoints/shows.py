@@ -112,8 +112,8 @@ async def get_show_by_imdb_id(
     **Look up a show by its IMDB ID.**
 
     Title search is ambiguous ("The Office" → UK or US?); IMDB ID is not.
-    Useful when bridging from another catalog (Radarr, Sonarr, personal
-    library) that already has the IMDB ID.
+    Use the IMDB ID for persistent show references across catalogs.
+    The epguides key follows the current catalog directory name.
 
     ### Path parameter
 
