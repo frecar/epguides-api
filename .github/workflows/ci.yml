@@ -156,44 +156,18 @@ jobs:
         run: uv run pytest app/tests -n auto --dist=worksteal --cov=app --cov-fail-under=95 --cov-report=term-missing -q
 
   # ===== BEGIN managed-public-ci-template: ci-trivy-buildx — DO NOT HAND-EDIT =====
-  # Trivy fs scan. Standalone job here so PR/push runs gate on it via
-  # ci-gate. The companion .github/workflows/trivy-fs-nightly.yml owns
-  # the 03:30 UTC schedule trigger independently so scheduled sweeps
-  # do not conflate with PR signal.
-  #
-  # Two-step gating: a single step with `severity: "CRITICAL,HIGH"` +
-  # `exit-code: "1"` gates on BOTH severities (the `exit-code` applies
-  # to ANY finding matching the `severity` filter). Splitting into two
-  # steps lets CRITICAL hard-gate and HIGH stay annotation-only:
-  #   step 1: severity=CRITICAL, exit-code=1                  → blocks merge
-  #   step 2: severity=HIGH, exit-code=0, if: always()        → surfaces findings only
-  #
-  # `if: always()` on the HIGH step is load-bearing: without it, a
-  # CRITICAL failure skips the HIGH-annotation step entirely, which
-  # would actually weaken HIGH visibility compared to the previous
-  # single-step form.
   trivy-fs:
     name: Trivy fs scan
-    # GitHub-hosted — public-repo fork-PR isolation (see `audit` above).
     runs-on: ubuntu-latest
-    # Bounded ceiling so a wedged runner (hung Trivy DB pull or stuck
-    # scan) fails fast instead of holding a shared self-hosted runner
-    # for the GitHub default 6h.
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Install Trivy into a per-job directory on the runner's local temp
-      # space. setup-trivy's default install path ($HOME/.local/bin/trivy-bin)
-      # is shared across concurrent jobs on a self-hosted runner host, so one
-      # job writing the binary while another execs it raises ETXTBSY ("Text
-      # file busy", exit 126). ${{ runner.temp }} is unique per job and on
-      # local disk, so there is no shared write/exec target to race on.
       - name: Install Trivy (per-job, isolated binary)
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
-          version: v0.70.0 # keep in sync with aquasecurity/trivy-action@v0.36.0
+          version: v0.70.0
           cache: true
           path: ${{ runner.temp }}
       - name: Put the per-job Trivy on PATH
@@ -201,31 +175,23 @@ jobs:
       - name: Trivy fs scan — CRITICAL (gates merge)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          skip-setup-trivy: true # use the per-job Trivy installed above
+          skip-setup-trivy: true
           scan-type: "fs"
           scan-ref: "."
           severity: "CRITICAL"
           exit-code: "1"
-          # Suppress findings with no upstream fix available — those
-          # are noise we cannot act on (`bump the dep` is the only
-          # real remediation, and there is nothing to bump to).
           ignore-unfixed: true
           format: "table"
           trivyignores: ".trivyignore"
         env:
           TRIVY_DISABLE_VEX_NOTICE: "true"
       - name: Trivy fs scan — HIGH (annotation only)
-        # `if: always()` so a CRITICAL failure above does not suppress
-        # HIGH visibility — policy is "CRITICAL gates, HIGH informs",
-        # not "CRITICAL gates, HIGH only-shown-when-clean".
         if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          skip-setup-trivy: true # use the per-job Trivy installed above
+          skip-setup-trivy: true
           scan-type: "fs"
           scan-ref: "."
-          # exit-code=0 — HIGH surfaces in the run log but does NOT
-          # gate. Avoids base-image noise creating bypass culture.
           severity: "HIGH"
           exit-code: "0"
           ignore-unfixed: true
@@ -234,7 +200,6 @@ jobs:
         env:
           TRIVY_DISABLE_VEX_NOTICE: "true"
 
-  # Build the declared production recipes once and scan their immutable IDs.
   trivy-image:
     name: Trivy image scan
     runs-on: ubuntu-latest
@@ -301,8 +266,6 @@ jobs:
           IMAGE_TAGS: ${{ steps.production.outputs.image-tags || '[]' }}
         run: bash scripts/compose_build.sh cleanup
 
-  # Preserve the existing required build context with a receipt from the same
-  # successful build-and-scan job, without building the image a second time.
   docker-build:
     name: Docker build
     needs: [trivy-image]
