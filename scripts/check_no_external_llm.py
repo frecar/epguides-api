@@ -26,31 +26,13 @@ import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-# Pattern split + reassembled at runtime so this file itself doesn't
-# trigger the lint when run against the whole tree.
 _FORBIDDEN_HOSTS = ("anthropic", "openai")
 PATTERN = re.compile(r"api\." + r"(?:" + "|".join(_FORBIDDEN_HOSTS) + r")" + r"\.com")
 
-# Per-line opt-out — for docs/runbooks/issue bodies that need to name the
-# forbidden patterns when explaining the policy.
 IGNORE_MARKER = "llm-policy: ignore"
 
-# REVIEW DATE for the three hand-maintained sets below (allowed path
-# components, allowed filenames, checked extensions). These sets are a
-# reviewed judgment, not derived state: a new language added to a repo
-# without a matching extension entry would be silently unscanned, and a new
-# tooling/cache directory without an allowlist entry would either
-# false-positive or, if exempted thoughtlessly, punch a hole. Re-examine all
-# three sets on or before this date and move it forward deliberately; the
-# check at the top of main() fails the run once it lapses so the review
-# cannot go silent. NOTE: this file is synced byte-for-byte into consumer
-# repos and must stay stdlib-only, so the review marker lives here rather
-# than in the shared reviewed-literal helper.
 LITERAL_REVIEW_BY = date(2026, 11, 25)
 
-# Path components / filenames that are always allowed (tests, benchmarks,
-# this script itself, virtualenvs, build artifacts). Component matching handles
-# both pre-commit's relative paths (`tests/foo.py`) and CI's repo-walk paths.
 ALLOWED_PATH_COMPONENTS = (
     "tests",
     "test",
@@ -58,7 +40,7 @@ ALLOWED_PATH_COMPONENTS = (
     "node_modules",
     "__pycache__",
     ".git",
-    ".claude",  # local agent tooling worktrees, never part of a checkout's source
+    ".claude",
     ".next",
     ".cache",
     ".mypy_cache",
@@ -71,7 +53,6 @@ ALLOWED_PATH_COMPONENTS = (
 ALLOWED_FILENAMES = {
     "check_no_external_llm.py",
 }
-# File extensions we DO want to check. Skip binaries, lockfiles, etc.
 CHECKED_EXTENSIONS = {
     ".py",
     ".ts",
@@ -96,7 +77,6 @@ def is_allowed_path(path: Path) -> bool:
         return True
     if path.name in ALLOWED_FILENAMES:
         return True
-    # Benchmark scripts are allowlisted by prefix convention.
     return path.name.startswith("benchmark_")
 
 
@@ -104,7 +84,6 @@ def should_check_file(path: Path) -> bool:
     """Return True if this file type is worth scanning."""
     if path.suffix in CHECKED_EXTENSIONS:
         return True
-    # Match `.env.<anything>` files (`.env.production`, `.env.dev`, …).
     return path.name.startswith(".env")
 
 
@@ -142,10 +121,8 @@ def main(argv: list[str]) -> int:
         )
         return 1
     if argv:
-        # Pre-commit pass: argv is the list of changed files.
         files = [Path(a) for a in argv]
     else:
-        # CI / manual pass: walk the entire repo from CWD.
         repo_root = Path.cwd()
         files = [p for p in repo_root.rglob("*") if p.is_file()]
 

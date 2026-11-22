@@ -147,12 +147,6 @@ repos:
         stages: [pre-push]
 
   # >>> shared baseline additions (managed; do not hand-edit) >>>
-  # Cap AGENTS.md at 48 KiB (49152 bytes). The Muse agent harness truncates
-  # each rules file past ~52.5 KiB, so the tail of an oversized AGENTS.md (its
-  # Operational Rules) silently stops loading; 48 KiB keeps headroom. Extract
-  # bulky reference material into docs/agents/*.md instead of growing this
-  # file. The limit is owned by the AGENTS.md sync gate
-  # (sync-agents-core.sh --check); keep this value in step with it.
   - repo: local
     hooks:
       - id: agents-md-size-cap
@@ -163,36 +157,17 @@ repos:
         files: ^AGENTS\.md$
         stages: [pre-commit]
 
-  # Lint GitHub Actions workflow YAML locally. `language: golang` auto-bootstraps
-  # Go, so no host toolchain is needed. Keep this `rev` and the CI `actionlint`
-  # job's pinned version in lockstep.
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.10
     hooks:
       - id: actionlint
 
-  # Spell-checker (crate-ci/typos). Allowlist of domain vocabulary lives in
-  # `.typos.toml` — add a word there ONLY for a real domain term, never to paper
-  # over a misspelling. Keep this `rev` and CI's `typos` job in lockstep.
-  #
-  # `args` overrides the upstream default `[--write-changes, --force-exclude]`:
-  # we DROP `--write-changes` so the hook is CHECK-ONLY and can never auto-fix.
-  # Auto-fix silently rewrites source — and for a localized repo it corrupts
-  # non-English UI strings into broken English. We KEEP
-  # `--force-exclude` so a repo's `.typos.toml` `[files] extend-exclude` is
-  # honoured even when pre-commit passes explicit filenames (without it, an
-  # explicitly-passed excluded file is scanned anyway). Check-only is the right
-  # default for every consumer; a repo that genuinely wants auto-fix overrides
-  # this hook OUTSIDE the managed block.
   - repo: https://github.com/crate-ci/typos
     rev: v1.47.2
     hooks:
       - id: typos
         args: ["--force-exclude"]
 
-  # Lint standalone shell scripts on the host shellcheck binary — NOT the
-  # Docker-image hook, to dodge Docker-Hub rate-limits on shared NAT egress.
-  # `language: system` calls the on-PATH shellcheck directly.
   - repo: local
     hooks:
       - id: shellcheck
@@ -200,6 +175,5 @@ repos:
         entry: shellcheck
         language: system
         types: [shell]
-        # shellcheck has no zsh dialect ("Unknown shell: zsh").
         exclude: \.zsh$
   # <<< shared baseline additions <<<
