@@ -1,5 +1,6 @@
 """Upstream fetch and parse failures log what failed, the show or TVMaze ID, the URL and the consequence."""
 
+import inspect
 import json
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -43,7 +44,7 @@ async def test_catalogue_with_html_body_is_rejected_naming_missing_columns(mock_
     mock_fetch.return_value = _response("<!DOCTYPE html><html><body>maintenance</body></html>")
 
     with caplog.at_level(logging.ERROR), patch("app.services.epguides.record_upstream_request") as mock_record:
-        result = await epguides.get_all_shows_metadata()
+        result = await inspect.unwrap(epguides.get_all_shows_metadata)()
 
     assert result == []
     record = _only_record(caplog, logging.ERROR)
@@ -60,7 +61,7 @@ async def test_catalogue_without_directory_column_names_it(mock_fetch, caplog):
     mock_fetch.return_value = _response("title,network\nBreaking Bad,AMC\n")
 
     with caplog.at_level(logging.ERROR):
-        result = await epguides.get_all_shows_metadata()
+        result = await inspect.unwrap(epguides.get_all_shows_metadata)()
 
     assert result == []
     message = _only_record(caplog, logging.ERROR).getMessage()
@@ -71,7 +72,7 @@ async def test_catalogue_without_directory_column_names_it(mock_fetch, caplog):
 @patch("app.services.epguides._fetch_url", new_callable=AsyncMock, return_value=None)
 async def test_catalogue_fetch_failure_states_consequence(mock_fetch, caplog):
     with caplog.at_level(logging.WARNING):
-        assert await epguides.get_all_shows_metadata() == []
+        assert await inspect.unwrap(epguides.get_all_shows_metadata)() == []
 
     record = _only_record(caplog, logging.WARNING)
     assert record.getMessage() == (
@@ -220,7 +221,7 @@ async def test_wrongly_shaped_tvmaze_search_payload_names_title(mock_get, caplog
 @patch("app.services.epguides._fetch_url", new_callable=AsyncMock, return_value=None)
 async def test_show_page_failure_names_show_and_url(mock_fetch, caplog):
     with caplog.at_level(logging.WARNING):
-        assert await epguides.get_show_metadata("nosuchshow") is None
+        assert await inspect.unwrap(epguides.get_show_metadata)("nosuchshow") is None
 
     record = _only_record(caplog, logging.WARNING)
     assert record.getMessage() == (
@@ -235,7 +236,7 @@ async def test_show_page_failure_names_show_and_url(mock_fetch, caplog):
 @patch("app.services.epguides._get_show_title", new_callable=AsyncMock, return_value=None)
 async def test_no_episode_source_log_names_show(mock_title, mock_fetch, caplog):
     with caplog.at_level(logging.WARNING):
-        assert await epguides.get_episodes_data("nosuchshow") == []
+        assert await inspect.unwrap(epguides.get_episodes_data)("nosuchshow") == []
 
     record = _only_record(caplog, logging.WARNING)
     assert record.getMessage().startswith("No episode data for show 'nosuchshow' from epguides.com")
