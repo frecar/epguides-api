@@ -84,36 +84,18 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# Vendored / generated dirs that never host a source-of-truth Dockerfile.
 _SKIP_DIR_PARTS = frozenset({".git", "node_modules", ".venv", "__pycache__"})
 
-# A fully-pinned external reference: `name[:port]/path:tag@sha256:<64hex>`.
-# `[^@\s]+:[^@\s/]+` requires a tag (a `:`-separated segment with no `/`, so a
-# registry `host:port` prefix is not mistaken for the tag) and forbids an
-# embedded `@` (so a bare `name@sha256:` with no tag fails).
 _PINNED_RE = re.compile(r"^[^@\s]+:[^@\s/]+@sha256:[0-9a-f]{64}$")
 
-# A leading FROM flag (`--platform=...`) to strip before the image token.
 _FROM_FLAG_RE = re.compile(r"^--[a-z][a-z0-9-]*=\S+$")
 
-# `COPY --from=<ref>` (also matches `COPY --chown=... --from=<ref>`).
 _COPY_FROM_RE = re.compile(r"^\s*COPY\b.*?--from=(\S+)", re.IGNORECASE)
 
-# Images whose VERSION is the single source of record, kept in lockstep across
-# repos by an external sync that rewrites only the version tag on a reviewed
-# bump. These must be pinned by an EXACT VERSION TAG and must NOT carry an
-# `@sha256:` digest (see the module docstring for both halves of the rule).
 _CENTRAL_VERSION_MANAGED_PREFIXES = ("ghcr.io/astral-sh/uv:",)
 
-# The exact-version-tag shape a central-version-managed image must carry: a
-# concrete version (`0.11.21`), optionally with one or more build/variant
-# suffixes (`-python3.14`, `-bookworm`, `-debian-slim`). It REJECTS a moving tag
-# (`latest` / `main` / `edge`), an empty tag, and any non-version tag. The
-# leading `\d+(?:\.\d+)*` anchors on a numeric version, and each suffix must
-# start with `-` so a bare word like `latest` (or `0latest`) cannot pass.
 _CENTRAL_VERSION_TAG_RE = re.compile(r"^\d+(?:\.\d+)*(?:-[\w.]+)*$")
 
-# Problem categories a single external image reference can have.
 _PROBLEM_UNPINNED = "unpinned"
 _PROBLEM_CENTRAL_HAS_DIGEST = "central_has_digest"
 _PROBLEM_CENTRAL_NON_VERSION_TAG = "central_non_version_tag"
@@ -123,7 +105,6 @@ def _external_ref_problem(ref: str) -> str | None:
     """Classify an EXTERNAL image reference; return a problem key or ``None`` if OK."""
     for prefix in _CENTRAL_VERSION_MANAGED_PREFIXES:
         if ref.startswith(prefix):
-            # Central-version-managed: an exact version tag, never a digest.
             if "@sha256:" in ref:
                 return _PROBLEM_CENTRAL_HAS_DIGEST
             tag = ref[len(prefix) :]
@@ -133,10 +114,6 @@ def _external_ref_problem(ref: str) -> str | None:
 
 def find_dockerfiles(repo_root: Path) -> list[Path]:
     """Return every tracked ``Dockerfile`` / ``Dockerfile.*`` under ``repo_root``."""
-    # prune `_SKIP_DIR_PARTS` DURING the walk, not after — a
-    # name-patterned `rglob("Dockerfile*")` still has to descend into every
-    # directory (glob has no pruning hook), including `.git` and any stray
-    # venv, before the old post-hoc `rel.parts` filter discarded them.
     out: list[Path] = []
     for dirpath, dirnames, filenames in repo_root.walk():
         dirnames[:] = [d for d in dirnames if d not in _SKIP_DIR_PARTS]
