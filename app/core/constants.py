@@ -32,7 +32,7 @@ def get_version() -> str:
     if version_file.exists():
         try:
             return version_file.read_text().strip()
-        except Exception:
+        except OSError:
             pass
 
     env_version = os.environ.get("APP_VERSION")
@@ -50,7 +50,7 @@ def get_version() -> str:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except Exception:
+    except OSError, subprocess.SubprocessError:
         pass
 
     return "dev"

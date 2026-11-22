@@ -67,9 +67,17 @@ def test_get_version_fallback_to_dev(monkeypatch):
     monkeypatch.delenv("APP_VERSION", raising=False)
 
     with patch("pathlib.Path.exists", return_value=False), patch("subprocess.run") as mock_run:
-        mock_run.side_effect = Exception("git not available")
+        mock_run.side_effect = FileNotFoundError("git not available")
         result = get_version()
         assert result == "dev"
+
+
+def test_get_version_unreadable_version_file_falls_back_to_env(monkeypatch):
+    """An unreadable VERSION file falls through to APP_VERSION."""
+    monkeypatch.setenv("APP_VERSION", "777")
+
+    with patch("pathlib.Path.exists", return_value=True), patch("pathlib.Path.read_text", side_effect=PermissionError):
+        assert get_version() == "777"
 
 
 def test_get_version_git_fails_returns_dev(monkeypatch):
