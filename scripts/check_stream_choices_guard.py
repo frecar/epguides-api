@@ -58,25 +58,10 @@ import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-# Per-line opt-out for the rare legitimate unguarded index (kept identical in
-# spirit to check_no_external_llm.py's `# llm-policy: ignore`).
 IGNORE_MARKER = "stream-choices-guard: ignore"
 
-# REVIEW DATE for the two hand-maintained sets below (allowed path components,
-# allowed filenames). These sets are a reviewed judgment, not derived state: a
-# new tooling/cache directory without an allowlist entry would false-positive
-# on vendored code, and a thoughtless exemption would punch a hole in the
-# guard's coverage. Re-examine both sets on or before this date and move it
-# forward deliberately; the check at the top of main() fails the run once it
-# lapses so the review cannot go silent. NOTE: this file is vendored
-# byte-for-byte into consumer repos and must stay stdlib-only, so the review
-# marker lives here rather than in the shared reviewed-literal helper.
 LITERAL_REVIEW_BY = date(2026, 11, 25)
 
-# Path components / filenames that are skipped. Tests are allowlisted: they
-# legitimately build unguarded-stream fixtures to prove the guard works, and
-# the test file for THIS check needs an unguarded-site fixture. Mirrors
-# check_no_external_llm.py's allowlist.
 ALLOWED_PATH_COMPONENTS = (
     "tests",
     "test",
@@ -84,7 +69,7 @@ ALLOWED_PATH_COMPONENTS = (
     "node_modules",
     "__pycache__",
     ".git",
-    ".claude",  # local agent tooling worktrees, never part of a checkout's source
+    ".claude",
     ".next",
     ".cache",
     ".mypy_cache",
@@ -96,7 +81,6 @@ ALLOWED_PATH_COMPONENTS = (
     "migrations",
 )
 ALLOWED_FILENAMES = {
-    # This check defines the forbidden pattern in its own docstring/strings.
     "check_stream_choices_guard.py",
 }
 
@@ -111,14 +95,12 @@ def is_allowed_path(path: Path) -> bool:
 
 def _is_choices_index(node: ast.AST, loop_var: str) -> bool:
     """True if `node` is `<loop_var>.choices[0]` (optionally `.<attr>` after)."""
-    # Walk past any trailing attribute access: choices[0].delta -> the [0] sub.
     cur = node
     while isinstance(cur, ast.Attribute):
         cur = cur.value
     if not isinstance(cur, ast.Subscript):
         return False
     value = cur.value
-    # value must be `<loop_var>.choices`
     if not (isinstance(value, ast.Attribute) and value.attr == "choices"):
         return False
     base = value.value
@@ -132,8 +114,6 @@ def _index_sites(body: list[ast.stmt], loop_var: str) -> list[int]:
     sites: list[int] = []
     for stmt in body:
         for sub in ast.walk(stmt):
-            # Don't descend into an inner loop that rebinds the same name — its
-            # own body is checked separately as its own loop.
             if isinstance(sub, (ast.For, ast.AsyncFor)) and _loop_target_name(sub) == loop_var and sub is not stmt:
                 continue
             if isinstance(sub, ast.Subscript) and _is_choices_index(sub, loop_var):
@@ -154,10 +134,6 @@ def _has_empty_choices_guard(loop: ast.For | ast.AsyncFor, loop_var: str) -> boo
     (positive form)."""
     for stmt in loop.body:
         if not isinstance(stmt, ast.If):
-            # A non-If statement before any guard that itself indexes choices is
-            # the unguarded case; keep scanning in case the guard comes first
-            # textually but order is what matters — handled by the caller via
-            # line comparison. Here we only need to detect a guard's presence.
             continue
         if _if_is_negative_guard(stmt, loop_var):
             return True
@@ -196,8 +172,6 @@ def _if_is_positive_guard(stmt: ast.If, loop_var: str) -> bool:
     accept it when the test is exactly a reference to `<loop_var>.choices` and
     the indexing site lives inside this If's body and NOT after it."""
     test = stmt.test
-    # Only accept a *direct* truthy test on choices (`if v.choices:`), not an
-    # arbitrary condition — keeps this low-false-positive.
     if not (
         isinstance(test, ast.Attribute)
         and test.attr == "choices"
@@ -205,7 +179,6 @@ def _if_is_positive_guard(stmt: ast.If, loop_var: str) -> bool:
         and test.value.id == loop_var
     ):
         return False
-    # The indexing must occur inside the truthy branch.
     return bool(_index_sites(stmt.body, loop_var))
 
 
@@ -218,7 +191,6 @@ class _LoopVisitor(ast.NodeVisitor):
         if loop_var is not None:
             sites = _index_sites(loop.body, loop_var)
             if sites and not _has_empty_choices_guard(loop, loop_var):
-                # Report the first unguarded indexing site.
                 self.violations.append(min(sites))
         self.generic_visit(loop)
 
@@ -235,18 +207,11 @@ def check_file(path: Path) -> list[tuple[int, str]]:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
-    # every violation shape above requires an `ast.Attribute`
-    # node with `attr == "choices"`, which requires the literal text
-    # "choices" to appear in the source — cheap to rule out before paying
-    # for `ast.parse` (this guard's dominant cost on the no-argv full-repo
-    # pass `make ci-parity` runs, since the vast majority of tracked .py
-    # files never mention `choices` at all).
     if "choices" not in text:
         return []
     try:
         tree = ast.parse(text, filename=str(path))
     except SyntaxError:
-        # Not valid Python (partial file, template) — nothing to assert.
         return []
 
     visitor = _LoopVisitor()
@@ -265,11 +230,6 @@ def check_file(path: Path) -> list[tuple[int, str]]:
 
 
 def _discover_repo_python_files(root: Path) -> list[Path]:
-    # prune `ALLOWED_PATH_COMPONENTS` dirs DURING the walk rather
-    # than relying solely on the per-file `is_allowed_path` check below —
-    # `rglob("*.py")` has no pruning hook, so it used to stat every file
-    # under `.venv`/site-packages too (measured: 3973 of 6002 discovered
-    # files were vendored .venv code) before that filter discarded them.
     out: list[Path] = []
     for dirpath, dirnames, filenames in root.walk():
         dirnames[:] = [d for d in dirnames if d not in ALLOWED_PATH_COMPONENTS]
