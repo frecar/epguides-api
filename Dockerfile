@@ -25,11 +25,13 @@ LABEL org.opencontainers.image.title="Epguides API" \
       org.opencontainers.image.licenses="MIT"
 
 ARG APP_VERSION=dev
+ARG GIT_SHA=
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONOPTIMIZE=2 \
     APP_VERSION=${APP_VERSION} \
+    GIT_SHA=${GIT_SHA} \
     PATH="/build/.venv/bin:$PATH"
 
 ARG OS_SECURITY_EPOCH

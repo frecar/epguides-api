@@ -28,7 +28,7 @@ from app.core.cache import (
     refresh_cache_age_gauges,
 )
 from app.core.config import settings
-from app.core.constants import VERSION
+from app.core.constants import VERSION, release_name
 from app.core.metrics import init_ingest_freshness, mark_worker_dead, render_metrics
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware, get_request_id
 from app.core.observability import init_observability
@@ -59,7 +59,7 @@ _PROCESS_START_TIME = time.time()
 _READINESS_UPSTREAM = "epguides"
 
 
-init_observability(release=os.environ.get("GIT_SHA", VERSION))
+init_observability(release=release_name())
 
 
 async def _cache_age_refresh_loop() -> None:
