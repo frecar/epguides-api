@@ -70,9 +70,8 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from jsonschema import exceptions as jsonschema_exceptions
 
-# Cap a single validation-problem message so a deeply-nested mismatch can't
-# produce an unreadable multi-kilobyte assertion failure.
 VALIDATION_MESSAGE_LIMIT = 400
+SUCCESS_RESPONSE_KEYS = (200, "200", "2XX")
 
 
 @dataclass(frozen=True)
@@ -159,10 +158,8 @@ def _operation_is_anonymous(operation: dict[str, Any]) -> bool:
 
 
 def _has_required_parameter(path_item: dict[str, Any], operation: dict[str, Any]) -> bool:
-    # Parameters can live at the path-item level (shared across methods) or
-    # the operation level. Any required one anywhere disqualifies the route —
-    # there is no safe synthetic value to fill it with.
-    for source in (path_item.get("parameters"), operation.get("parameters")):
+    path_level_and_operation_level = (path_item.get("parameters"), operation.get("parameters"))
+    for source in path_level_and_operation_level:
         if not isinstance(source, list):
             continue
         for param in source:
@@ -200,9 +197,7 @@ def _extract_200_json_schema(schema: dict[str, Any], path: str) -> dict[str, Any
     operation = schema.get("paths", {}).get(path, {}).get("get", {})
     responses = operation.get("responses", {}) if isinstance(operation, dict) else {}
     response = None
-    # Some generators key the response object under the INTEGER 200 rather
-    # than the spec's string "200". Accept both, plus the "2XX" range key.
-    for key in (200, "200", "2XX"):
+    for key in SUCCESS_RESPONSE_KEYS:
         candidate = responses.get(key)
         if isinstance(candidate, dict):
             response = candidate
@@ -267,7 +262,7 @@ def _probe_route(path: str, *, fetch: Fetch, validator: Draft202012Validator | N
     messages: list[str] = []
     try:
         http_status, body = fetch(path)
-    except Exception as exc:  # transport blew up entirely
+    except Exception as exc:
         return RouteProbeResult(
             route=path,
             ok=False,
