@@ -77,6 +77,7 @@ These rules bind **every** agent working in this repo — Claude, Codex, OpenCod
 
 ### Commits & conventions
 - **Write self-documenting code.** Use precise names, clear control flow, and focused functions. Remove explanatory code comments and express invariants in code or tests. Keep required tool directives and legal notices.
+- **Make failures explain themselves.** An error states what failed, the offending identifier or value (never a secret), the expected form and the next action. Raise typed exceptions that keep the cause; never swallow an error. Validate config, env, CLI arguments and payloads at the boundary. Prefer types, enums and named constants over loose dicts and magic values. Every CLI command and option has `--help` with an example. Tests assert error messages. Delete a doc only once its failure and recovery guidance lives in code.
 - **Do not add explanatory Markdown.** Make behavior discoverable through code, command help, schemas, and tests. Remove existing Markdown once those sources carry the guidance. A concise root README may identify the project and its supported entry points. Keep the minimum instruction and skill files a harness actually loads. Verify existing consumer paths before removal and track any unresolved format dependency in its cleanup issue.
 - <!-- HARD-NO:BEGIN commit-attribution -->**Never** add `Co-Authored-By` or any AI-attribution line — commits are the operator's own work.<!-- HARD-NO:END commit-attribution -->
 - **Never** fix production by ad-hoc SSH. Fix in the repo, commit, deploy.
