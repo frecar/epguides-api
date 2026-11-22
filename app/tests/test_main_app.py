@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.exceptions import EpguidesAPIException, ExternalServiceError
+from app.exceptions import EpguidesAPIException, ExternalServiceError, UpstreamSource
 from app.main import app
 
 client = TestClient(app)
@@ -58,7 +58,9 @@ def test_epguides_exception_handler():
     assert response.status_code == 500
     data = response.json()
     assert "internal error" in data["detail"].lower()
-    assert "request_id" in data
+    assert data["request_id"] in data["detail"]
+    assert data["code"] == "internal_error"
+    assert "Test error" not in data["detail"]
 
 
 def test_external_service_exception_handler():
@@ -66,12 +68,15 @@ def test_external_service_exception_handler():
 
     @app.get("/test-external-error")
     async def raise_external_error():
-        raise ExternalServiceError("External service failed")
+        raise ExternalServiceError("TVMaze is unavailable: timed out after 10s", source=UpstreamSource.TVMAZE)
 
     response = client.get("/test-external-error")
     assert response.status_code == 503
     data = response.json()
-    assert "unavailable" in data["detail"].lower()
+    assert data["detail"] == "TVMaze is unavailable: timed out after 10s"
+    assert data["code"] == "upstream_unavailable"
+    assert data["context"] == {"upstream_source": "TVMaze"}
+    assert "/health/ready" in data["hint"]
     assert "request_id" in data
 
 

@@ -5,6 +5,8 @@ Provides async HTTP client for endpoint testing.
 """
 
 import os
+from collections.abc import Iterator
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -18,6 +20,13 @@ if _XDIST_REDIS_DB is not None:
     os.environ["REDIS_DB"] = str(_XDIST_REDIS_DB)
 
 from app.main import app  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def show_catalogue_available() -> Iterator[AsyncMock]:
+    """Treat the upstream show catalogue as reachable unless a test says otherwise."""
+    with patch("app.services.show_service.is_show_catalogue_available", new=AsyncMock(return_value=True)) as mock:
+        yield mock
 
 
 @pytest_asyncio.fixture

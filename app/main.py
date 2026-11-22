@@ -9,10 +9,12 @@ import asyncio
 import logging.config
 import os
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -30,7 +32,7 @@ from app.core.constants import VERSION
 from app.core.metrics import init_ingest_freshness, mark_worker_dead, render_metrics
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware, get_request_id
 from app.core.observability import init_observability
-from app.exceptions import EpguidesAPIException, ExternalServiceError
+from app.exceptions import EpguidesAPIException, ErrorCode, ExternalServiceError
 
 
 def _initialize_logging() -> None:
@@ -177,38 +179,38 @@ app.add_middleware(
 )
 
 
+def _error_log_fields(exc: EpguidesAPIException, request_id: str) -> dict[str, object]:
+    return {"error_code": exc.code.value, "request_id": request_id, **exc.context}
+
+
 @app.exception_handler(EpguidesAPIException)
 async def epguides_exception_handler(
     request: Request,
     exc: EpguidesAPIException,
 ) -> JSONResponse:
-    """Handle custom API exceptions."""
+    """Render a typed API error as ``{detail, code, hint, context, request_id}``."""
     request_id = get_request_id(request)
-    logger.error("API error: %s (request_id=%s)", exc, request_id, exc_info=True)
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "detail": "An internal error occurred. Please try again later.",
-            "request_id": request_id,
-        },
-    )
+    log_fields = _error_log_fields(exc, request_id)
+    if not exc.is_client_visible:
+        logger.error("API error: %s (request_id=%s)", exc, request_id, exc_info=True, extra=log_fields)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": f"An internal error occurred. Retry later and quote request_id {request_id} if it persists.",
+                "code": ErrorCode.INTERNAL_ERROR.value,
+                "request_id": request_id,
+            },
+        )
+    if isinstance(exc, ExternalServiceError):
+        logger.error("External service error: %s (request_id=%s)", exc, request_id, exc_info=True, extra=log_fields)
+    else:
+        logger.info("%s: %s", exc.code.value, exc.message, extra=log_fields)
+    return JSONResponse(status_code=exc.status_code, content={**exc.to_payload(), "request_id": request_id})
 
 
-@app.exception_handler(ExternalServiceError)
-async def external_service_exception_handler(
-    request: Request,
-    exc: ExternalServiceError,
-) -> JSONResponse:
-    """Handle external service failures."""
-    request_id = get_request_id(request)
-    logger.error("External service error: %s (request_id=%s)", exc, request_id, exc_info=True)
-    return JSONResponse(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={
-            "detail": "External service temporarily unavailable.",
-            "request_id": request_id,
-        },
-    )
+def _describe_validation_error(error: Mapping[str, Any]) -> str:
+    location = ".".join(str(part) for part in error.get("loc", ()))
+    return f"{location}={error.get('input')!r}: {error.get('msg', 'invalid value')}"
 
 
 @app.exception_handler(RequestValidationError)
@@ -216,15 +218,20 @@ async def validation_exception_handler(
     request: Request,
     exc: RequestValidationError,
 ) -> JSONResponse:
-    """Handle request validation errors with clean details."""
+    """Reject invalid parameters with one message per field and the offending value."""
     request_id = get_request_id(request)
+    errors = exc.errors()
+    summary = "; ".join(_describe_validation_error(error) for error in errors)
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content={
-            "detail": "Validation error",
-            "errors": exc.errors(),
-            "request_id": request_id,
-        },
+        content=jsonable_encoder(
+            {
+                "detail": f"Validation error: {summary}. See /docs for each parameter's accepted values.",
+                "code": ErrorCode.VALIDATION_ERROR.value,
+                "errors": errors,
+                "request_id": request_id,
+            }
+        ),
     )
 
 
@@ -233,13 +240,16 @@ async def not_found_handler(
     request: Request,
     exc: Exception,
 ) -> JSONResponse:
-    """Handle 404 Not Found errors with a clean JSON response."""
+    """Handle unknown routes with the method, path and where to find valid routes."""
     request_id = get_request_id(request)
-    detail = getattr(exc, "detail", "The requested resource was not found.")
+    detail = getattr(exc, "detail", None)
+    if detail in (None, "Not Found"):
+        detail = f"No route matches {request.method} {request.url.path}. See /docs for the available endpoints."
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={
             "detail": detail,
+            "code": ErrorCode.ROUTE_NOT_FOUND.value,
             "request_id": request_id,
         },
     )
@@ -256,7 +266,8 @@ async def internal_error_handler(
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "detail": "An unexpected error occurred.",
+            "detail": f"An unexpected error occurred. Retry later and quote request_id {request_id} if it persists.",
+            "code": ErrorCode.INTERNAL_ERROR.value,
             "request_id": request_id,
         },
     )

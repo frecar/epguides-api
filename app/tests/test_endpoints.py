@@ -733,10 +733,12 @@ async def test_get_next_episode_stale_no_new(
 
 
 @pytest.mark.asyncio
+@patch("app.api.endpoints.shows.show_service.get_show")
 @patch("app.api.endpoints.shows.show_service.get_episodes")
-async def test_get_latest_episode_no_episodes(mock_get_episodes, async_client: AsyncClient):
+async def test_get_latest_episode_no_episodes(mock_get_episodes, mock_get_show, async_client: AsyncClient):
     """Test get_latest_episode with no episodes."""
     mock_get_episodes.return_value = []
+    mock_get_show.return_value = create_show_schema(epguides_key="test", title="Test Show")
 
     response = await async_client.get("/shows/TestShow/episodes/latest")
 

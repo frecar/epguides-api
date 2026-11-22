@@ -90,9 +90,19 @@ async def search_shows_fast(query: str) -> list[ShowSchema]:
     return [ShowSchema(**item) for item in matches[:100]]
 
 
+_ALL_SHOWS_CACHE_KEY = "shows:all:raw"
+
+
+async def is_show_catalogue_available() -> bool:
+    """True when the epguides show catalogue is cached or can be fetched now."""
+    if await cache_exists(_ALL_SHOWS_CACHE_KEY):
+        return True
+    return bool(await _get_all_shows_raw())
+
+
 async def _get_all_shows_raw() -> list[dict[str, Any]]:
     """Get raw show data (cached as dicts, not Pydantic models)."""
-    cache_key = "shows:all:raw"
+    cache_key = _ALL_SHOWS_CACHE_KEY
 
     cached_data = await cache_get(cache_key)
     if cached_data:

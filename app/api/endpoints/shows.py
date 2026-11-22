@@ -7,9 +7,21 @@ All endpoints are async and return Pydantic models for automatic validation.
 import re
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query
 
 from app.core.cache import invalidate_cache
+from app.exceptions import (
+    ImdbIdNotFoundError,
+    InvalidImdbIdError,
+    InvalidParameterError,
+    NoEpisodesError,
+    NoReleasedEpisodeError,
+    NoUpcomingEpisodeError,
+    SeasonNotFoundError,
+    ShowCatalogUnavailableError,
+    ShowFinishedError,
+    ShowNotFoundError,
+)
 from app.models.responses import PaginatedResponse
 from app.models.schemas import EpisodeSchema, SeasonSchema, ShowDetailsSchema, ShowListSchema, ShowSchema
 from app.services import llm_service, show_service
@@ -17,6 +29,15 @@ from app.services import llm_service, show_service
 router = APIRouter()
 
 _IMDB_ID_RE = re.compile(r"^tt\d+$")
+
+
+async def _require_show(epguides_key: str) -> ShowSchema:
+    show = await show_service.get_show(epguides_key)
+    if show:
+        return show
+    if not await show_service.is_show_catalogue_available():
+        raise ShowCatalogUnavailableError(epguides_key)
+    raise ShowNotFoundError(epguides_key)
 
 
 @router.get(
@@ -135,17 +156,11 @@ async def get_show_by_imdb_id(
       none can be chosen safely
     """
     if not _IMDB_ID_RE.match(imdb_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid IMDB ID format: {imdb_id!r} (expected 'tt' followed by digits)",
-        )
+        raise InvalidImdbIdError(imdb_id)
 
     show = await show_service.get_show_by_imdb_id(imdb_id)
     if not show:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No show found for IMDB ID: {imdb_id}",
-        )
+        raise ImdbIdNotFoundError(imdb_id)
     return show
 
 
@@ -187,12 +202,7 @@ async def get_show_metadata(
         await invalidate_cache("show_metadata", normalized_key)
         await show_service.invalidate_show_cache(normalized_key)
 
-    show = await show_service.get_show(epguides_key)
-    if not show:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Show not found: {epguides_key}",
-        )
+    show = await _require_show(epguides_key)
 
     if include == "episodes":
         episodes = await show_service.get_episodes(epguides_key)
@@ -223,9 +233,7 @@ async def get_seasons(epguides_key: str) -> list[SeasonSchema]:
     """
     seasons = await show_service.get_seasons(epguides_key)
     if not seasons:
-        show = await show_service.get_show(epguides_key)
-        if not show:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Show not found: {epguides_key}")
+        await _require_show(epguides_key)
     return seasons
 
 
@@ -253,10 +261,8 @@ async def get_season_episodes(
 
     if not season_episodes:
         if not episodes:
-            show = await show_service.get_show(epguides_key)
-            if not show:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Show not found: {epguides_key}")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Season {season_number} not found")
+            await _require_show(epguides_key)
+        raise SeasonNotFoundError(epguides_key, season_number, (ep.season for ep in episodes))
 
     return season_episodes
 
@@ -327,6 +333,9 @@ async def get_show_episodes(
 
     Use `?refresh=true` to bypass cache and fetch fresh data. Useful when checking for new episodes.
     """
+    if episode is not None and season is None:
+        raise InvalidParameterError("episode", episode, "the episode filter requires season, as in ?season=1&episode=5")
+
     if refresh:
         normalized_key = show_service.normalize_show_id(epguides_key)
         await invalidate_cache("episodes", normalized_key)
@@ -353,12 +362,7 @@ async def get_show_episodes(
             episodes = [EpisodeSchema(**ep) for ep in llm_result]
 
     if not episodes:
-        show = await show_service.get_show(epguides_key)
-        if not show:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Show not found: {epguides_key}",
-            )
+        await _require_show(epguides_key)
 
     return episodes
 
@@ -389,25 +393,14 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
     GET /shows/Severance/episodes/next
     ```
     """
-    show = await show_service.get_show(epguides_key)
-    if not show:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Show not found: {epguides_key}",
-        )
+    show = await _require_show(epguides_key)
 
     if show.end_date:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Show has finished airing",
-        )
+        raise ShowFinishedError(epguides_key, show.end_date)
 
     episodes = await show_service.get_episodes(epguides_key)
     if not episodes:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No episodes found",
-        )
+        raise NoEpisodesError(epguides_key)
 
     next_ep = None
     for ep in episodes:
@@ -416,10 +409,7 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
             break
 
     if not next_ep:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No unreleased episodes found",
-        )
+        raise NoUpcomingEpisodeError(epguides_key)
 
     if next_ep.release_date < datetime.now(UTC).date():
         normalized_key = show_service.normalize_show_id(epguides_key)
@@ -430,10 +420,7 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
             if not ep.is_released and ep.title:
                 return ep
 
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No unreleased episodes found",
-        )
+        raise NoUpcomingEpisodeError(epguides_key)
 
     return next_ep
 
@@ -458,16 +445,11 @@ async def get_latest_episode(epguides_key: str) -> EpisodeSchema:
     """
     episodes = await show_service.get_episodes(epguides_key)
     if not episodes:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No episodes found",
-        )
+        await _require_show(epguides_key)
+        raise NoEpisodesError(epguides_key)
 
     released = [ep for ep in episodes if ep.is_released]
     if not released:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No released episodes found",
-        )
+        raise NoReleasedEpisodeError(epguides_key)
 
     return released[-1]
