@@ -7,17 +7,114 @@ for AI assistants to consume.
 
 import json
 import logging
+from collections.abc import Awaitable, Callable, Mapping
+from enum import IntEnum
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
 from app.core.constants import MCP_PROTOCOL_VERSION, VERSION
-from app.services import show_service
+from app.exceptions import (
+    IMDB_ID_EXAMPLE,
+    SHOW_KEY_EXAMPLE,
+    EpguidesAPIException,
+    ErrorCode,
+    ExternalServiceError,
+    InvalidParameterError,
+    NoEpisodesError,
+    NoReleasedEpisodeError,
+    NoUpcomingEpisodeError,
+)
+from app.models.schemas import EpisodeSchema
+from app.services import llm_service, show_service
 
 logger = logging.getLogger(__name__)
 
+SHOWS_RESOURCE_URI = "epguides://shows"
 
-_ERROR_METHOD_NOT_FOUND = -32601
-_ERROR_INVALID_PARAMS = -32602
-_ERROR_INTERNAL = -32603
+
+class JSONRPCErrorCode(IntEnum):
+    METHOD_NOT_FOUND = -32601
+    INVALID_PARAMS = -32602
+    INTERNAL_ERROR = -32603
+
+
+_MCP_HINTS: dict[ErrorCode, str] = {
+    ErrorCode.SHOW_NOT_FOUND: "Call search_shows with the show title to find its epguides_key.",
+    ErrorCode.SEASON_NOT_FOUND: "Call get_seasons with this epguides_key to list valid seasons.",
+    ErrorCode.NO_EPISODES: "Retry later; the episode list may not have loaded from upstream yet.",
+    ErrorCode.NO_RELEASED_EPISODE: "Call get_next_episode for the first air date.",
+    ErrorCode.NO_UPCOMING_EPISODE: "Call get_latest_episode for the most recent episode.",
+    ErrorCode.SHOW_FINISHED: "Call get_latest_episode for the final episode.",
+    ErrorCode.INVALID_IMDB_ID: f"Pass the ID from the IMDB title URL, for example {IMDB_ID_EXAMPLE!r}.",
+    ErrorCode.IMDB_ID_NOT_FOUND: "Call search_shows with the show title instead.",
+    ErrorCode.UPSTREAM_UNAVAILABLE: "Retry in a few minutes.",
+    ErrorCode.VALIDATION_ERROR: "Call tools/list for the tool's inputSchema.",
+}
+
+
+class _ToolArguments(BaseModel):
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+
+
+class _SearchArguments(_ToolArguments):
+    query: str = Field(min_length=1)
+
+
+class _ImdbArguments(_ToolArguments):
+    imdb_id: str = Field(min_length=1)
+
+
+class _ShowArguments(_ToolArguments):
+    epguides_key: str = Field(min_length=1)
+
+
+class _EpisodeFilterArguments(_ShowArguments):
+    season: int | None = Field(default=None, ge=1)
+    episode: int | None = Field(default=None, ge=1)
+    year: int | None = Field(default=None, ge=1900, le=2100)
+    title_search: str | None = None
+    nlq: str | None = None
+
+
+_TOOL_ARGUMENT_EXAMPLES: dict[str, dict[str, object]] = {
+    "search_shows": {"query": "breaking"},
+    "lookup_by_imdb_id": {"imdb_id": IMDB_ID_EXAMPLE},
+    "get_show": {"epguides_key": SHOW_KEY_EXAMPLE},
+    "get_episodes": {"epguides_key": SHOW_KEY_EXAMPLE, "season": 1},
+    "get_next_episode": {"epguides_key": SHOW_KEY_EXAMPLE},
+    "get_latest_episode": {"epguides_key": SHOW_KEY_EXAMPLE},
+    "get_seasons": {"epguides_key": SHOW_KEY_EXAMPLE},
+}
+
+
+def _describe_field_error(detail: Mapping[str, Any]) -> dict[str, object]:
+    return {
+        "field": ".".join(str(part) for part in detail["loc"]) or "arguments",
+        "input": None if detail["type"] == "missing" else detail.get("input"),
+        "msg": detail["msg"],
+    }
+
+
+class ToolArgumentError(Exception):
+    """Tool arguments failed validation; ``field_errors`` lists each field, its input and the reason."""
+
+    def __init__(self, tool_name: str, error: ValidationError) -> None:
+        self.tool_name = tool_name
+        self.field_errors = [_describe_field_error(detail) for detail in error.errors(include_url=False)]
+        described = "; ".join(
+            f"{e['field']}: {e['msg']}" if e["input"] is None else f"{e['field']}={e['input']!r}: {e['msg']}"
+            for e in self.field_errors
+        )
+        example = json.dumps(_TOOL_ARGUMENT_EXAMPLES.get(tool_name, {}))
+        super().__init__(f"Invalid arguments for tool {tool_name!r}: {described}. Example arguments: {example}.")
+
+
+def _parse_arguments[ArgsT: _ToolArguments](tool_name: str, model: type[ArgsT], arguments: object) -> ArgsT:
+    try:
+        return model.model_validate(arguments if arguments is not None else {})
+    except ValidationError as err:
+        raise ToolArgumentError(tool_name, err) from err
 
 
 _TOOLS = [
@@ -192,13 +289,19 @@ class MCPServer:
 
         handler = handlers.get(method)
         if not handler:
-            return self._error(_ERROR_METHOD_NOT_FOUND, f"Method not found: {method}")
+            return self._error(
+                JSONRPCErrorCode.METHOD_NOT_FOUND,
+                f"Method not found: {method!r}. Supported methods: {', '.join(handlers)}.",
+            )
 
         try:
             return await handler(params)
         except Exception as e:
-            logger.exception("Error handling %s request", method)
-            return self._error(_ERROR_INTERNAL, f"Internal error: {e}")
+            logger.exception("Error handling %s request", method, extra={"mcp_method": method})
+            return self._error(
+                JSONRPCErrorCode.INTERNAL_ERROR,
+                f"Internal error while handling {method!r}: {type(e).__name__}: {e}. Retry the request.",
+            )
 
     async def _handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle MCP initialize request."""
@@ -216,7 +319,7 @@ class MCPServer:
             {
                 "resources": [
                     {
-                        "uri": "epguides://shows",
+                        "uri": SHOWS_RESOURCE_URI,
                         "name": "All Shows",
                         "description": "Complete list of all TV shows",
                         "mimeType": "application/json",
@@ -229,8 +332,11 @@ class MCPServer:
         """Read an MCP resource."""
         uri = params.get("uri", "")
 
-        if uri != "epguides://shows":
-            return self._error(_ERROR_INVALID_PARAMS, f"Unknown resource: {uri}")
+        if uri != SHOWS_RESOURCE_URI:
+            return self._error(
+                JSONRPCErrorCode.INVALID_PARAMS,
+                f"Unknown resource: {uri!r}. Available resources: {SHOWS_RESOURCE_URI} (see resources/list).",
+            )
 
         shows = await show_service.get_all_shows()
         shows_data = [show.model_dump() for show in shows[:100]]
@@ -252,11 +358,11 @@ class MCPServer:
         return self._success({"tools": _TOOLS})
 
     async def _handle_tool_call(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Execute an MCP tool."""
+        """Execute an MCP tool, turning domain and argument errors into actionable JSON-RPC errors."""
         tool_name = params.get("name", "")
         arguments = params.get("arguments", {})
 
-        tool_handlers = {
+        tool_handlers: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
             "search_shows": self._tool_search_shows,
             "lookup_by_imdb_id": self._tool_lookup_by_imdb_id,
             "get_show": self._tool_get_show,
@@ -268,40 +374,79 @@ class MCPServer:
 
         handler = tool_handlers.get(tool_name)
         if not handler:
-            return self._error(_ERROR_METHOD_NOT_FOUND, f"Unknown tool: {tool_name}")
+            return self._error(
+                JSONRPCErrorCode.METHOD_NOT_FOUND,
+                f"Unknown tool: {tool_name!r}. Available tools: {', '.join(tool_handlers)}. "
+                "Call tools/list for their argument schemas.",
+            )
+
+        log_fields: dict[str, object] = {"tool": tool_name}
+        if isinstance(arguments, dict) and isinstance(arguments.get("epguides_key"), str):
+            log_fields["epguides_key"] = arguments["epguides_key"]
 
         try:
             return await handler(arguments)
+        except ToolArgumentError as e:
+            logger.info("%s", e, extra=log_fields)
+            return self._error(
+                JSONRPCErrorCode.INVALID_PARAMS,
+                f"{e} {_MCP_HINTS[ErrorCode.VALIDATION_ERROR]}",
+                {"code": ErrorCode.VALIDATION_ERROR.value, "tool": tool_name, "errors": e.field_errors},
+            )
+        except EpguidesAPIException as e:
+            return self._domain_error(tool_name, e, log_fields)
         except Exception as e:
-            logger.exception("Error executing tool %s", tool_name)
-            return self._error(_ERROR_INTERNAL, f"Tool execution error: {e}")
+            logger.exception("Error executing tool %s", tool_name, extra=log_fields)
+            return self._error(
+                JSONRPCErrorCode.INTERNAL_ERROR,
+                f"Tool execution error in {tool_name!r}: {type(e).__name__}: {e}. Retry the call.",
+                {"code": ErrorCode.INTERNAL_ERROR.value, "tool": tool_name},
+            )
+
+    def _domain_error(
+        self, tool_name: str, error: EpguidesAPIException, log_fields: dict[str, object]
+    ) -> dict[str, Any]:
+        hint = _MCP_HINTS.get(error.code)
+        fields = {**log_fields, "error_code": error.code.value, **error.context}
+        if isinstance(error, ExternalServiceError):
+            logger.warning("Tool %s upstream failure: %s", tool_name, error.message, extra=fields)
+            rpc_code = JSONRPCErrorCode.INTERNAL_ERROR
+        else:
+            logger.info("Tool %s: %s", tool_name, error.message, extra=fields)
+            rpc_code = JSONRPCErrorCode.INVALID_PARAMS
+        data: dict[str, object] = {"code": error.code.value, "tool": tool_name}
+        if hint:
+            data["hint"] = hint
+        if error.context:
+            data["context"] = error.context
+        message = f"{error.message} {hint}" if hint else error.message
+        return self._error(rpc_code, message, data)
 
     async def _tool_search_shows(self, args: dict[str, Any]) -> dict[str, Any]:
         """Search for shows by title."""
-        query = args.get("query", "")
-        shows = await show_service.search_shows(query)
+        parsed = _parse_arguments("search_shows", _SearchArguments, args)
+        shows = await show_service.search_shows(parsed.query)
         result = [show.model_dump() for show in shows[:50]]
         return self._success(self._text_content(json.dumps(result, indent=2, default=str)))
 
     async def _tool_lookup_by_imdb_id(self, args: dict[str, Any]) -> dict[str, Any]:
         """Bridge an IMDB ID to the show's epguides_key (mirrors REST /shows/by-imdb/{imdb_id})."""
-        imdb_id = args.get("imdb_id", "").strip()
-        if not imdb_id:
-            return self._error(_ERROR_INVALID_PARAMS, "imdb_id is required")
-        show = await show_service.get_show_by_imdb_id(imdb_id)
-        if not show:
-            return self._error(_ERROR_INVALID_PARAMS, f"No show found for IMDB ID: {imdb_id}")
+        parsed = _parse_arguments("lookup_by_imdb_id", _ImdbArguments, args)
+        show = await show_service.require_show_by_imdb_id(parsed.imdb_id)
         return self._success(self._text_content(json.dumps(show.model_dump(), indent=2, default=str)))
 
     async def _tool_get_show(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get show details."""
-        epguides_key = args.get("epguides_key", "")
-        show = await show_service.get_show(epguides_key)
-
-        if not show:
-            return self._error(_ERROR_INVALID_PARAMS, f"Show not found: {epguides_key}")
-
+        parsed = _parse_arguments("get_show", _ShowArguments, args)
+        show = await show_service.require_show(parsed.epguides_key)
         return self._success(self._text_content(json.dumps(show.model_dump(), indent=2, default=str)))
+
+    async def _episodes_or_raise(self, epguides_key: str) -> list[EpisodeSchema]:
+        episodes = await show_service.get_episodes(epguides_key)
+        if not episodes:
+            await show_service.require_show(epguides_key)
+            raise NoEpisodesError(epguides_key)
+        return episodes
 
     async def _tool_get_episodes(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get episodes for a show, optionally filtered by season/episode/year/title/nlq.
@@ -309,36 +454,28 @@ class MCPServer:
         Mirrors REST GET /shows/{key}/episodes — same filter precedence:
         structured filters first, NL query last, no LLM = nlq ignored.
         """
-        epguides_key = args.get("epguides_key", "")
-        episodes = await show_service.get_episodes(epguides_key)
+        parsed = _parse_arguments("get_episodes", _EpisodeFilterArguments, args)
+        if parsed.episode is not None and parsed.season is None:
+            raise InvalidParameterError(
+                "episode", parsed.episode, "the episode filter requires season, as in {'season': 1, 'episode': 5}"
+            )
+        episodes = await self._episodes_or_raise(parsed.epguides_key)
 
-        if not episodes:
-            return self._error(_ERROR_INVALID_PARAMS, f"No episodes found for: {epguides_key}")
+        if parsed.season is not None:
+            episodes = [ep for ep in episodes if ep.season == parsed.season]
+            if parsed.episode is not None:
+                episodes = [ep for ep in episodes if ep.number == parsed.episode]
 
-        season = args.get("season")
-        episode = args.get("episode")
-        year = args.get("year")
-        title_search = args.get("title_search")
+        if parsed.year is not None:
+            episodes = [ep for ep in episodes if ep.release_date.year == parsed.year]
 
-        if season is not None:
-            episodes = [ep for ep in episodes if ep.season == season]
-            if episode is not None:
-                episodes = [ep for ep in episodes if ep.number == episode]
-
-        if year is not None:
-            episodes = [ep for ep in episodes if ep.release_date.year == year]
-
-        if title_search:
-            search_lower = title_search.lower()
+        if parsed.title_search:
+            search_lower = parsed.title_search.lower()
             episodes = [ep for ep in episodes if search_lower in ep.title.lower()]
 
-        nlq = args.get("nlq")
-        if nlq and episodes:
-            from app.models.schemas import EpisodeSchema
-            from app.services import llm_service
-
+        if parsed.nlq and episodes:
             episodes_as_dicts = [ep.model_dump() for ep in episodes]
-            llm_result = await llm_service.parse_natural_language_query(nlq, episodes_as_dicts)
+            llm_result = await llm_service.parse_natural_language_query(parsed.nlq, episodes_as_dicts)
             if llm_result is not None:
                 episodes = [EpisodeSchema(**ep) for ep in llm_result]
 
@@ -347,40 +484,35 @@ class MCPServer:
 
     async def _tool_get_next_episode(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get next unreleased episode."""
-        epguides_key = args.get("epguides_key", "")
-        episodes = await show_service.get_episodes(epguides_key)
-
-        if not episodes:
-            return self._error(_ERROR_INVALID_PARAMS, f"No episodes found for: {epguides_key}")
+        parsed = _parse_arguments("get_next_episode", _ShowArguments, args)
+        episodes = await self._episodes_or_raise(parsed.epguides_key)
 
         for ep in episodes:
             if not ep.is_released and ep.title:
                 return self._success(self._text_content(json.dumps(ep.model_dump(), indent=2, default=str)))
 
-        return self._error(_ERROR_INVALID_PARAMS, "No unreleased episodes found")
+        raise NoUpcomingEpisodeError(parsed.epguides_key)
 
     async def _tool_get_latest_episode(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get most recently released episode."""
-        epguides_key = args.get("epguides_key", "")
-        episodes = await show_service.get_episodes(epguides_key)
-
-        if not episodes:
-            return self._error(_ERROR_INVALID_PARAMS, f"No episodes found for: {epguides_key}")
+        parsed = _parse_arguments("get_latest_episode", _ShowArguments, args)
+        episodes = await self._episodes_or_raise(parsed.epguides_key)
 
         released = [ep for ep in episodes if ep.is_released]
         if not released:
-            return self._error(_ERROR_INVALID_PARAMS, "No released episodes found")
+            raise NoReleasedEpisodeError(parsed.epguides_key)
 
         last_ep = released[-1]
         return self._success(self._text_content(json.dumps(last_ep.model_dump(), indent=2, default=str)))
 
     async def _tool_get_seasons(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get all seasons for a show with posters and summaries."""
-        epguides_key = args.get("epguides_key", "")
-        seasons = await show_service.get_seasons(epguides_key)
+        parsed = _parse_arguments("get_seasons", _ShowArguments, args)
+        seasons = await show_service.get_seasons(parsed.epguides_key)
 
         if not seasons:
-            return self._error(_ERROR_INVALID_PARAMS, f"No seasons found for: {epguides_key}")
+            await show_service.require_show(parsed.epguides_key)
+            raise NoEpisodesError(parsed.epguides_key)
 
         result = [season.model_dump() for season in seasons]
         return self._success(self._text_content(json.dumps(result, indent=2, default=str)))
@@ -393,12 +525,15 @@ class MCPServer:
             "result": result,
         }
 
-    def _error(self, code: int, message: str) -> dict[str, Any]:
-        """Build error JSON-RPC response."""
+    def _error(self, code: JSONRPCErrorCode, message: str, data: dict[str, object] | None = None) -> dict[str, Any]:
+        """Build error JSON-RPC response; ``data`` carries the stable error code, hint and context."""
+        error: dict[str, object] = {"code": int(code), "message": message}
+        if data is not None:
+            error["data"] = data
         return {
             "jsonrpc": "2.0",
             "id": self._request_id,
-            "error": {"code": code, "message": message},
+            "error": error,
         }
 
     def _text_content(self, text: str) -> dict[str, Any]:
