@@ -48,6 +48,7 @@ default in-process registry — same behavior as before.
 
 import os
 import time
+from enum import StrEnum
 
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -185,6 +186,19 @@ def record_cache_hit(cache_key: str) -> None:
 def record_cache_miss(cache_key: str) -> None:
     """Increment the cache-miss counter for the resource type in this key."""
     CACHE_MISSES.labels(type=cache_type_from_key(cache_key)).inc()
+
+
+class UpstreamMetricSource(StrEnum):
+    EPGUIDES = "epguides"
+    TVMAZE = "tvmaze"
+
+
+class UpstreamOutcome(StrEnum):
+    SUCCESS = "success"
+    TIMEOUT = "timeout"
+    HTTP_ERROR = "http_error"
+    EMPTY_RESPONSE = "empty_response"
+    PARSE_ERROR = "parse_error"
 
 
 def record_upstream_request(source: str, outcome: str) -> None:

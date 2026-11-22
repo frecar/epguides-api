@@ -25,9 +25,33 @@ import httpx
 from app.core.cache import cache, mark_upstream_success
 from app.core.config import settings
 from app.core.constants import CACHE_TTL_SHOWS_METADATA_SECONDS, DATE_FORMATS, EPGUIDES_BASE_URL
-from app.core.metrics import observe_upstream_response_age, record_upstream_request
+from app.core.metrics import (
+    UpstreamMetricSource,
+    UpstreamOutcome,
+    observe_upstream_response_age,
+    record_upstream_request,
+)
+from app.exceptions import UpstreamSource
 
 logger = logging.getLogger(__name__)
+
+_EPGUIDES = UpstreamMetricSource.EPGUIDES
+_TVMAZE = UpstreamMetricSource.TVMAZE
+_PAYLOAD_ERRORS: tuple[type[Exception], ...] = (ValueError, TypeError, AttributeError, KeyError)
+CATALOGUE_REQUIRED_COLUMNS = ("title", "directory")
+_HEADER_PREVIEW_COLUMNS = 10
+_HEADER_PREVIEW_CHARS = 40
+
+
+def _upstream_log_fields(
+    source: UpstreamSource, outcome: UpstreamOutcome | None = None, **fields: str | int | None
+) -> dict[str, object]:
+    extra: dict[str, object] = {"upstream_source": source.value}
+    if outcome is not None:
+        extra["outcome"] = outcome.value
+    extra.update({key: value for key, value in fields.items() if value is not None})
+    return extra
+
 
 _DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; EpguidesBot/1.0; +https://epguides.frecar.no)",
@@ -96,25 +120,49 @@ async def _fetch_url(url: str) -> httpx.Response | None:
         ) as client:
             response = await client.get(url)
             response.raise_for_status()
-            observe_upstream_response_age("epguides", time.monotonic() - start)
-            record_upstream_request("epguides", "success")
-            await mark_upstream_success("epguides")
+            observe_upstream_response_age(_EPGUIDES, time.monotonic() - start)
+            record_upstream_request(_EPGUIDES, UpstreamOutcome.SUCCESS)
+            await mark_upstream_success(_EPGUIDES)
             return response
     except httpx.TimeoutException:
-        logger.warning("Timeout fetching %s after %ss", url, settings.HTTP_TIMEOUT_SECONDS)
-        record_upstream_request("epguides", "timeout")
+        logger.warning(
+            "epguides.com request timed out after %ss: %s (raise HTTP_TIMEOUT_SECONDS if this persists)",
+            settings.HTTP_TIMEOUT_SECONDS,
+            url,
+            extra=_upstream_log_fields(UpstreamSource.EPGUIDES, UpstreamOutcome.TIMEOUT, url=url),
+        )
+        record_upstream_request(_EPGUIDES, UpstreamOutcome.TIMEOUT)
         return None
-    except httpx.ConnectError:
-        logger.warning("Connection failed for %s (host unreachable or DNS failure)", url)
-        record_upstream_request("epguides", "http_error")
+    except httpx.ConnectError as e:
+        logger.warning(
+            "epguides.com unreachable (connection or DNS failure) for %s: %s",
+            url,
+            e,
+            extra=_upstream_log_fields(UpstreamSource.EPGUIDES, UpstreamOutcome.HTTP_ERROR, url=url),
+        )
+        record_upstream_request(_EPGUIDES, UpstreamOutcome.HTTP_ERROR)
         return None
     except httpx.HTTPStatusError as e:
-        logger.warning("HTTP %d from %s: %s", e.response.status_code, url, e)
-        record_upstream_request("epguides", "http_error")
+        logger.warning(
+            "epguides.com returned HTTP %d for %s",
+            e.response.status_code,
+            url,
+            extra=_upstream_log_fields(
+                UpstreamSource.EPGUIDES, UpstreamOutcome.HTTP_ERROR, url=url, http_status=e.response.status_code
+            ),
+        )
+        record_upstream_request(_EPGUIDES, UpstreamOutcome.HTTP_ERROR)
         return None
     except Exception as e:
-        logger.error("Unexpected error fetching %s: %s: %s", url, type(e).__name__, e)
-        record_upstream_request("epguides", "http_error")
+        logger.error(
+            "Unexpected %s fetching %s from epguides.com: %s",
+            type(e).__name__,
+            url,
+            e,
+            exc_info=True,
+            extra=_upstream_log_fields(UpstreamSource.EPGUIDES, UpstreamOutcome.HTTP_ERROR, url=url),
+        )
+        record_upstream_request(_EPGUIDES, UpstreamOutcome.HTTP_ERROR)
         return None
 
 
@@ -168,8 +216,11 @@ async def fetch_csv(url: str) -> list[list[str]]:
             "Empty CSV body from %s (HTTP %d) — treating as upstream-unavailable",
             url,
             response.status_code,
+            extra=_upstream_log_fields(
+                UpstreamSource.EPGUIDES, UpstreamOutcome.EMPTY_RESPONSE, url=url, http_status=response.status_code
+            ),
         )
-        record_upstream_request("epguides", "empty_response")
+        record_upstream_request(_EPGUIDES, UpstreamOutcome.EMPTY_RESPONSE)
         return []
 
     if _looks_like_html(text):
@@ -177,15 +228,23 @@ async def fetch_csv(url: str) -> list[list[str]]:
             "HTML body where CSV expected from %s (HTTP %d) — treating as upstream-unavailable",
             url,
             response.status_code,
+            extra=_upstream_log_fields(
+                UpstreamSource.EPGUIDES, UpstreamOutcome.PARSE_ERROR, url=url, http_status=response.status_code
+            ),
         )
-        record_upstream_request("epguides", "parse_error")
+        record_upstream_request(_EPGUIDES, UpstreamOutcome.PARSE_ERROR)
         return []
 
     try:
         return list(csv.reader(io.StringIO(text, newline="")))
     except csv.Error as e:
-        logger.error("CSV parse error for %s: %s", url, e)
-        record_upstream_request("epguides", "parse_error")
+        logger.error(
+            "CSV parse error for %s: %s — treating as upstream-unavailable",
+            url,
+            e,
+            extra=_upstream_log_fields(UpstreamSource.EPGUIDES, UpstreamOutcome.PARSE_ERROR, url=url),
+        )
+        record_upstream_request(_EPGUIDES, UpstreamOutcome.PARSE_ERROR)
         return []
 
 
@@ -201,10 +260,29 @@ async def get_all_shows_metadata() -> list[dict[str, str]]:
     response = await _fetch_url(url)
 
     if not response or response.status_code != 200:
+        logger.warning(
+            "epguides.com show catalogue unavailable from %s; show lookups report upstream_unavailable until it loads",
+            url,
+            extra=_upstream_log_fields(UpstreamSource.EPGUIDES, url=url),
+        )
         return []
 
     text = _clean_unicode_text(response)
-    return list(csv.DictReader(io.StringIO(text, newline="")))
+    reader = csv.DictReader(io.StringIO(text, newline=""))
+    header = [column.strip().lower() for column in reader.fieldnames or []]
+    missing = [column for column in CATALOGUE_REQUIRED_COLUMNS if column not in header]
+    if _looks_like_html(text) or missing:
+        logger.error(
+            "epguides.com show catalogue at %s is not the expected CSV: missing columns %s (header: %s); "
+            "treating as upstream-unavailable",
+            url,
+            missing or list(CATALOGUE_REQUIRED_COLUMNS),
+            [column[:_HEADER_PREVIEW_CHARS] for column in header[:_HEADER_PREVIEW_COLUMNS]],
+            extra=_upstream_log_fields(UpstreamSource.EPGUIDES, UpstreamOutcome.PARSE_ERROR, url=url),
+        )
+        record_upstream_request(_EPGUIDES, UpstreamOutcome.PARSE_ERROR)
+        return []
+    return list(reader)
 
 
 _TVRAGE_COLUMNS = {"season": 1, "number": 2, "release_date": 4, "title": 5}
@@ -232,25 +310,61 @@ async def _tvmaze_get(url: str, *, follow_redirects: bool = False, **kwargs: Any
         async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS) as client:
             response = await client.get(url, **kwargs)
             if follow_redirects and (response.url.scheme != "https" or response.url.host != _TVMAZE_API_HOST):
-                record_upstream_request("tvmaze", "http_error")
-                logger.warning("TVMaze %s redirected off the API origin to %s", url, response.url)
+                record_upstream_request(_TVMAZE, UpstreamOutcome.HTTP_ERROR)
+                logger.warning(
+                    "TVMaze %s redirected off the API origin to %s; refusing to follow",
+                    url,
+                    response.url,
+                    extra=_upstream_log_fields(UpstreamSource.TVMAZE, UpstreamOutcome.HTTP_ERROR, url=url),
+                )
                 return None
             if response.status_code != 200:
-                record_upstream_request("tvmaze", "http_error")
-                logger.debug("TVMaze %s returned HTTP %d", url, response.status_code)
+                record_upstream_request(_TVMAZE, UpstreamOutcome.HTTP_ERROR)
+                logger.debug(
+                    "TVMaze %s returned HTTP %d",
+                    url,
+                    response.status_code,
+                    extra=_upstream_log_fields(
+                        UpstreamSource.TVMAZE, UpstreamOutcome.HTTP_ERROR, url=url, http_status=response.status_code
+                    ),
+                )
                 return None
-            observe_upstream_response_age("tvmaze", time.monotonic() - start)
-            record_upstream_request("tvmaze", "success")
-            await mark_upstream_success("tvmaze")
+            observe_upstream_response_age(_TVMAZE, time.monotonic() - start)
+            record_upstream_request(_TVMAZE, UpstreamOutcome.SUCCESS)
+            await mark_upstream_success(_TVMAZE)
             return response
     except httpx.TimeoutException:
-        logger.warning("Timeout fetching TVMaze %s", url)
-        record_upstream_request("tvmaze", "timeout")
+        logger.warning(
+            "TVMaze request timed out after %ss: %s",
+            settings.HTTP_TIMEOUT_SECONDS,
+            url,
+            extra=_upstream_log_fields(UpstreamSource.TVMAZE, UpstreamOutcome.TIMEOUT, url=url),
+        )
+        record_upstream_request(_TVMAZE, UpstreamOutcome.TIMEOUT)
         return None
     except Exception as e:
-        logger.warning("TVMaze fetch error for %s: %s", url, e)
-        record_upstream_request("tvmaze", "http_error")
+        logger.warning(
+            "TVMaze request failed for %s: %s: %s",
+            url,
+            type(e).__name__,
+            e,
+            extra=_upstream_log_fields(UpstreamSource.TVMAZE, UpstreamOutcome.HTTP_ERROR, url=url),
+        )
+        record_upstream_request(_TVMAZE, UpstreamOutcome.HTTP_ERROR)
         return None
+
+
+def _log_tvmaze_payload_error(payload: str, error: Exception, **identifiers: str) -> None:
+    described = ", ".join(f"{key}={value!r}" for key, value in identifiers.items())
+    logger.warning(
+        "TVMaze %s payload for %s could not be parsed: %s: %s; continuing without it",
+        payload,
+        described,
+        type(error).__name__,
+        error,
+        extra=_upstream_log_fields(UpstreamSource.TVMAZE, UpstreamOutcome.PARSE_ERROR, **identifiers),
+    )
+    record_upstream_request(_TVMAZE, UpstreamOutcome.PARSE_ERROR)
 
 
 async def _search_tvmaze_by_title(title: str) -> dict[str, Any] | None:
@@ -274,8 +388,8 @@ async def _search_tvmaze_by_title(title: str) -> dict[str, Any] | None:
     try:
         result: dict[str, Any] = response.json()
         return result
-    except Exception as e:
-        logger.warning("TVMaze search parse error for '%s': %s", title, e)
+    except _PAYLOAD_ERRORS as e:
+        _log_tvmaze_payload_error("show search", e, title=title)
         return None
 
 
@@ -309,8 +423,8 @@ async def lookup_tvmaze_by_imdb(imdb_id: str) -> dict[str, Any] | None:
     try:
         result: dict[str, Any] = response.json()
         return result
-    except Exception as e:
-        logger.warning("TVMaze imdb lookup parse error for '%s': %s", imdb_id, e)
+    except _PAYLOAD_ERRORS as e:
+        _log_tvmaze_payload_error("IMDB lookup", e, imdb_id=imdb_id)
         return None
 
 
@@ -366,8 +480,8 @@ async def _fetch_tvmaze_episodes(maze_id: str) -> list[dict[str, Any]]:
 
         return episodes
 
-    except Exception as e:
-        logger.warning("TVMaze episodes parse error for maze=%s: %s", maze_id, e)
+    except _PAYLOAD_ERRORS as e:
+        _log_tvmaze_payload_error("episode list", e, maze_id=maze_id)
         return []
 
 
@@ -547,6 +661,7 @@ async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
                 "epguides CSV returned no episodes for %s (csv_url=%s) — falling back to TVMaze",
                 show_id,
                 csv_url,
+                extra=_upstream_log_fields(UpstreamSource.EPGUIDES, epguides_key=show_id, url=csv_url),
             )
 
     if show_page_maze_id:
@@ -573,7 +688,12 @@ async def get_episodes_data(show_id: str) -> list[dict[str, Any]]:
                     )
                     return episodes
 
-    logger.warning("No episode data found for %s", show_id)
+    logger.warning(
+        "No episode data for show %r from epguides.com (%s) or TVMaze; it will be reported as no_episodes",
+        show_id,
+        url,
+        extra={"epguides_key": show_id, "url": url},
+    )
     return []
 
 
@@ -651,8 +771,8 @@ async def _merge_tvmaze_episode_data(episodes: list[dict[str, Any]], maze_id: st
 
         return episodes
 
-    except Exception as e:
-        logger.warning("Failed to merge TVMaze episode data for maze=%s: %s", maze_id, e)
+    except _PAYLOAD_ERRORS as e:
+        _log_tvmaze_payload_error("episode enrichment", e, maze_id=maze_id)
         return episodes
 
 
@@ -676,8 +796,8 @@ async def get_tvmaze_show_data(maze_id: str) -> dict[str, Any] | None:
     try:
         data: dict[str, Any] = response.json()
         return data
-    except Exception as e:
-        logger.warning("Failed to parse TVMaze show data for maze=%s: %s", maze_id, e)
+    except _PAYLOAD_ERRORS as e:
+        _log_tvmaze_payload_error("show details", e, maze_id=maze_id)
         return None
 
 
@@ -698,8 +818,8 @@ async def get_tvmaze_seasons(maze_id: str) -> list[dict[str, Any]]:
     try:
         data: list[dict[str, Any]] = response.json()
         return data
-    except Exception as e:
-        logger.warning("Failed to parse TVMaze seasons for maze=%s: %s", maze_id, e)
+    except _PAYLOAD_ERRORS as e:
+        _log_tvmaze_payload_error("season list", e, maze_id=maze_id)
         return []
 
 
@@ -863,7 +983,12 @@ async def get_show_metadata(show_id: str) -> tuple[str, str] | None:
     response = await _fetch_url(url)
 
     if not response or response.status_code != 200:
-        logger.warning("Failed to fetch metadata for %s", show_id)
+        logger.warning(
+            "Could not fetch the epguides.com page for show %r at %s; its IMDB ID and title are unavailable",
+            show_id,
+            url,
+            extra=_upstream_log_fields(UpstreamSource.EPGUIDES, epguides_key=show_id, url=url),
+        )
         return None
 
     text = response.text

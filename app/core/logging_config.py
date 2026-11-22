@@ -29,6 +29,10 @@ _EXTRA_FIELDS = (
     "upstream_source",
     "tool",
     "mcp_method",
+    "url",
+    "maze_id",
+    "outcome",
+    "http_status",
 )
 
 
