@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS, get_version
+from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS, VERSION, get_version, release_name
 from app.services import epguides, show_service
 
 
@@ -3133,3 +3133,15 @@ async def test_get_show_skips_index_when_no_imdb_id(mock_cached, mock_cache_get,
     assert result is not None
     mock_cache_get.assert_not_awaited()
     mock_index.assert_not_awaited()
+
+
+def test_release_name_is_the_image_commit(monkeypatch):
+    monkeypatch.setenv("GIT_SHA", "0123456789abcdef0123456789abcdef01234567")
+    assert release_name() == "0123456789abcdef0123456789abcdef01234567"
+
+
+def test_release_name_falls_back_to_version_when_the_build_left_git_sha_empty(monkeypatch):
+    monkeypatch.setenv("GIT_SHA", "")
+    assert release_name() == VERSION
+    monkeypatch.delenv("GIT_SHA")
+    assert release_name() == VERSION

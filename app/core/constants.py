@@ -59,6 +59,13 @@ def get_version() -> str:
 VERSION = get_version()
 
 
+def release_name() -> str:
+    """Sentry release: the image's commit (GIT_SHA), or VERSION when it is unset or empty."""
+    import os
+
+    return os.environ.get("GIT_SHA") or VERSION
+
+
 EPISODE_RELEASE_THRESHOLD_HOURS = 80
 """
 Hours after airtime before an episode is considered 'released'.
