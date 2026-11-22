@@ -132,8 +132,6 @@ def isolate_build_model(model: dict[str, Any], namespace: str) -> tuple[dict[str
                     kept[key] = deepcopy(service[key])
             isolated[name] = kept
 
-    # Preserve only top-level metadata relevant to Compose project identity
-    # and the declarations required by the retained build graph.
     result: dict[str, Any] = {}
     for key in ("name", "version"):
         if key in model:
@@ -141,6 +139,4 @@ def isolate_build_model(model: dict[str, Any], namespace: str) -> tuple[dict[str
     result["services"] = isolated
     if secret_sources:
         result["secrets"] = {name: deepcopy(secrets[name]) for name in sorted(secret_sources)}
-    # Compose config already escapes literal dollars for a subsequent parse.
-    # Preserve its output verbatim; escaping again changes build arguments.
     return result, service_tags

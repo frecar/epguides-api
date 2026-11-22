@@ -17,7 +17,6 @@ from typing import Any
 if __package__:
     from .isolate import _build_secret_sources, _service_context_references, isolate_build_model
 else:
-    # Direct execution resolves the co-published sibling, independently of cwd.
     spec = importlib.util.spec_from_file_location("compose_build_isolate", Path(__file__).with_name("isolate.py"))
     if spec is None or spec.loader is None:
         raise ImportError("missing co-published Compose isolation helper")
@@ -96,7 +95,6 @@ def _assert_round_trip(
         raise ValueError("Compose config services must be mappings")
 
     expected_names = set(service_tags)
-    # isolate_build_model retains image-only services used by service: contexts.
     for name in service_tags:
         build = original_services[name].get("build")
         if isinstance(build, dict):
