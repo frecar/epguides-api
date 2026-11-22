@@ -33,12 +33,19 @@ from app.core.cache import (
 from app.core.config import settings
 from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS
 from app.core.metrics import record_by_imdb_bridge_miss
+from app.exceptions import (
+    ImdbIdNotFoundError,
+    InvalidImdbIdError,
+    ShowCatalogUnavailableError,
+    ShowNotFoundError,
+)
 from app.models.schemas import EpisodeSchema, SeasonSchema, ShowSchema, create_show_schema
 from app.services import epguides
 
 logger = logging.getLogger(__name__)
 
 
+IMDB_ID_PATTERN = re.compile(r"tt\d+")
 _DATE_PLACEHOLDER_PATTERNS = [r"^_+", r"^TBA", r"^TBD", r"^\?+", r"^N/A"]
 _MONTH_YEAR_FORMATS = ["%b %Y", "%B %Y", "%b %y", "%B %y"]
 
@@ -98,6 +105,26 @@ async def is_show_catalogue_available() -> bool:
     if await cache_exists(_ALL_SHOWS_CACHE_KEY):
         return True
     return bool(await _get_all_shows_raw())
+
+
+async def require_show(epguides_key: str) -> ShowSchema:
+    """Return the show or raise: ShowCatalogUnavailableError when upstream is down, else ShowNotFoundError."""
+    show = await get_show(epguides_key)
+    if show:
+        return show
+    if not await is_show_catalogue_available():
+        raise ShowCatalogUnavailableError(epguides_key)
+    raise ShowNotFoundError(epguides_key)
+
+
+async def require_show_by_imdb_id(imdb_id: str) -> ShowSchema:
+    """Return the show for a ``tt``-prefixed IMDB ID or raise InvalidImdbIdError / ImdbIdNotFoundError."""
+    if not IMDB_ID_PATTERN.fullmatch(imdb_id):
+        raise InvalidImdbIdError(imdb_id)
+    show = await get_show_by_imdb_id(imdb_id)
+    if not show:
+        raise ImdbIdNotFoundError(imdb_id)
+    return show
 
 
 async def _get_all_shows_raw() -> list[dict[str, Any]]:

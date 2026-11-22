@@ -4,40 +4,24 @@ REST API endpoints for TV show operations.
 All endpoints are async and return Pydantic models for automatic validation.
 """
 
-import re
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query
 
 from app.core.cache import invalidate_cache
 from app.exceptions import (
-    ImdbIdNotFoundError,
-    InvalidImdbIdError,
     InvalidParameterError,
     NoEpisodesError,
     NoReleasedEpisodeError,
     NoUpcomingEpisodeError,
     SeasonNotFoundError,
-    ShowCatalogUnavailableError,
     ShowFinishedError,
-    ShowNotFoundError,
 )
 from app.models.responses import PaginatedResponse
 from app.models.schemas import EpisodeSchema, SeasonSchema, ShowDetailsSchema, ShowListSchema, ShowSchema
 from app.services import llm_service, show_service
 
 router = APIRouter()
-
-_IMDB_ID_RE = re.compile(r"^tt\d+$")
-
-
-async def _require_show(epguides_key: str) -> ShowSchema:
-    show = await show_service.get_show(epguides_key)
-    if show:
-        return show
-    if not await show_service.is_show_catalogue_available():
-        raise ShowCatalogUnavailableError(epguides_key)
-    raise ShowNotFoundError(epguides_key)
 
 
 @router.get(
@@ -155,13 +139,7 @@ async def get_show_by_imdb_id(
       isn't in the epguides catalog, or several catalog shows match and
       none can be chosen safely
     """
-    if not _IMDB_ID_RE.match(imdb_id):
-        raise InvalidImdbIdError(imdb_id)
-
-    show = await show_service.get_show_by_imdb_id(imdb_id)
-    if not show:
-        raise ImdbIdNotFoundError(imdb_id)
-    return show
+    return await show_service.require_show_by_imdb_id(imdb_id)
 
 
 @router.get(
@@ -202,7 +180,7 @@ async def get_show_metadata(
         await invalidate_cache("show_metadata", normalized_key)
         await show_service.invalidate_show_cache(normalized_key)
 
-    show = await _require_show(epguides_key)
+    show = await show_service.require_show(epguides_key)
 
     if include == "episodes":
         episodes = await show_service.get_episodes(epguides_key)
@@ -233,7 +211,7 @@ async def get_seasons(epguides_key: str) -> list[SeasonSchema]:
     """
     seasons = await show_service.get_seasons(epguides_key)
     if not seasons:
-        await _require_show(epguides_key)
+        await show_service.require_show(epguides_key)
     return seasons
 
 
@@ -261,7 +239,7 @@ async def get_season_episodes(
 
     if not season_episodes:
         if not episodes:
-            await _require_show(epguides_key)
+            await show_service.require_show(epguides_key)
         raise SeasonNotFoundError(epguides_key, season_number, (ep.season for ep in episodes))
 
     return season_episodes
@@ -362,7 +340,7 @@ async def get_show_episodes(
             episodes = [EpisodeSchema(**ep) for ep in llm_result]
 
     if not episodes:
-        await _require_show(epguides_key)
+        await show_service.require_show(epguides_key)
 
     return episodes
 
@@ -393,7 +371,7 @@ async def get_next_episode(epguides_key: str) -> EpisodeSchema:
     GET /shows/Severance/episodes/next
     ```
     """
-    show = await _require_show(epguides_key)
+    show = await show_service.require_show(epguides_key)
 
     if show.end_date:
         raise ShowFinishedError(epguides_key, show.end_date)
@@ -445,7 +423,7 @@ async def get_latest_episode(epguides_key: str) -> EpisodeSchema:
     """
     episodes = await show_service.get_episodes(epguides_key)
     if not episodes:
-        await _require_show(epguides_key)
+        await show_service.require_show(epguides_key)
         raise NoEpisodesError(epguides_key)
 
     released = [ep for ep in episodes if ep.is_released]

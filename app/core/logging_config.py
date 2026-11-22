@@ -27,6 +27,8 @@ _EXTRA_FIELDS = (
     "end_date",
     "parameter",
     "upstream_source",
+    "tool",
+    "mcp_method",
 )
 
 
