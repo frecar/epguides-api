@@ -12,7 +12,22 @@ from typing import Any
 
 from app.core.config import settings
 
-_EXTRA_FIELDS = ("method", "path", "status_code", "process_time_seconds", "client")
+_EXTRA_FIELDS = (
+    "method",
+    "path",
+    "status_code",
+    "process_time_seconds",
+    "client",
+    "request_id",
+    "error_code",
+    "epguides_key",
+    "imdb_id",
+    "season",
+    "available_seasons",
+    "end_date",
+    "parameter",
+    "upstream_source",
+)
 
 
 class StructuredFormatter(logging.Formatter):
