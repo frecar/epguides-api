@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Managed CI helper. Build production Compose recipes and scan their exact images.
 set -euo pipefail
 umask 077
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -19,7 +18,6 @@ case "$operation" in
   build) ;;
   *) echo "operation must be build, scan or cleanup" >&2; exit 2 ;;
 esac
-# The co-published library is checked by the consumer-bundle runtime controls.
 # shellcheck source=/dev/null
 source "$script_dir/compose_build_command.sh"
 export GIT_SHA
@@ -49,7 +47,6 @@ for filename in os.environ.get("COMPOSE_FILES", "docker-compose.prod.yml").split
 PY
 python3 "$script_dir/images.py" prepare --directory "$plan_dir" --namespace "$namespace" \
     --prefix-json "$plan_dir/prefix.json" --profiles-json "$plan_dir/profiles.json" > /dev/null
-# Publish owned tags before building, so a partial failure can still clean up.
 compose_cmd=$(python3 - "$plan_dir/state.json" <<'PY'
 import json
 import os

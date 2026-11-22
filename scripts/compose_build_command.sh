@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Shared by the deploy renderer and the deploy-build-parity composite action.
-# The caller owns retry, logging, locking, preflight and image scanning.
 
 build_service_log() {
     local message="$*"
@@ -13,9 +11,6 @@ build_service_log() {
     fi
 }
 
-# Print the smallest service list that builds every distinct image exactly
-# once. Empty output means build all services; any missing tool or invalid
-# Compose config therefore fails open to the historical build-everything path.
 compose_dedup_build_targets() {
     local compose_prefix="${1:-}"
     local config lines lines_rc total_count canon_names canon_count config_rc
@@ -102,10 +97,6 @@ PY
     return 0
 }
 
-# Execute the common first-attempt build argv without evaluating a shell
-# string. Prefix and build flags are trusted renderer outputs; service names
-# arrive as distinct positional arguments. The `--` separator is present only
-# when a deduped service list exists.
 compose_build_command() {
     local compose_prefix="${1:-}"
     local pull="${2:-}"

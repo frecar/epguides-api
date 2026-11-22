@@ -1,26 +1,9 @@
 name: EPGuides API Trivy fs nightly sweep
 # managed-public-ci-template: trivy-fs-nightly — DO NOT HAND-EDIT.
-# This file is a managed copy kept byte-identical to the canonical CI
-# template. Hand-edits are overwritten by the next template sync; change
-# the canonical template (and re-run the drift check) instead.
-#
-# Nightly Trivy fs sweep — catches CVEs published against pinned
-# versions since the last PR. Companion to the `trivy-fs` job in
-# ci.yml (which gates PR/push). Identical scan, different trigger.
-#
-# Runs at 03:30 UTC — findings land in the Actions log and (on
-# failure) surface via GitHub's default workflow-failure
-# notifications without blocking any PR.
-#
-# `ignore-unfixed: true` suppresses upstream-not-yet-patched noise
-# (bumping the dep is the only real remediation, and there is
-# nothing to bump to yet).
 
 on:
   schedule:
     - cron: "30 3 * * *"
-  # Manual dispatch for ad-hoc re-scans (e.g. after editing
-  # .trivyignore to verify the allowlist behaves as intended).
   workflow_dispatch:
 
 permissions:
@@ -29,37 +12,22 @@ permissions:
 jobs:
   trivy-fs-nightly:
     name: Trivy fs scan (nightly)
-    # GitHub-hosted: keep this public repo entirely off self-hosted
-    # runners. This scheduled scan reads the repo against the advisory DB
-    # and has no infrastructure dependency.
     runs-on: ubuntu-latest
-    # Bounded ceiling so a wedged runner (hung Trivy DB pull or stuck
-    # scan) fails fast. Mirrors the trivy-fs PR job in ci.yml.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Install Trivy into a per-job directory — see the ci.yml trivy-fs
-      # job for the full rationale: setup-trivy's default path is shared
-      # across concurrent jobs on the self-hosted runner host, so writing
-      # the binary in one job while another execs it raises ETXTBSY
-      # (exit 126). ${{ runner.temp }} is per-job and on local disk.
       - name: Install Trivy (per-job, isolated binary)
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
-          version: v0.70.0 # keep in sync with aquasecurity/trivy-action@v0.36.0
+          version: v0.70.0
           cache: true
           path: ${{ runner.temp }}
       - name: Put the per-job Trivy on PATH
         run: echo "${{ runner.temp }}/trivy-bin" >> "$GITHUB_PATH"
-      # Two-step gating mirrors the PR-gating job in ci.yml. Unified
-      # policy across PR + nightly: CRITICAL gates the workflow run
-      # (fails the scheduled job → GitHub notification); HIGH surfaces
-      # in log only. Same split keeps the meaning of "the trivy-fs
-      # policy" uniform across triggers.
       - name: Trivy fs scan — CRITICAL (gates run)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          skip-setup-trivy: true # use the per-job Trivy installed above
+          skip-setup-trivy: true
           scan-type: "fs"
           scan-ref: "."
           severity: "CRITICAL"
@@ -70,12 +38,10 @@ jobs:
         env:
           TRIVY_DISABLE_VEX_NOTICE: "true"
       - name: Trivy fs scan — HIGH (annotation only)
-        # if: always() ensures a CRITICAL fail above does not hide
-        # HIGH findings — see ci.yml comment for the rationale.
         if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          skip-setup-trivy: true # use the per-job Trivy installed above
+          skip-setup-trivy: true
           scan-type: "fs"
           scan-ref: "."
           severity: "HIGH"
