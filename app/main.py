@@ -41,8 +41,13 @@ def _initialize_logging() -> None:
         from app.core.logging_config import setup_logging
 
         setup_logging()
-    except Exception:
+    except Exception as e:
         logging.basicConfig(level=logging.INFO)
+        logging.getLogger(__name__).warning(
+            "Structured logging setup failed (%s: %s); using basic INFO logging. Check LOG_LEVEL and LOG_FORMAT.",
+            type(e).__name__,
+            e,
+        )
 
 
 _initialize_logging()

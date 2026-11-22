@@ -184,7 +184,8 @@ async def cache_exists(key: str) -> bool:
         redis = await get_redis()
         count = await redis.exists(key)
         return bool(count > 0)
-    except Exception:
+    except Exception as e:
+        logger.warning("Cache existence check failed for %s, treating it as absent: %s", key, e)
         return False
 
 
