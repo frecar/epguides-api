@@ -62,7 +62,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]') || (vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,7 +102,7 @@ jobs:
 
   typecheck:
     name: Type Check
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]') || (vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -294,7 +294,7 @@ jobs:
   # ===== END managed-public-ci-template: ci-trivy-buildx =====
 
   gitleaks:
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]') || (vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-pooled-untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -354,7 +354,7 @@ jobs:
   ci-gate:
     if: always()
     needs: [audit, lint, typecheck, test, trivy-fs, docker-build, trivy-image, gitleaks]
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && '["ubuntu-latest"]') || (vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-direct-untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Assert all required jobs succeeded
