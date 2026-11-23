@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     REDIS_DB: int = Field(default=0, ge=0)
     REDIS_PASSWORD: str | None = None
     REDIS_MAX_CONNECTIONS: int = Field(default=100, ge=1)
+    REDIS_CONNECT_TIMEOUT_SECONDS: float = Field(default=0.5, gt=0)
+    REDIS_SOCKET_TIMEOUT_SECONDS: float = Field(default=1.0, gt=0)
 
     CACHE_TTL_SECONDS: int = Field(default=604800, gt=0)
 

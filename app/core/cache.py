@@ -51,7 +51,8 @@ async def get_redis() -> Redis:
 
     Pool is sized for production workloads:
     - 12 uvicorn workers × 10 connections each = 120 max connections
-    - Socket timeouts prevent hanging on network issues
+    - Short socket timeouts and no retry, so an unreachable cache costs
+      under a second and requests fall through to the source
     - Health check interval ensures dead connections are recycled
     """
     global _redis_client, _redis_pool
@@ -64,10 +65,10 @@ async def get_redis() -> Redis:
             password=settings.REDIS_PASSWORD,
             decode_responses=True,
             max_connections=settings.REDIS_MAX_CONNECTIONS,
-            socket_timeout=5.0,
-            socket_connect_timeout=5.0,
+            socket_timeout=settings.REDIS_SOCKET_TIMEOUT_SECONDS,
+            socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT_SECONDS,
             health_check_interval=30,
-            retry_on_timeout=True,
+            retry_on_timeout=False,
         )
         _redis_client = Redis(connection_pool=_redis_pool)
 
