@@ -33,6 +33,7 @@ from app.core.metrics import init_ingest_freshness, mark_worker_dead, render_met
 from app.core.middleware import RequestIDMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware, get_request_id
 from app.core.observability import init_observability
 from app.exceptions import EpguidesAPIException, ErrorCode, ExternalServiceError
+from app.services.show_service import refresh_search_catalogue
 
 
 def _initialize_logging() -> None:
@@ -62,15 +63,10 @@ _READINESS_UPSTREAM = "epguides"
 init_observability(release=release_name())
 
 
-async def _cache_age_refresh_loop() -> None:
-    """Background task: update the cache-age gauge every 5 minutes.
-
-    Runs in every uvicorn worker but only one worker actually scans Redis
-    per interval (NX lock inside refresh_cache_age_gauges). CancelledError
-    from task.cancel() propagates out of asyncio.sleep naturally.
-    """
+async def _refresh_worker_caches() -> None:
+    """Refresh the search catalogue and cache-age gauge every five minutes."""
     while True:
-        await refresh_cache_age_gauges()
+        await asyncio.gather(refresh_search_catalogue(), refresh_cache_age_gauges())
         await asyncio.sleep(300)
 
 
@@ -83,7 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     logger.info("Application startup")
     init_ingest_freshness()
-    task = asyncio.create_task(_cache_age_refresh_loop())
+    task = asyncio.create_task(_refresh_worker_caches())
     yield
     task.cancel()
     try:

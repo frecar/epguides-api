@@ -476,8 +476,9 @@ async def test_get_shows_page(mock_get_metadata, mock_cache_set, mock_cache_get)
 @patch("app.services.show_service.cache_get")
 @patch("app.services.show_service.cache_set")
 @patch("app.services.epguides.get_all_shows_metadata")
-async def test_search_shows_fast(mock_get_metadata, mock_cache_set, mock_cache_get):
+async def test_search_shows_fast(mock_get_metadata, mock_cache_set, mock_cache_get, monkeypatch):
     """Test fast search shows."""
+    monkeypatch.setattr(show_service, "_search_catalogue", None)
     mock_cache_get.return_value = None
     mock_get_metadata.return_value = [
         {"directory": "bb", "title": "Breaking Bad"},
@@ -489,6 +490,35 @@ async def test_search_shows_fast(mock_get_metadata, mock_cache_set, mock_cache_g
 
     assert len(results) == 1
     assert results[0].title == "Breaking Bad"
+
+
+@pytest.mark.asyncio
+async def test_search_keeps_last_good_catalogue_until_expiry(monkeypatch):
+    monkeypatch.setattr(show_service, "_search_catalogue", None)
+    with (
+        patch.object(show_service, "monotonic", return_value=100.0) as clock,
+        patch.object(show_service, "cache_get", return_value='[{"epguides_key": "lost", "title": "Lost"}]') as redis,
+        patch.object(epguides, "get_all_shows_metadata", return_value=[]) as origin,
+    ):
+        await show_service.refresh_search_catalogue()
+        redis.return_value = None
+
+        results = await show_service.search_shows_fast("lost")
+        assert [show.title for show in results] == ["Lost"]
+        redis.assert_awaited_once()
+        origin.assert_not_awaited()
+
+        clock.return_value = 699.0
+        assert await show_service.refresh_search_catalogue() == []
+        assert [show.title for show in await show_service.search_shows_fast("lost")] == ["Lost"]
+
+        clock.return_value = 700.0
+        assert await show_service.search_shows_fast("lost") == []
+
+        redis.return_value = '[{"epguides_key": "lostinsp", "title": "Lost in Space"}]'
+        await show_service.refresh_search_catalogue()
+        redis.return_value = None
+        assert [show.title for show in await show_service.search_shows_fast("lost")] == ["Lost in Space"]
 
 
 @pytest.mark.asyncio
