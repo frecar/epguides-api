@@ -5,6 +5,7 @@ import pytest
 from scripts.compute_xdist_workers import (
     MEASURED_BYTES_PER_WORKER,
     MEASURED_SUITE_KNEE,
+    RedisWorkerDatabaseOutOfRange,
     redis_db_for_worker,
     select_workers,
 )
@@ -44,5 +45,5 @@ def test_each_normal_xdist_worker_gets_a_dedicated_redis_database() -> None:
     assert redis_db_for_worker("gw0") == 1
     assert redis_db_for_worker(f"gw{MEASURED_SUITE_KNEE - 1}") == MEASURED_SUITE_KNEE
     assert redis_db_for_worker("master") is None
-    with pytest.raises(ValueError, match="exceeds Redis"):
+    with pytest.raises(RedisWorkerDatabaseOutOfRange, match="gw15 requires database 16 and exceeds Redis"):
         redis_db_for_worker("gw15")

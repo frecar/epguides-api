@@ -7,6 +7,7 @@ Tests Redis cache operations, decorators, and helpers.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.core import cache
 
@@ -57,7 +58,7 @@ async def test_cache_get_returns_none_on_miss():
 async def test_cache_get_handles_error():
     """Test cache_get returns None on Redis error."""
     mock_redis = AsyncMock()
-    mock_redis.get.side_effect = Exception("Redis error")
+    mock_redis.get.side_effect = RedisConnectionError("Redis error")
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
         result = await cache.cache_get("test_key")
@@ -81,7 +82,7 @@ async def test_cache_set_stores_value():
 async def test_cache_set_handles_error():
     """Test cache_set handles Redis error silently."""
     mock_redis = AsyncMock()
-    mock_redis.set.side_effect = Exception("Redis error")
+    mock_redis.set.side_effect = RedisConnectionError("Redis error")
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
         await cache.cache_set("test_key", "test_value", 3600)
@@ -101,7 +102,7 @@ async def test_cache_delete_removes_keys():
 async def test_cache_delete_handles_error():
     """Test cache_delete handles Redis error silently."""
     mock_redis = AsyncMock()
-    mock_redis.delete.side_effect = Exception("Redis error")
+    mock_redis.delete.side_effect = RedisConnectionError("Redis error")
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
         await cache.cache_delete("key1")
@@ -122,7 +123,7 @@ async def test_cache_hget_returns_value():
 async def test_cache_hget_handles_error():
     """Test cache_hget returns None on error."""
     mock_redis = AsyncMock()
-    mock_redis.hget.side_effect = Exception("Redis error")
+    mock_redis.hget.side_effect = RedisConnectionError("Redis error")
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
         result = await cache.cache_hget("hash_key", "field")
@@ -155,7 +156,7 @@ async def test_cache_exists_returns_false():
 async def test_cache_exists_handles_error():
     """Test cache_exists returns False on error."""
     mock_redis = AsyncMock()
-    mock_redis.exists.side_effect = Exception("Redis error")
+    mock_redis.exists.side_effect = RedisConnectionError("Redis error")
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
         result = await cache.cache_exists("test_key")
@@ -189,7 +190,7 @@ async def test_invalidate_cache_returns_false_when_not_found():
 async def test_invalidate_cache_handles_error():
     """Test invalidate_cache returns False on error."""
     mock_redis = AsyncMock()
-    mock_redis.delete.side_effect = Exception("Redis error")
+    mock_redis.delete.side_effect = RedisConnectionError("Redis error")
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
         result = await cache.invalidate_cache("episodes", "test")
@@ -212,7 +213,7 @@ async def test_extend_cache_ttl_extends():
 async def test_extend_cache_ttl_handles_error():
     """Test extend_cache_ttl returns False on error."""
     mock_redis = AsyncMock()
-    mock_redis.expire.side_effect = Exception("Redis error")
+    mock_redis.expire.side_effect = RedisConnectionError("Redis error")
 
     with patch.object(cache, "get_redis", return_value=mock_redis):
         result = await cache.extend_cache_ttl("episodes", "test", 3600)
@@ -407,7 +408,7 @@ async def test_get_cache_stats_returns_stats():
 @pytest.mark.asyncio
 async def test_get_cache_stats_handles_error():
     """Test get_cache_stats returns error status on failure."""
-    with patch.object(cache, "get_redis", side_effect=Exception("Connection failed")):
+    with patch.object(cache, "get_redis", side_effect=RedisConnectionError("Connection failed")):
         result = await cache.get_cache_stats()
         assert result["status"] == "error"
         assert "error" in result
@@ -421,9 +422,34 @@ async def test_cache_decorator_handles_redis_error():
     async def get_data(key: str) -> dict:
         return {"result": "fresh"}
 
-    with patch.object(cache, "cache_get", side_effect=Exception("Redis connection error")):
+    with patch.object(cache, "get_redis", side_effect=RedisConnectionError("Redis connection error")):
         result = await get_data("mykey")
         assert result == {"result": "fresh"}
+
+
+@pytest.mark.asyncio
+async def test_cache_decorator_propagates_source_failure_once():
+    failure = RuntimeError("upstream programming error")
+    fetch = AsyncMock(side_effect=failure)
+    cached_fetch = cache.cache(ttl_seconds=3600, key_prefix="test")(fetch)
+
+    with patch.object(cache, "cache_get", return_value=None), pytest.raises(RuntimeError, match=str(failure)):
+        await cached_fetch("mykey")
+
+    fetch.assert_awaited_once_with("mykey")
+
+
+@pytest.mark.asyncio
+async def test_cache_decorator_keeps_result_when_result_cannot_be_encoded():
+    result = object()
+    fetch = AsyncMock(return_value=result)
+    cached_fetch = cache.cache(ttl_seconds=3600, key_prefix="test")(fetch)
+
+    with patch.object(cache, "cache_get", return_value=None), patch.object(cache, "cache_set") as store:
+        assert await cached_fetch("mykey") is result
+
+    fetch.assert_awaited_once_with("mykey")
+    store.assert_not_called()
 
 
 def _agen(*items):
@@ -562,7 +588,7 @@ async def test_refresh_cache_age_gauges_exception_logs_warning(caplog):
     """Redis errors are caught and logged as warnings."""
     import logging
 
-    with patch.object(cache, "get_redis", side_effect=Exception("redis down")):
+    with patch.object(cache, "get_redis", side_effect=RedisConnectionError("redis down")):
         with caplog.at_level(logging.WARNING, logger="app.core.cache"):
             await cache.refresh_cache_age_gauges()
     assert "Failed to refresh cache age gauges" in caplog.text
@@ -587,7 +613,7 @@ async def test_mark_upstream_success_swallows_redis_error(caplog):
     """A Redis write failure must not propagate out of mark_upstream_success."""
     import logging
 
-    with patch.object(cache, "get_redis", side_effect=Exception("redis down")):
+    with patch.object(cache, "get_redis", side_effect=RedisConnectionError("redis down")):
         with caplog.at_level(logging.WARNING, logger="app.core.cache"):
             await cache.mark_upstream_success("epguides")
     assert "Failed to record upstream success" in caplog.text
@@ -639,7 +665,7 @@ async def test_get_upstream_last_success_redis_error_returns_none(caplog):
     """A Redis read error returns None and logs a warning."""
     import logging
 
-    with patch.object(cache, "get_redis", side_effect=Exception("redis down")):
+    with patch.object(cache, "get_redis", side_effect=RedisConnectionError("redis down")):
         with caplog.at_level(logging.WARNING, logger="app.core.cache"):
             result = await cache.get_upstream_last_success("epguides")
 
@@ -689,7 +715,7 @@ async def test_probe_redis_round_trip_error_returns_false(caplog):
     """A Redis connection error returns (False, None) and logs a warning."""
     import logging
 
-    with patch.object(cache, "get_redis", side_effect=Exception("connection refused")):
+    with patch.object(cache, "get_redis", side_effect=RedisConnectionError("connection refused")):
         with caplog.at_level(logging.WARNING, logger="app.core.cache"):
             ok, round_trip_ms = await cache.probe_redis_round_trip()
 

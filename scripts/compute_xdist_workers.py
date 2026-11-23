@@ -114,13 +114,27 @@ def discover_available_memory() -> int | None:
     return host_available
 
 
+class WorkerConfigurationError(ValueError):
+    pass
+
+
+class RedisWorkerDatabaseOutOfRange(WorkerConfigurationError):
+    def __init__(self, worker_id: str, database: int) -> None:
+        self.worker_id = worker_id
+        self.database = database
+        super().__init__(
+            f"xdist worker {worker_id} requires database {database} and exceeds Redis's default 16-database range. "
+            "Use at most 15 xdist workers with the default configuration."
+        )
+
+
 def redis_db_for_worker(worker_id: str) -> int | None:
     """Map an xdist ``gwN`` identity to a dedicated non-default Redis DB."""
     if not worker_id.startswith("gw") or not worker_id[2:].isdigit():
         return None
     database = int(worker_id[2:]) + 1
     if database > 15:
-        raise ValueError(f"xdist worker {worker_id} exceeds Redis's default 16-database range")
+        raise RedisWorkerDatabaseOutOfRange(worker_id, database)
     return database
 
 

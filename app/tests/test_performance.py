@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from redis.exceptions import RedisError
 
 from app.main import app
 from app.models.schemas import EpisodeSchema, SeasonSchema, create_show_schema
@@ -115,7 +116,7 @@ async def measure_endpoint(client: AsyncClient, method: str, url: str, **kwargs)
     elif method.upper() == "POST":
         request = client.post
     else:
-        raise ValueError(f"unsupported HTTP method: {method}")
+        pytest.fail(f"unsupported HTTP method: {method}")
 
     await request(url, **kwargs)
     samples: list[float] = []
@@ -323,7 +324,7 @@ async def redis_available() -> bool:
         redis = await get_redis()
         await redis.ping()
         return True
-    except Exception:
+    except RedisError:
         return False
 
 

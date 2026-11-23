@@ -68,7 +68,7 @@ def _local_hooks() -> dict[str, dict]:
             hooks[hook_id] = hook
     if hooks:
         return hooks
-    raise AssertionError("no `repo: local` block in .pre-commit-config.yaml")
+    pytest.fail("no `repo: local` block in .pre-commit-config.yaml")
 
 
 def test_make_test_isolates_coverage_file_per_run() -> None:

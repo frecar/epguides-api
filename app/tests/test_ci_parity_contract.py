@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -44,7 +45,7 @@ def _local_hooks() -> dict[str, dict]:
             hooks[hook_id] = hook
     if hooks:
         return hooks
-    raise AssertionError("no `repo: local` block in .pre-commit-config.yaml")
+    pytest.fail("no `repo: local` block in .pre-commit-config.yaml")
 
 
 def test_makefile_exposes_ci_parity_target() -> None:

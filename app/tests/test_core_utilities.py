@@ -95,8 +95,9 @@ class TestStructuredFormatter:
     def test_exception_info_included(self):
         """Test that exception info is added to JSON output."""
         formatter = StructuredFormatter()
+        failure = ValueError("something broke")
         try:
-            raise ValueError("something broke")
+            raise failure
         except ValueError:
             import sys
 

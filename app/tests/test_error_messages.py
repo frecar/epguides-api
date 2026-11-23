@@ -247,7 +247,8 @@ def test_typed_errors_keep_their_cause():
         try:
             raise cause
         except TimeoutError as err:
-            raise ExternalServiceError("TVMaze timed out", source=UpstreamSource.TVMAZE) from err
+            message = "TVMaze timed out"
+            raise ExternalServiceError(message, source=UpstreamSource.TVMAZE) from err
     except ExternalServiceError as error:
         assert error.__cause__ is cause
 

@@ -54,6 +54,7 @@ force-exclude = true
 
 [tool.ruff.lint]
 select = [
+    "BLE001", "TRY002", "TRY003", "B904", "E722", "S110", "S112",
     "E",
     "W",
     "F",

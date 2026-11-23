@@ -63,12 +63,15 @@ exactly; only prose naming private siblings has been rewritten.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from jsonschema import Draft202012Validator
 from jsonschema import exceptions as jsonschema_exceptions
+
+logger = logging.getLogger(__name__)
 
 VALIDATION_MESSAGE_LIMIT = 400
 SUCCESS_RESPONSE_KEYS = (200, "200", "2XX")
@@ -124,6 +127,22 @@ class ContractResult:
         return lines
 
 
+class ContractProbeError(AssertionError):
+    pass
+
+
+class DocumentSecurityError(ContractProbeError):
+    def __init__(self, document_security: object) -> None:
+        self.document_security = document_security
+        super().__init__(
+            "OpenAPI document carries a top-level `security` requirement "
+            f"({document_security!r}); the anonymous-route eligibility filter "
+            "(absent operation security == anonymous) is no longer valid. "
+            "Switch the filter to require an explicit empty `security: []` per "
+            "anonymous operation, or scope the document security away."
+        )
+
+
 def assert_no_document_level_security(schema: dict[str, Any]) -> None:
     """Raise if the document carries a non-empty top-level ``security``.
 
@@ -137,13 +156,7 @@ def assert_no_document_level_security(schema: dict[str, Any]) -> None:
     """
     document_security = schema.get("security")
     if document_security:
-        raise AssertionError(
-            "OpenAPI document carries a top-level `security` requirement "
-            f"({document_security!r}); the anonymous-route eligibility filter "
-            "(absent operation security == anonymous) is no longer valid. "
-            "Switch the filter to require an explicit empty `security: []` per "
-            "anonymous operation, or scope the document security away."
-        )
+        raise DocumentSecurityError(document_security)
 
 
 def _operation_is_anonymous(operation: dict[str, Any]) -> bool:
@@ -263,6 +276,7 @@ def _probe_route(path: str, *, fetch: Fetch, validator: Draft202012Validator | N
     try:
         http_status, body = fetch(path)
     except Exception as exc:
+        logger.exception("Contract fetch failed for %s", path)
         return RouteProbeResult(
             route=path,
             ok=False,

@@ -17,6 +17,7 @@ from time import monotonic
 from typing import Any, NamedTuple
 
 import orjson
+from redis.exceptions import RedisError
 
 from app.core.cache import (
     TTL_1_YEAR,
@@ -218,7 +219,7 @@ async def _build_show_index() -> None:
         pipe.expire("runtime_index", TTL_30_DAYS)
         await pipe.execute()
         logger.info("Built show index: %d shows", len(shows))
-    except Exception as e:
+    except RedisError as e:
         logger.warning("Failed to build show index: %s", e)
 
 
