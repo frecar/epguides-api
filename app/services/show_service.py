@@ -13,7 +13,8 @@ import json
 import logging
 import re
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from time import monotonic
+from typing import Any, NamedTuple
 
 import orjson
 
@@ -48,6 +49,15 @@ logger = logging.getLogger(__name__)
 IMDB_ID_PATTERN = re.compile(r"tt\d+")
 _DATE_PLACEHOLDER_PATTERNS = [r"^_+", r"^TBA", r"^TBD", r"^\?+", r"^N/A"]
 _MONTH_YEAR_FORMATS = ["%b %Y", "%B %Y", "%b %y", "%B %y"]
+_SEARCH_CATALOGUE_TTL_SECONDS = 600
+
+
+class _SearchCatalogue(NamedTuple):
+    expires_at: float
+    shows: list[dict[str, Any]]
+
+
+_search_catalogue: _SearchCatalogue | None = None
 
 
 async def invalidate_show_cache(normalized_id: str) -> None:
@@ -91,10 +101,23 @@ async def get_shows_page(page: int, limit: int) -> tuple[list[ShowSchema], int]:
 
 async def search_shows_fast(query: str) -> list[ShowSchema]:
     """Search shows efficiently (only converts matches to Pydantic)."""
-    raw = await _get_all_shows_raw()
+    catalogue = _search_catalogue
+    if catalogue is None or monotonic() >= catalogue.expires_at:
+        raw = await refresh_search_catalogue()
+    else:
+        raw = catalogue.shows
     query_lower = query.lower()
     matches = [item for item in raw if query_lower in item.get("title", "").lower()]
     return [ShowSchema(**item) for item in matches[:100]]
+
+
+async def refresh_search_catalogue() -> list[dict[str, Any]]:
+    """Refresh the worker's search catalogue and retain the prior expiry on failure."""
+    global _search_catalogue
+    shows = await _get_all_shows_raw()
+    if shows:
+        _search_catalogue = _SearchCatalogue(monotonic() + _SEARCH_CATALOGUE_TTL_SECONDS, shows)
+    return shows
 
 
 _ALL_SHOWS_CACHE_KEY = "shows:all:raw"

@@ -140,6 +140,7 @@ async def test_lifespan_startup_shutdown():
     with (
         patch("app.main.close_redis_pool") as mock_close,
         patch("app.main.refresh_cache_age_gauges", new_callable=AsyncMock),
+        patch("app.main.refresh_search_catalogue", new_callable=AsyncMock),
     ):
         async with lifespan(mock_app):
             pass
@@ -147,19 +148,20 @@ async def test_lifespan_startup_shutdown():
 
 
 @pytest.mark.asyncio
-async def test_cache_age_refresh_loop_calls_refresh_then_sleeps():
-    """The background loop calls refresh once before sleeping."""
+async def test_worker_cache_loop_refreshes_catalogue_and_metrics_before_sleeping():
     import asyncio
 
-    from app.main import _cache_age_refresh_loop
+    from app.main import _refresh_worker_caches
 
     with (
-        patch("app.main.refresh_cache_age_gauges", new_callable=AsyncMock) as mock_refresh,
+        patch("app.main.refresh_cache_age_gauges", new_callable=AsyncMock) as refresh_metrics,
+        patch("app.main.refresh_search_catalogue", new_callable=AsyncMock) as refresh_catalogue,
         patch("asyncio.sleep", side_effect=asyncio.CancelledError),
     ):
         with pytest.raises(asyncio.CancelledError):
-            await _cache_age_refresh_loop()
-    mock_refresh.assert_called_once()
+            await _refresh_worker_caches()
+    refresh_metrics.assert_awaited_once()
+    refresh_catalogue.assert_awaited_once()
 
 
 def test_middleware_exception_handling():
