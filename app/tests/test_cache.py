@@ -718,3 +718,29 @@ async def test_probe_redis_round_trip_timeout_returns_false():
 
     assert ok is False
     assert round_trip_ms is None
+
+
+@pytest.mark.asyncio
+async def test_redis_pool_fails_fast_instead_of_retrying_an_unreachable_cache():
+    with (
+        patch.object(cache, "_redis_client", None),
+        patch.object(cache, "_redis_pool", None),
+        patch.object(cache, "ConnectionPool") as pool_class,
+        patch.object(cache, "Redis"),
+    ):
+        await cache.get_redis()
+    options = pool_class.call_args.kwargs
+    assert options["socket_connect_timeout"] == cache.settings.REDIS_CONNECT_TIMEOUT_SECONDS == 0.5
+    assert options["socket_timeout"] == cache.settings.REDIS_SOCKET_TIMEOUT_SECONDS == 1.0
+    assert options["retry_on_timeout"] is False
+
+
+@pytest.mark.parametrize("name", ["REDIS_CONNECT_TIMEOUT_SECONDS", "REDIS_SOCKET_TIMEOUT_SECONDS"])
+def test_redis_timeouts_must_be_positive(name: str, monkeypatch: pytest.MonkeyPatch):
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    monkeypatch.setenv(name, "0")
+    with pytest.raises(ValidationError, match=name):
+        Settings()
