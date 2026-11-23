@@ -118,8 +118,10 @@ class TestRequestLoggingMiddleware:
         middleware = RequestLoggingMiddleware(app=MagicMock())
         request = self._make_request()
 
+        failure = RuntimeError("handler failed")
+
         async def call_next(req):
-            raise RuntimeError("handler failed")
+            raise failure
 
         with pytest.raises(RuntimeError, match="handler failed"):
             await middleware.dispatch(request, call_next)
@@ -130,8 +132,10 @@ class TestRequestLoggingMiddleware:
         middleware = RequestLoggingMiddleware(app=MagicMock())
         request = self._make_request(method="GET", path="/broken")
 
+        failure = ValueError("something broke")
+
         async def call_next(req):
-            raise ValueError("something broke")
+            raise failure
 
         with caplog.at_level(logging.ERROR, logger="app.core.middleware"):
             with pytest.raises(ValueError):
@@ -169,8 +173,10 @@ class TestRequestLoggingMiddleware:
         middleware = RequestLoggingMiddleware(app=MagicMock())
         request = self._make_request(method="POST", path="/mcp")
 
+        failure = TypeError("bad type")
+
         async def call_next(req):
-            raise TypeError("bad type")
+            raise failure
 
         with caplog.at_level(logging.ERROR, logger="app.core.middleware"):
             with pytest.raises(TypeError):

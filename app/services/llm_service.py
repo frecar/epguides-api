@@ -77,7 +77,7 @@ async def parse_natural_language_query(
 
     try:
         return await _query_llm(query, episodes, base_url=base_url)
-    except Exception as e:
+    except (httpx.RequestError, httpx.InvalidURL, json.JSONDecodeError) as e:
         logger.error("Error using LLM for query parsing: %s", e, exc_info=True)
         return None
 

@@ -385,7 +385,7 @@ async def test_fetch_tvmaze_episodes_error(mock_client_class):
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.get = AsyncMock(side_effect=Exception("Connection error"))
+    mock_client.get = AsyncMock(side_effect=httpx.ReadError("Connection error"))
     mock_client_class.return_value = mock_client
     result = await epguides._fetch_tvmaze_episodes("123")
     assert result == []

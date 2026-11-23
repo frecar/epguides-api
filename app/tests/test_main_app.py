@@ -52,7 +52,8 @@ def test_epguides_exception_handler():
 
     @app.get("/test-epguides-error")
     async def raise_epguides_error():
-        raise EpguidesAPIException("Test error")
+        error = EpguidesAPIException("Test error")
+        raise error
 
     response = client.get("/test-epguides-error")
     assert response.status_code == 500
@@ -68,7 +69,8 @@ def test_external_service_exception_handler():
 
     @app.get("/test-external-error")
     async def raise_external_error():
-        raise ExternalServiceError("TVMaze is unavailable: timed out after 10s", source=UpstreamSource.TVMAZE)
+        error = ExternalServiceError("TVMaze is unavailable: timed out after 10s", source=UpstreamSource.TVMAZE)
+        raise error
 
     response = client.get("/test-external-error")
     assert response.status_code == 503
@@ -169,7 +171,8 @@ def test_middleware_exception_handling():
 
     @app.get("/test-middleware-error")
     async def raise_error():
-        raise RuntimeError("Test middleware error")
+        error = RuntimeError("Test middleware error")
+        raise error
 
     with pytest.raises(RuntimeError, match="Test middleware error"):
         client.get("/test-middleware-error")

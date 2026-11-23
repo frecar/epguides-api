@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 import healthcheck
 import verify_llm
@@ -165,7 +166,7 @@ def test_verify_llm_success_lists_matches(monkeypatch, capsys):
 @pytest.mark.asyncio
 async def test_cache_exists_failure_is_logged_with_key(caplog):
     with (
-        patch("app.core.cache.get_redis", new=AsyncMock(side_effect=ConnectionError("redis down"))),
+        patch("app.core.cache.get_redis", new=AsyncMock(side_effect=RedisConnectionError("redis down"))),
         caplog.at_level(logging.WARNING, logger="app.core.cache"),
     ):
         assert await cache.cache_exists("show_index") is False

@@ -110,7 +110,7 @@ async def _fetch_url(url: str) -> httpx.Response | None:
     """
     Fetch URL with standard timeout and error handling.
 
-    Returns None on any error (logged with specific error type).
+    Returns None on HTTP request errors (logged with the specific error type).
     Records epguides upstream metrics on every call.
     """
     start = time.monotonic()
@@ -153,7 +153,7 @@ async def _fetch_url(url: str) -> httpx.Response | None:
         )
         record_upstream_request(_EPGUIDES, UpstreamOutcome.HTTP_ERROR)
         return None
-    except Exception as e:
+    except (httpx.RequestError, httpx.InvalidURL) as e:
         logger.error(
             "Unexpected %s fetching %s from epguides.com: %s",
             type(e).__name__,
@@ -295,7 +295,7 @@ _TVMAZE_API_HOST = httpx.URL(_TVMAZE_API_URL).host
 async def _tvmaze_get(url: str, *, follow_redirects: bool = False, **kwargs: Any) -> httpx.Response | None:
     """GET a TVMaze API endpoint with metric recording.
 
-    Returns the response on HTTP 200, None on any error or non-200 status.
+    Returns the response on HTTP 200, None on request errors or non-200 status.
     Records tvmaze upstream request and latency metrics.
 
     ``follow_redirects`` is opt-in for endpoints TVMaze documents as
@@ -342,7 +342,7 @@ async def _tvmaze_get(url: str, *, follow_redirects: bool = False, **kwargs: Any
         )
         record_upstream_request(_TVMAZE, UpstreamOutcome.TIMEOUT)
         return None
-    except Exception as e:
+    except (httpx.RequestError, httpx.InvalidURL) as e:
         logger.warning(
             "TVMaze request failed for %s: %s: %s",
             url,

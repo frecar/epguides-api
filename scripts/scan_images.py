@@ -16,13 +16,46 @@ _SEVERITIES = {"CRITICAL": "1", "HIGH": "0"}
 _SCAN_TIMEOUT_SECONDS = 600
 
 
+class TrivyScanError(ValueError):
+    pass
+
+
+class InvalidScanImages(TrivyScanError):
+    def __init__(self, value: object, *, index: int | None = None) -> None:
+        self.index = index
+        self.value_type = type(value)
+        if index is None:
+            detail = "image IDs must be a non-empty JSON list"
+        else:
+            detail = f"image ID at index {index} must be sha256 followed by 64 lowercase hex digits"
+        super().__init__(f"{detail} (received {self.value_type.__name__}). Pass the JSON from capture.")
+
+
+class InvalidScanSeverity(TrivyScanError):
+    def __init__(self, severity: str) -> None:
+        self.severity = severity
+        choices = " or ".join(sorted(_SEVERITIES))
+        super().__init__(f"Invalid scan severity {severity!r}. Set --severity to {choices}.")
+
+
+class InvalidTrivyIgnorefile(TrivyScanError):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        super().__init__(f"Trivy ignorefile {path} is missing or is not a file. Set --ignorefile to a readable file.")
+
+
+class MissingTrivyCache(TrivyScanError):
+    def __init__(self) -> None:
+        super().__init__("TRIVY_CACHE_DIR is required. Set it to the path of the Trivy database directory.")
+
+
 def _validated_image_ids(value: object) -> list[str]:
     if not isinstance(value, list) or not value:
-        raise ValueError("image IDs must be a non-empty JSON list")
+        raise InvalidScanImages(value)
     unique: list[str] = []
-    for image_id in value:
+    for index, image_id in enumerate(value):
         if not isinstance(image_id, str) or not _IMAGE_ID_RE.fullmatch(image_id):
-            raise ValueError("every image ID must be sha256 followed by 64 lowercase hex digits")
+            raise InvalidScanImages(image_id, index=index)
         if image_id not in unique:
             unique.append(image_id)
     return unique
@@ -32,15 +65,15 @@ def scan(image_ids: object, severity: str, ignorefile: Path, *, env: dict[str, s
     """Run one local-Docker Trivy scan per distinct immutable image ID."""
     ids = _validated_image_ids(image_ids)
     if severity not in _SEVERITIES:
-        raise ValueError("severity must be CRITICAL or HIGH")
+        raise InvalidScanSeverity(severity)
     ignorefile = Path(ignorefile)
     if not ignorefile.is_file():
-        raise ValueError("Trivy ignorefile does not exist or is not a file")
+        raise InvalidTrivyIgnorefile(ignorefile)
 
     scan_env = dict(os.environ if env is None else env)
     cache_dir = scan_env.get("TRIVY_CACHE_DIR")
     if not cache_dir:
-        raise ValueError("TRIVY_CACHE_DIR is required")
+        raise MissingTrivyCache()
 
     exit_code = _SEVERITIES[severity]
     failed = False
@@ -92,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         image_ids = json.loads(args.image_ids.read_text(encoding="utf-8"))
         return scan(image_ids, args.severity, args.ignorefile)
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
+    except (OSError, json.JSONDecodeError, TrivyScanError) as exc:
         sys.stderr.write(f"Trivy image scan: {exc}\n")
         return 2
 

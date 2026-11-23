@@ -129,11 +129,14 @@ async def test_epguides_connect_error_log_names_url(caplog):
 async def test_unexpected_epguides_failure_logs_type_and_traceback(caplog):
     url = "https://epguides.com/BreakingBad/"
 
-    with caplog.at_level(logging.ERROR), patch("httpx.AsyncClient", _client_returning(error=RuntimeError("boom"))):
+    with (
+        caplog.at_level(logging.ERROR),
+        patch("httpx.AsyncClient", _client_returning(error=httpx.RemoteProtocolError("boom"))),
+    ):
         assert await epguides._fetch_url(url) is None
 
     record = _only_record(caplog, logging.ERROR)
-    assert record.getMessage() == f"Unexpected RuntimeError fetching {url} from epguides.com: boom"
+    assert record.getMessage() == f"Unexpected RemoteProtocolError fetching {url} from epguides.com: boom"
     assert record.exc_info is not None
 
 

@@ -38,6 +38,7 @@ from fastapi.testclient import TestClient
 from app.contract import MUST_COVER
 from app.contract_engine import (
     ContractResult,
+    DocumentSecurityError,
     RouteProbeResult,
     assert_no_document_level_security,
     build_validator,
@@ -194,8 +195,10 @@ def test_run_contract_flags_non_json_200() -> None:
 
 
 def test_run_contract_flags_transport_exception() -> None:
+    transport_error = RuntimeError("connection refused")
+
     def boom(_path: str) -> tuple[int, Any]:
-        raise RuntimeError("connection refused")
+        raise transport_error
 
     result = run_contract(_MINIMAL_SCHEMA, boom, must_cover=("/ok",))
     assert not result.ok
@@ -411,9 +414,9 @@ def test_document_level_security_fails_loud() -> None:
         "security": [{"bearerAuth": []}],
         "paths": {"/x": {"get": {"responses": {"200": {}}}}},
     }
-    with pytest.raises(AssertionError, match="top-level `security`"):
+    with pytest.raises(DocumentSecurityError, match="top-level `security`"):
         assert_no_document_level_security(schema)
-    with pytest.raises(AssertionError, match="top-level `security`"):
+    with pytest.raises(DocumentSecurityError, match="top-level `security`"):
         run_contract(schema, lambda _p: (200, {}), must_cover=("/x",))
 
 

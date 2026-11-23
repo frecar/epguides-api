@@ -14,7 +14,9 @@ from functools import wraps
 from typing import Any, ParamSpec, TypeVar, cast
 
 import orjson
+from pydantic import ValidationError
 from redis.asyncio import ConnectionPool, Redis
+from redis.exceptions import RedisError
 
 from app.core.config import settings
 from app.core.metrics import record_cache_hit, record_cache_miss, update_cache_age_gauge
@@ -110,7 +112,7 @@ async def invalidate_cache(key_prefix: str, key_suffix: str) -> bool:
         if deleted:
             logger.info("Invalidated cache: %s", cache_key)
         return bool(deleted > 0)
-    except Exception as e:
+    except RedisError as e:
         logger.error("Failed to invalidate cache %s:%s: %s", key_prefix, key_suffix, e)
         return False
 
@@ -134,7 +136,7 @@ async def extend_cache_ttl(key_prefix: str, key_suffix: str, new_ttl: int) -> bo
         if result:
             logger.info("Extended cache TTL for %s to %d seconds", cache_key, new_ttl)
         return result
-    except Exception as e:
+    except RedisError as e:
         logger.error("Failed to extend cache TTL for %s:%s: %s", key_prefix, key_suffix, e)
         return False
 
@@ -145,7 +147,7 @@ async def cache_get(key: str) -> str | None:
         redis = await get_redis()
         result = cast("str | None", await redis.get(key))
         return result
-    except Exception as e:
+    except RedisError as e:
         logger.warning("Cache read error for %s: %s", key, e)
         return None
 
@@ -155,7 +157,7 @@ async def cache_set(key: str, value: str, ttl: int) -> None:
     try:
         redis = await get_redis()
         await redis.set(key, value, ex=ttl)
-    except Exception as e:
+    except RedisError as e:
         logger.warning("Cache write error for %s: %s", key, e)
 
 
@@ -164,7 +166,7 @@ async def cache_delete(*keys: str) -> None:
     try:
         redis = await get_redis()
         await redis.delete(*keys)
-    except Exception as e:
+    except RedisError as e:
         logger.warning("Cache delete error: %s", e)
 
 
@@ -174,7 +176,7 @@ async def cache_hget(hash_key: str, field: str) -> str | None:
         redis = await get_redis()
         result = cast("str | None", await redis.hget(hash_key, field))
         return result
-    except Exception as e:
+    except RedisError as e:
         logger.warning("Cache hash read error for %s[%s]: %s", hash_key, field, e)
         return None
 
@@ -185,7 +187,7 @@ async def cache_exists(key: str) -> bool:
         redis = await get_redis()
         count = await redis.exists(key)
         return bool(count > 0)
-    except Exception as e:
+    except RedisError as e:
         logger.warning("Cache existence check failed for %s, treating it as absent: %s", key, e)
         return False
 
@@ -204,7 +206,7 @@ async def mark_upstream_success(source: str) -> None:
         redis = await get_redis()
         key = _UPSTREAM_LAST_SUCCESS_KEY.format(source=source)
         await redis.set(key, str(time.time()))
-    except Exception as e:
+    except RedisError as e:
         logger.warning("Failed to record upstream success for %s: %s", source, e)
 
 
@@ -225,7 +227,7 @@ async def get_upstream_last_success(source: str) -> float | None:
     except ValueError, TypeError:
         logger.warning("Malformed upstream-success timestamp for %s", source)
         return None
-    except Exception as e:
+    except RedisError as e:
         logger.warning("Failed to read upstream success for %s: %s", source, e)
         return None
 
@@ -253,7 +255,7 @@ async def probe_redis_round_trip() -> tuple[bool, float | None]:
     start = time.monotonic()
     try:
         ok = await asyncio.wait_for(_round_trip(), timeout=settings.READINESS_REDIS_TIMEOUT_SECONDS)
-    except Exception as e:
+    except (RedisError, TimeoutError) as e:
         logger.warning("Redis readiness round-trip failed: %s", e)
         return False, None
 
@@ -290,23 +292,24 @@ def cache(
             cache_key_suffix = args[0] if args else "global"
             cache_key = f"{key_prefix}:{cache_key_suffix}"
 
-            try:
-                cached = await cache_get(cache_key)
-                if cached:
-                    try:
-                        record_cache_hit(cache_key)
-                        return orjson.loads(cached)  # type: ignore[no-any-return]
-                    except orjson.JSONDecodeError as e:
-                        logger.warning("Corrupted JSON in cache %s: %s", cache_key, e)
+            cached = await cache_get(cache_key)
+            if cached:
+                try:
+                    record_cache_hit(cache_key)
+                    return orjson.loads(cached)  # type: ignore[no-any-return]
+                except orjson.JSONDecodeError as exc:
+                    logger.warning("Corrupted JSON in cache %s: %s", cache_key, exc)
 
-                record_cache_miss(cache_key)
-                result = await func(*args, **kwargs)
-                if result:
-                    await cache_set(cache_key, orjson.dumps(result).decode(), ttl_seconds)
-                return result
-            except Exception as e:
-                logger.error("Cache error for %s: %s", cache_key, e)
-                return await func(*args, **kwargs)
+            record_cache_miss(cache_key)
+            result = await func(*args, **kwargs)
+            if result:
+                try:
+                    encoded = orjson.dumps(result).decode()
+                except orjson.JSONEncodeError as exc:
+                    logger.warning("Could not encode cache value for %s: %s", cache_key, exc)
+                else:
+                    await cache_set(cache_key, encoded, ttl_seconds)
+            return result
 
         return wrapper
 
@@ -367,7 +370,7 @@ def cached(
                     return data  # type: ignore[no-any-return]
                 except orjson.JSONDecodeError as e:
                     logger.warning("Corrupted JSON in cache %s: %s", cache_key, e)
-                except Exception as e:
+                except (ValidationError, TypeError) as e:
                     logger.warning("Cache validation error for %s: %s", cache_key, e)
 
             record_cache_miss(cache_key)
@@ -454,7 +457,7 @@ async def get_cache_stats() -> dict[str, Any]:
                 "peak": peak_memory,
             },
         }
-    except Exception as e:
+    except RedisError as e:
         logger.error("Failed to get cache stats: %s", e)
         return {
             "status": "error",
@@ -513,5 +516,5 @@ async def refresh_cache_age_gauges() -> None:
 
         ages = {t: float(max(0, _classify_ttl(r) - r)) for t, r in min_remaining.items()}
         update_cache_age_gauge(ages)
-    except Exception as e:
+    except RedisError as e:
         logger.warning("Failed to refresh cache age gauges: %s", e)

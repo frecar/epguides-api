@@ -7,7 +7,9 @@ Tests business logic independently of HTTP layer.
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS, VERSION, get_version, release_name
 from app.services import epguides, show_service
@@ -986,7 +988,7 @@ async def test_build_show_index_success(mock_get_all, mock_redis):
 @patch("app.services.show_service.get_all_shows")
 async def test_build_show_index_handles_error(mock_get_all, mock_redis):
     """Test _build_show_index handles Redis errors."""
-    mock_redis.side_effect = Exception("Redis connection error")
+    mock_redis.side_effect = RedisConnectionError("Redis connection error")
     mock_get_all.return_value = [
         show_service.ShowSchema(epguides_key="test", title="Test Show"),
     ]
@@ -1286,7 +1288,7 @@ async def test_get_tvmaze_seasons(mock_client_class):
 async def test_get_tvmaze_seasons_error(mock_client_class):
     """Test get_tvmaze_seasons returns empty on error."""
     mock_client = AsyncMock()
-    mock_client.get.side_effect = Exception("Connection error")
+    mock_client.get.side_effect = httpx.ReadError("Connection error")
     mock_client.__aenter__.return_value = mock_client
     mock_client_class.return_value = mock_client
 
@@ -1337,7 +1339,7 @@ async def test_search_tvmaze_by_title_not_found(mock_client_class):
 async def test_search_tvmaze_by_title_error(mock_client_class):
     """Test _search_tvmaze_by_title returns None on error."""
     mock_client = AsyncMock()
-    mock_client.get.side_effect = Exception("Connection error")
+    mock_client.get.side_effect = httpx.ReadError("Connection error")
     mock_client.__aenter__.return_value = mock_client
     mock_client_class.return_value = mock_client
 
@@ -1401,7 +1403,7 @@ async def test_fetch_tvmaze_episodes_success(mock_client_class):
 async def test_fetch_tvmaze_episodes_error(mock_client_class):
     """Test _fetch_tvmaze_episodes returns empty on error."""
     mock_client = AsyncMock()
-    mock_client.get.side_effect = Exception("Connection error")
+    mock_client.get.side_effect = httpx.ReadError("Connection error")
     mock_client.__aenter__.return_value = mock_client
     mock_client_class.return_value = mock_client
 
@@ -1504,7 +1506,7 @@ async def test_get_tvmaze_show_data(mock_client_class):
 async def test_get_tvmaze_show_data_error(mock_client_class):
     """Test get_tvmaze_show_data returns None on error."""
     mock_client = AsyncMock()
-    mock_client.get.side_effect = Exception("Connection error")
+    mock_client.get.side_effect = httpx.ReadError("Connection error")
     mock_client.__aenter__.return_value = mock_client
     mock_client_class.return_value = mock_client
 
@@ -2113,7 +2115,7 @@ async def test_merge_tvmaze_episode_data_skips_invalid(mock_client_class):
 async def test_merge_tvmaze_episode_data_handles_exception(mock_client_class):
     """Test _merge_tvmaze_episode_data handles exceptions gracefully."""
     mock_client = AsyncMock()
-    mock_client.get.side_effect = Exception("Network error")
+    mock_client.get.side_effect = httpx.ReadError("Network error")
     mock_client.__aenter__.return_value = mock_client
     mock_client_class.return_value = mock_client
 
@@ -2515,15 +2517,15 @@ async def test_fetch_url_http_status_error(mock_client_class):
 @pytest.mark.asyncio
 @patch("httpx.AsyncClient")
 async def test_fetch_url_unexpected_error(mock_client_class):
-    """Test _fetch_url logs unexpected errors with type info."""
+    """Programming errors propagate to the request boundary."""
     mock_client = AsyncMock()
-    mock_client.get.side_effect = RuntimeError("Unexpected internal error")
+    failure = RuntimeError("Unexpected internal error")
+    mock_client.get.side_effect = failure
     mock_client.__aenter__.return_value = mock_client
     mock_client_class.return_value = mock_client
 
-    result = await epguides._fetch_url("http://example.com/test")
-
-    assert result is None
+    with pytest.raises(RuntimeError, match="Unexpected internal error"):
+        await epguides._fetch_url("http://example.com/test")
 
 
 @pytest.mark.asyncio
@@ -2648,7 +2650,7 @@ async def test_parse_natural_language_query_exception(mock_settings, mock_query)
     mock_settings.LLM_API_URL = "https://llm.example.com/v1"
     mock_settings.LLM_ALLOW_EXTERNAL = False
     mock_settings.LLM_MODEL_NAME = "auto"
-    mock_query.side_effect = Exception("LLM service error")
+    mock_query.side_effect = httpx.ReadError("LLM service error")
 
     episodes = [{"season": 1, "number": 1, "title": "Pilot", "release_date": "2020-01-01"}]
 

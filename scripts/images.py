@@ -11,20 +11,34 @@ import re
 import subprocess
 import sys
 from contextlib import suppress
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+
+class IsolationHelperUnavailable(ImportError):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        super().__init__(f"Missing co-published Compose isolation helper {path}. Install both scripts together.")
+
+
 if __package__:
-    from .isolate import _build_secret_sources, _service_context_references, isolate_build_model
+    from . import isolate as isolation
 else:
-    spec = importlib.util.spec_from_file_location("compose_build_isolate", Path(__file__).with_name("isolate.py"))
+    helper_path = Path(__file__).with_name("isolate.py")
+    spec = importlib.util.spec_from_file_location("compose_build_isolate", helper_path)
     if spec is None or spec.loader is None:
-        raise ImportError("missing co-published Compose isolation helper")
+        raise IsolationHelperUnavailable(helper_path)
     isolation = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(isolation)
-    _build_secret_sources = isolation._build_secret_sources
-    _service_context_references = isolation._service_context_references
-    isolate_build_model = isolation.isolate_build_model
+    try:
+        spec.loader.exec_module(isolation)
+    except FileNotFoundError as exc:
+        raise IsolationHelperUnavailable(helper_path) from exc
+
+
+_build_secret_sources = isolation._build_secret_sources
+_service_context_references = isolation._service_context_references
+isolate_build_model = isolation.isolate_build_model
 
 _JOB_NAMESPACE_RE = re.compile(r"ci-[a-f0-9]{32}\Z")
 _IMAGE_TAG_RE = re.compile(r"(?P<namespace>ci-[a-f0-9]{32}):image-[1-9][0-9]*\Z")
@@ -33,13 +47,130 @@ _CONFIG_TIMEOUT_SECONDS = 60
 _INSPECT_TIMEOUT_SECONDS = 20
 
 
+class ComposeArgumentIssue(StrEnum):
+    PREFIX_START = "Compose prefix must begin with docker compose"
+    PREFIX_PARTS = "Compose prefix must contain only non-empty strings"
+    PROFILES = "Compose profiles must be a list of non-empty strings"
+
+
+class InvalidComposeArguments(isolation.ComposeIsolationError):
+    def __init__(self, issue: ComposeArgumentIssue, value: object) -> None:
+        self.issue = issue
+        self.value = value
+        super().__init__(f"{issue} (received {type(value).__name__}). Check the Compose isolation inputs.")
+
+
+class ComposeConfigIssue(StrEnum):
+    EXECUTION = "could not resolve Compose config"
+    EXIT_STATUS = "Compose config exited with status"
+    JSON = "Compose config returned invalid JSON"
+    JSON_SHAPE = "Compose config must return a JSON object"
+
+
+class ComposeConfigError(isolation.ComposeIsolationError):
+    def __init__(self, issue: ComposeConfigIssue, *, status: int | None = None) -> None:
+        self.issue = issue
+        self.status = status
+        detail = f"{issue} {status}" if status is not None else issue
+        super().__init__(f"{detail}. Check docker compose config --format json.")
+
+
+class ComposeRoundTripField(StrEnum):
+    SERVICE_SET = "the retained service set"
+    SERVICE_DEFINITION = "the retained service definition"
+    BUILD = "build inputs"
+    PLATFORM = "platform"
+    PROFILES = "profiles"
+    IMAGE = "image"
+    SECRETS = "used build secret definitions"
+
+
+class ComposeRoundTripError(isolation.ComposeIsolationError):
+    def __init__(self, field: ComposeRoundTripField, *, service: str | None = None) -> None:
+        self.field = field
+        self.service = service
+        target = f" for {service!r}" if service is not None else ""
+        super().__init__(
+            f"isolated Compose round trip changed {field}{target}. "
+            "Check that Compose resolves the same build inputs after isolation."
+        )
+
+
+class IsolationDirectoryIssue(StrEnum):
+    MISSING = "must already exist"
+    NOT_PRIVATE = "must be private"
+
+
+class InvalidIsolationDirectory(isolation.ComposeIsolationError):
+    def __init__(self, path: Path, issue: IsolationDirectoryIssue) -> None:
+        self.path = path
+        self.issue = issue
+        super().__init__(f"Compose isolation directory {path} {issue}. Create a fresh directory with mode 0700.")
+
+
+class IsolationFilesExist(isolation.ComposeIsolationError, FileExistsError):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        super().__init__(f"Compose isolation files already exist in {path}. Use a new private directory.")
+
+
+class IsolationStateIssue(StrEnum):
+    UNREADABLE = "cannot read Compose isolation state"
+    SHAPE = "Compose isolation state must be an object"
+    NAMESPACE = "Compose isolation state has an invalid job namespace"
+    PREFIX = "Compose isolation state has an invalid prefix"
+    TAGS_MISSING = "Compose isolation state has no image tags"
+    TAG_INVALID = "Compose isolation state contains an invalid isolated image tag"
+
+
+class InvalidIsolationState(isolation.ComposeIsolationError):
+    def __init__(self, path: Path, issue: IsolationStateIssue) -> None:
+        self.path = path
+        self.issue = issue
+        super().__init__(f"{issue} in {path}. Re-run prepare in a new private directory.")
+
+
+class IsolatedImageInspectionError(isolation.ComposeIsolationError):
+    def __init__(self, tag: str, *, status: int | None = None, invalid_id: bool = False) -> None:
+        self.tag = tag
+        self.status = status
+        self.invalid_id = invalid_id
+        if invalid_id:
+            detail = f"Docker returned an invalid image ID for {tag}, expected sha256 and 64 lowercase hex digits"
+        else:
+            suffix = f" (status {status})" if status is not None else ""
+            detail = f"could not inspect isolated image {tag}{suffix}"
+        super().__init__(f"{detail}. Check the isolated image build and the Docker daemon.")
+
+
+class CleanupTagIssue(StrEnum):
+    SHAPE = "image tags must be a JSON list"
+    OWNERSHIP = "cleanup accepts only job-owned image tags"
+    NAMESPACE = "cleanup tags must belong to one job namespace"
+
+
+class InvalidCleanupTags(isolation.ComposeIsolationError):
+    def __init__(self, issue: CleanupTagIssue) -> None:
+        self.issue = issue
+        super().__init__(f"{issue}. Pass the image tags produced by a single prepare run.")
+
+
+class ComposeJsonListError(isolation.ComposeIsolationError):
+    def __init__(self, path: Path, label: str, *, unreadable: bool = False) -> None:
+        self.path = path
+        self.label = label
+        self.unreadable = unreadable
+        detail = f"cannot read {label} JSON" if unreadable else f"{label} JSON must be a list of non-empty strings"
+        super().__init__(f"{detail} in {path}. Check the named JSON input.")
+
+
 def _validate_compose_args(prefix: list[str], profiles: list[str]) -> None:
     if not isinstance(prefix, list) or len(prefix) < 2 or prefix[:2] != ["docker", "compose"]:
-        raise ValueError("Compose prefix must begin with docker compose")
+        raise InvalidComposeArguments(ComposeArgumentIssue.PREFIX_START, prefix)
     if any(not isinstance(part, str) or not part for part in prefix):
-        raise ValueError("Compose prefix must contain only non-empty strings")
+        raise InvalidComposeArguments(ComposeArgumentIssue.PREFIX_PARTS, prefix)
     if not isinstance(profiles, list) or any(not isinstance(item, str) or not item for item in profiles):
-        raise ValueError("Compose profiles must be a list of non-empty strings")
+        raise InvalidComposeArguments(ComposeArgumentIssue.PROFILES, profiles)
 
 
 def _profile_args(profiles: list[str]) -> list[str]:
@@ -57,15 +188,15 @@ def _compose_config(prefix: list[str], profiles: list[str]) -> dict[str, Any]:
             timeout=_CONFIG_TIMEOUT_SECONDS,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise ValueError("could not resolve Compose config") from exc
+        raise ComposeConfigError(ComposeConfigIssue.EXECUTION) from exc
     if result.returncode != 0:
-        raise ValueError(f"Compose config exited with status {result.returncode}")
+        raise ComposeConfigError(ComposeConfigIssue.EXIT_STATUS, status=result.returncode)
     try:
         model = json.loads(result.stdout)
     except (TypeError, json.JSONDecodeError) as exc:
-        raise ValueError("Compose config returned invalid JSON") from exc
+        raise ComposeConfigError(ComposeConfigIssue.JSON) from exc
     if not isinstance(model, dict):
-        raise ValueError("Compose config must return a JSON object")
+        raise ComposeConfigError(ComposeConfigIssue.JSON_SHAPE)
     return model
 
 
@@ -92,7 +223,7 @@ def _assert_round_trip(
     original_services = original.get("services")
     actual_services = reparsed.get("services")
     if not isinstance(original_services, dict) or not isinstance(actual_services, dict):
-        raise ValueError("Compose config services must be mappings")
+        raise isolation.InvalidComposeModel(isolation.ComposeModelIssue.SERVICES)
 
     expected_names = set(service_tags)
     for name in service_tags:
@@ -100,26 +231,26 @@ def _assert_round_trip(
         if isinstance(build, dict):
             expected_names.update(_service_context_references(build, name))
     if set(actual_services) != expected_names:
-        raise ValueError("isolated Compose round trip changed the retained service set")
+        raise ComposeRoundTripError(ComposeRoundTripField.SERVICE_SET)
 
     for name in expected_names:
         before = original_services.get(name)
         after = actual_services.get(name)
         if not isinstance(before, dict) or not isinstance(after, dict):
-            raise ValueError(f"isolated Compose round trip lost retained service {name!r}")
+            raise ComposeRoundTripError(ComposeRoundTripField.SERVICE_DEFINITION, service=name)
         if before.get("build") != after.get("build"):
-            raise ValueError(f"isolated Compose round trip changed build inputs for {name!r}")
-        for key in ("platform", "profiles"):
+            raise ComposeRoundTripError(ComposeRoundTripField.BUILD, service=name)
+        for key in (ComposeRoundTripField.PLATFORM, ComposeRoundTripField.PROFILES):
             if before.get(key) != after.get(key) or (key in before) != (key in after):
-                raise ValueError(f"isolated Compose round trip changed {key} for {name!r}")
+                raise ComposeRoundTripError(key, service=name)
         expected_image = service_tags.get(name, before.get("image"))
         if after.get("image") != expected_image:
-            raise ValueError(f"isolated Compose round trip changed image for {name!r}")
+            raise ComposeRoundTripError(ComposeRoundTripField.IMAGE, service=name)
 
     original_secrets = original.get("secrets", {})
     actual_secrets = reparsed.get("secrets", {})
     if not isinstance(original_secrets, dict) or not isinstance(actual_secrets, dict):
-        raise ValueError("Compose config secrets must be mappings")
+        raise isolation.InvalidComposeModel(isolation.ComposeModelIssue.SECRETS)
     used_secrets: set[str] = set()
     for name in service_tags:
         build = original_services[name].get("build")
@@ -127,23 +258,23 @@ def _assert_round_trip(
             used_secrets.update(_build_secret_sources(build, name))
     expected_secrets = {name: original_secrets[name] for name in used_secrets if name in original_secrets}
     if set(expected_secrets) != used_secrets or actual_secrets != expected_secrets:
-        raise ValueError("isolated Compose round trip changed used build secret definitions")
+        raise ComposeRoundTripError(ComposeRoundTripField.SECRETS)
 
 
 def prepare(prefix: list[str], directory: Path, namespace: str, profiles: list[str]) -> dict[str, Any]:
     """Resolve production Compose, write an isolated private model and state."""
     _validate_compose_args(prefix, profiles)
     if not isinstance(namespace, str) or not _JOB_NAMESPACE_RE.fullmatch(namespace):
-        raise ValueError("namespace must match ci- followed by 32 lowercase hex digits")
+        raise isolation.InvalidComposeNamespace(namespace, isolation.ComposeNamespaceFormat.JOB)
     directory = Path(directory)
     if not directory.is_dir():
-        raise ValueError("Compose isolation directory must already exist")
+        raise InvalidIsolationDirectory(directory, IsolationDirectoryIssue.MISSING)
     if directory.stat().st_mode & 0o077:
-        raise ValueError("Compose isolation directory must be private")
+        raise InvalidIsolationDirectory(directory, IsolationDirectoryIssue.NOT_PRIVATE)
     compose_path = directory / "compose.json"
     state_path = directory / "state.json"
     if compose_path.exists() or state_path.exists():
-        raise FileExistsError("Compose isolation files already exist")
+        raise IsolationFilesExist(directory)
 
     original = _compose_config(prefix, profiles)
     isolated, service_tags = isolate_build_model(original, namespace)
@@ -177,24 +308,24 @@ def capture(directory: Path) -> dict[str, list[str]]:
     try:
         state = json.loads(state_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError("cannot read Compose isolation state") from exc
+        raise InvalidIsolationState(state_path, IsolationStateIssue.UNREADABLE) from exc
     if not isinstance(state, dict):
-        raise ValueError("Compose isolation state must be an object")
+        raise InvalidIsolationState(state_path, IsolationStateIssue.SHAPE)
     namespace = state.get("namespace")
     service_tags = state.get("service_tags")
     prefix = state.get("prefix")
     if not isinstance(namespace, str) or not _JOB_NAMESPACE_RE.fullmatch(namespace):
-        raise ValueError("Compose isolation state has an invalid job namespace")
+        raise InvalidIsolationState(state_path, IsolationStateIssue.NAMESPACE)
     if not isinstance(prefix, list) or any(not isinstance(item, str) or not item for item in prefix):
-        raise ValueError("Compose isolation state has an invalid prefix")
+        raise InvalidIsolationState(state_path, IsolationStateIssue.PREFIX)
     if not isinstance(service_tags, dict) or not service_tags:
-        raise ValueError("Compose isolation state has no image tags")
+        raise InvalidIsolationState(state_path, IsolationStateIssue.TAGS_MISSING)
 
     tag_values = list(service_tags.values())
     for tag in tag_values:
         match = _IMAGE_TAG_RE.fullmatch(tag) if isinstance(tag, str) else None
         if match is None or match.group("namespace") != namespace:
-            raise ValueError("Compose isolation state contains an invalid isolated image tag")
+            raise InvalidIsolationState(state_path, IsolationStateIssue.TAG_INVALID)
     unique_tags = list(dict.fromkeys(tag_values))
 
     image_ids: list[str] = []
@@ -208,12 +339,12 @@ def capture(directory: Path) -> dict[str, list[str]]:
                 timeout=_INSPECT_TIMEOUT_SECONDS,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise ValueError(f"could not inspect isolated image {tag}") from exc
+            raise IsolatedImageInspectionError(tag) from exc
         if result.returncode != 0:
-            raise ValueError(f"could not inspect isolated image {tag} (status {result.returncode})")
+            raise IsolatedImageInspectionError(tag, status=result.returncode)
         image_id = result.stdout.strip()
         if not _IMAGE_ID_RE.fullmatch(image_id):
-            raise ValueError(f"Docker returned an invalid image ID for {tag}")
+            raise IsolatedImageInspectionError(tag, invalid_id=True)
         if image_id not in image_ids:
             image_ids.append(image_id)
     return {"image-tags": unique_tags, "image-ids": image_ids}
@@ -222,15 +353,15 @@ def capture(directory: Path) -> dict[str, list[str]]:
 def cleanup(tags: object) -> int:
     """Remove existing job-owned tags, preserving shared parent layers."""
     if not isinstance(tags, list):
-        raise ValueError("image tags must be a JSON list")
+        raise InvalidCleanupTags(CleanupTagIssue.SHAPE)
     if not tags:
         return 0
     matches = [_IMAGE_TAG_RE.fullmatch(tag) if isinstance(tag, str) else None for tag in tags]
     if any(match is None for match in matches):
-        raise ValueError("cleanup accepts only job-owned image tags")
+        raise InvalidCleanupTags(CleanupTagIssue.OWNERSHIP)
     namespaces = {match.group("namespace") for match in matches if match is not None}
     if len(namespaces) != 1:
-        raise ValueError("cleanup tags must belong to one job namespace")
+        raise InvalidCleanupTags(CleanupTagIssue.NAMESPACE)
     namespace = next(iter(namespaces))
     result = subprocess.run(
         ["docker", "image", "ls", "--format", "{{.Repository}}:{{.Tag}}", "--filter", f"reference={namespace}:image-*"],
@@ -250,9 +381,9 @@ def _read_json_list(path: Path, label: str) -> list[str]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(f"cannot read {label} JSON") from exc
+        raise ComposeJsonListError(path, label, unreadable=True) from exc
     if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
-        raise ValueError(f"{label} JSON must be a list of non-empty strings")
+        raise ComposeJsonListError(path, label)
     return value
 
 
