@@ -5,7 +5,7 @@ Provides async HTTP client for endpoint testing.
 """
 
 import os
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -19,6 +19,7 @@ _XDIST_REDIS_DB = redis_db_for_worker(_XDIST_WORKER)
 if _XDIST_REDIS_DB is not None:
     os.environ["REDIS_DB"] = str(_XDIST_REDIS_DB)
 
+from app.core.cache import close_redis_pool  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -27,6 +28,21 @@ def show_catalogue_available() -> Iterator[AsyncMock]:
     """Treat the upstream show catalogue as reachable unless a test says otherwise."""
     with patch("app.services.show_service.is_show_catalogue_available", new=AsyncMock(return_value=True)) as mock:
         yield mock
+
+
+@pytest.fixture
+def uncached_service_results() -> Iterator[None]:
+    with (
+        patch("app.core.cache.cache_get", new=AsyncMock(return_value=None)),
+        patch("app.core.cache.cache_set", new=AsyncMock()),
+    ):
+        yield
+
+
+@pytest_asyncio.fixture(autouse=True, loop_scope="function")
+async def redis_pool_lifetime() -> AsyncIterator[None]:
+    yield
+    await close_redis_pool()
 
 
 @pytest_asyncio.fixture

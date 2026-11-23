@@ -14,6 +14,8 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from app.core.constants import EPISODE_RELEASE_THRESHOLD_HOURS, VERSION, get_version, release_name
 from app.services import epguides, show_service
 
+pytestmark = pytest.mark.usefixtures("uncached_service_results")
+
 
 def test_get_version_from_version_file():
     """Test get_version reads from VERSION file when it exists."""

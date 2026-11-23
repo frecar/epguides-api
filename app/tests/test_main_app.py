@@ -220,9 +220,10 @@ def test_non_docs_paths_keep_strict_csp():
     assert response.headers["Content-Security-Policy"] == "default-src 'none'; frame-ancestors 'none'"
 
 
-def test_security_headers_on_error_responses():
+@pytest.mark.asyncio
+async def test_security_headers_on_error_responses(async_client):
     """Test that security headers are present even on error responses."""
-    response = client.get("/shows/nonexistentshow")
+    response = await async_client.get("/shows/nonexistentshow")
     assert response.status_code == 404
 
     assert response.headers["X-Content-Type-Options"] == "nosniff"

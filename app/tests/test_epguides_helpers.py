@@ -15,6 +15,8 @@ from prometheus_client import Histogram
 from app.core.metrics import UPSTREAM_REQUESTS, UPSTREAM_RESPONSE_AGE
 from app.services import epguides
 
+pytestmark = pytest.mark.usefixtures("uncached_service_results")
+
 
 def _histo_count(histogram: Histogram, **labels: Any) -> float:
     """Return the current observation count for a labeled histogram via collect()."""
