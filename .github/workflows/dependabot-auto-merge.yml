@@ -6,14 +6,18 @@ on:
     - cron: "17 * * * *"
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
+
+env:
+  GH_REPO: ${{ github.repository }}
 
 jobs:
   auto-merge:
     if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
-    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-direct-untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     timeout-minutes: 15
     steps:
       - name: Fetch Dependabot metadata
@@ -42,7 +46,10 @@ jobs:
 
   rebase-stale:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ fromJSON((vars.CI_FLEET_UNTRUSTED_ENABLED == 'true' && '["fleet-direct-untrusted-linux"]') || '["ubuntu-latest"]') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Rebase behind-main dependabot PRs
         env:
@@ -55,3 +62,25 @@ jobs:
                 echo "Rebasing behind-main PR #$pr"
                 gh pr update-branch "$pr" || echo "  (update-branch failed for #$pr, will retry next sweep)"
               done
+
+  recover-main-ci:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency: recover-main-ci
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Dispatch CI when the current main commit has no run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          main_sha="$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq '.object.sha')"
+          run_ids="$(gh api --method GET --paginate "repos/$GH_REPO/actions/workflows/ci.yml/runs" \
+            -f branch=main -f head_sha="$main_sha" \
+            --jq '.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch") | .id')"
+          if [[ -z "$run_ids" ]]; then
+            gh workflow run ci.yml --ref main
+          fi
