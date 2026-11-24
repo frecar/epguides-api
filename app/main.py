@@ -9,8 +9,8 @@ import asyncio
 import logging.config
 import os
 import time
-from collections.abc import AsyncGenerator, Mapping
-from contextlib import asynccontextmanager
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
+from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI, Request, status
@@ -63,10 +63,20 @@ _READINESS_UPSTREAM = "epguides"
 init_observability(release=release_name())
 
 
+async def _run_cache_refresh(name: str, refresh: Callable[[], Awaitable[object]]) -> None:
+    try:
+        await refresh()
+    except Exception:
+        logger.exception("Failed to refresh %s; retrying at the next scheduled interval", name)
+
+
 async def _refresh_worker_caches() -> None:
     """Refresh the search catalogue and cache-age gauge every five minutes."""
     while True:
-        await asyncio.gather(refresh_search_catalogue(), refresh_cache_age_gauges())
+        await asyncio.gather(
+            _run_cache_refresh("search catalogue", refresh_search_catalogue),
+            _run_cache_refresh("cache-age gauges", refresh_cache_age_gauges),
+        )
         await asyncio.sleep(300)
 
 
@@ -79,15 +89,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     logger.info("Application startup")
     init_ingest_freshness()
-    task = asyncio.create_task(_refresh_worker_caches())
-    yield
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-    mark_worker_dead(os.getpid())
-    await close_redis_pool()
+    async with AsyncExitStack() as cleanup:
+        cleanup.push_async_callback(close_redis_pool)
+        cleanup.callback(mark_worker_dead, os.getpid())
+        task = asyncio.create_task(_refresh_worker_caches())
+        try:
+            yield
+        finally:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
     logger.info("Application shutdown complete")
 
 

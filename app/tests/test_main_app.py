@@ -495,3 +495,39 @@ def test_readiness_listed_in_openapi():
     response = client.get("/openapi.json")
     assert response.status_code == 200
     assert "/health/ready" in response.json()["paths"]
+
+
+@pytest.mark.asyncio
+async def test_worker_retries_both_refreshes_after_transport_failure(caplog):
+    import asyncio
+
+    from app.main import _refresh_worker_caches
+
+    failure = RuntimeError("transport is closed")
+    with (
+        patch("app.main.refresh_search_catalogue", new_callable=AsyncMock, side_effect=[failure, []]) as catalogue,
+        patch("app.main.refresh_cache_age_gauges", new_callable=AsyncMock) as gauges,
+        patch("app.main.asyncio.sleep", new_callable=AsyncMock, side_effect=[None, asyncio.CancelledError]) as sleep,
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await _refresh_worker_caches()
+    assert catalogue.await_count == gauges.await_count == 2
+    assert [call.args for call in sleep.await_args_list] == [(300,), (300,)]
+    assert any(record.exc_info and record.exc_info[1] is failure for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_lifespan_cleans_up_when_serving_raises():
+    from app.main import lifespan
+
+    failure = ValueError("serving failed")
+    with (
+        patch("app.main._refresh_worker_caches", new_callable=AsyncMock),
+        patch("app.main.mark_worker_dead") as mark_dead,
+        patch("app.main.close_redis_pool", new_callable=AsyncMock) as close_pool,
+        pytest.raises(ValueError, match="serving failed"),
+    ):
+        async with lifespan(app):
+            raise failure
+    mark_dead.assert_called_once()
+    close_pool.assert_awaited_once()
