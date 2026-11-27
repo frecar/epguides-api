@@ -137,7 +137,11 @@ def find_problems(paths: list[Path]) -> list[tuple[Path, int, str, str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Example:\n  uv run python scripts/check_ci_resource_sizing.py --repo-root .",
+    )
     parser.add_argument(
         "--repo-root",
         type=Path,
