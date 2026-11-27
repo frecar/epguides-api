@@ -117,7 +117,11 @@ def scan(image_ids: object, severity: str, ignorefile: Path, *, env: dict[str, s
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Example:\n  uv run python scripts/scan_images.py --image-ids image-ids.json --severity HIGH --ignorefile .trivyignore",
+    )
     parser.add_argument("--image-ids", type=Path, required=True, help="JSON file containing immutable image IDs")
     parser.add_argument("--severity", choices=sorted(_SEVERITIES), required=True)
     parser.add_argument("--ignorefile", type=Path, required=True)

@@ -388,7 +388,11 @@ def _read_json_list(path: Path, label: str) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Example:\n  uv run python scripts/images.py prepare --directory . --namespace ci --prefix-json prefix.json --profiles-json profiles.json",
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     prepare_parser = commands.add_parser("prepare")
     prepare_parser.add_argument("--directory", type=Path, required=True)

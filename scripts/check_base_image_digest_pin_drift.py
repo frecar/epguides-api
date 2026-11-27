@@ -177,7 +177,11 @@ def find_problems(repo_root: Path) -> list[tuple[Path, int, str, str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Example:\n  uv run python scripts/check_base_image_digest_pin_drift.py --repo-root .",
+    )
     parser.add_argument(
         "--repo-root",
         type=Path,
