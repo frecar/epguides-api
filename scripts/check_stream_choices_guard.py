@@ -60,7 +60,9 @@ from pathlib import Path
 
 IGNORE_MARKER = "stream-choices-guard: ignore"
 
-LITERAL_REVIEW_BY = date(2026, 11, 25)
+# Verified 2026-11-28: allowlisted components are generic test/tool/build/migration
+# dirs and the only allowlisted filename is this guard; the full-tree run is clean.
+LITERAL_REVIEW_BY = date(2027, 5, 28)
 
 ALLOWED_PATH_COMPONENTS = (
     "tests",
