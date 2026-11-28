@@ -31,7 +31,9 @@ PATTERN = re.compile(r"api\." + r"(?:" + "|".join(_FORBIDDEN_HOSTS) + r")" + r"\
 
 IGNORE_MARKER = "llm-policy: ignore"
 
-LITERAL_REVIEW_BY = date(2026, 11, 25)
+# Verified 2026-11-28: allowlisted components are generic test/tool/build dirs;
+# the tracked tree's .j2/.json/.conf/.mjs files were unscanned, now checked and clean.
+LITERAL_REVIEW_BY = date(2027, 5, 28)
 
 ALLOWED_PATH_COMPONENTS = (
     "tests",
@@ -68,6 +70,10 @@ CHECKED_EXTENSIONS = {
     ".sh",
     ".bash",
     ".rs",
+    ".j2",
+    ".json",
+    ".conf",
+    ".mjs",
 }
 
 
